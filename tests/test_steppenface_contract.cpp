@@ -25,6 +25,12 @@ struct WorkspaceGeometrySnapshot {
   std::vector<std::pair<int, int>> focus;
 };
 
+struct ToolbarSegmentGeometrySnapshot {
+  std::vector<std::pair<int, int>> selection;
+  std::vector<std::pair<int, int>> underline;
+  std::vector<std::pair<int, int>> border;
+};
+
 WorkspaceGeometrySnapshot
 WorkspaceSelectionGeometry(const WorkspaceKind workspace) {
   ImGui::CreateContext();
@@ -68,9 +74,11 @@ WorkspaceSelectionGeometry(const WorkspaceKind workspace) {
     return positions;
   };
 
-  ImGui::NewFrame();
-  (void)ui.Draw(view, {});
-  ImGui::Render();
+  for (int frame = 0; frame < 2; ++frame) {
+    ImGui::NewFrame();
+    (void)ui.Draw(view, {});
+    ImGui::Render();
+  }
   std::vector<ImVec2> positions = collect_positions(selection_color);
 
   float minimum_x = std::numeric_limits<float>::max();
@@ -123,6 +131,106 @@ WorkspaceSelectionGeometry(const WorkspaceKind workspace) {
   WorkspaceGeometrySnapshot snapshot{
       .selection = normalize(positions),
       .focus = normalize(collect_positions(focus_color)),
+  };
+  ImGui::DestroyContext();
+  return snapshot;
+}
+
+ToolbarSegmentGeometrySnapshot
+ToolbarSegmentGeometry(const std::size_t selected_index) {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(1280.0f, 720.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  ImFontConfig font_config;
+  font_config.SizePixels = 16.0f;
+  io.Fonts->AddFontDefault(&font_config);
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+
+  ApplicationUi ui;
+  ApplicationView view;
+  view.application_bar.document_dirty = false;
+  view.context_toolbar.items.emplace_back(ToolbarSegmentedView{
+      .id = {.value = "test.segmented"},
+      .choices =
+          {
+              {
+                  .id = {.value = "test.segmented.left"},
+                  .label = "Mode",
+                  .selected = selected_index == 0,
+              },
+              {
+                  .id = {.value = "test.segmented.right"},
+                  .label = "Mode",
+                  .selected = selected_index == 1,
+              },
+          },
+  });
+
+  for (int frame = 0; frame < 2; ++frame) {
+    ImGui::NewFrame();
+    (void)ui.Draw(view, {});
+    ImGui::Render();
+  }
+
+  const fancy_ui::SemanticPalette palette =
+      fancy_ui::PaletteFor(fancy_ui::ResolvedTheme::Dark);
+  const auto color = [](const fancy_ui::ColorRgba value) {
+    return ImGui::ColorConvertFloat4ToU32(
+        ImVec4(value.red, value.green, value.blue, value.alpha));
+  };
+  const ImU32 selection_color = color(palette.selection);
+  const ImU32 focus_color = color(palette.focus);
+  const ImU32 border_color = color(palette.border_strong);
+  const auto collect_positions = [](const ImU32 target, const float minimum_y) {
+    std::vector<ImVec2> positions;
+    const ImDrawData *draw_data = ImGui::GetDrawData();
+    for (int list_index = 0; list_index < draw_data->CmdListsCount;
+         ++list_index) {
+      const ImDrawList *draw_list = draw_data->CmdLists[list_index];
+      for (const ImDrawVert &vertex : draw_list->VtxBuffer) {
+        if (vertex.col == target && vertex.pos.y >= minimum_y) {
+          positions.push_back(vertex.pos);
+        }
+      }
+    }
+    return positions;
+  };
+
+  const std::vector<ImVec2> border = collect_positions(border_color, 40.0f);
+  float group_minimum_x = std::numeric_limits<float>::max();
+  float group_maximum_x = std::numeric_limits<float>::lowest();
+  float group_minimum_y = std::numeric_limits<float>::max();
+  for (const ImVec2 position : border) {
+    group_minimum_x = std::min(group_minimum_x, position.x);
+    group_maximum_x = std::max(group_maximum_x, position.x);
+    group_minimum_y = std::min(group_minimum_y, position.y);
+  }
+
+  const auto normalize = [selected_index, group_minimum_x, group_maximum_x,
+                          group_minimum_y](
+                             const std::vector<ImVec2> &positions) {
+    std::vector<std::pair<int, int>> normalized;
+    normalized.reserve(positions.size());
+    for (const ImVec2 position : positions) {
+      const float local_x = selected_index == 0 ? position.x - group_minimum_x
+                                                : group_maximum_x - position.x;
+      normalized.emplace_back(static_cast<int>(std::lround(local_x * 1000.0f)),
+                              static_cast<int>(std::lround(
+                                  (position.y - group_minimum_y) * 1000.0f)));
+    }
+    std::ranges::sort(normalized);
+    return normalized;
+  };
+
+  ToolbarSegmentGeometrySnapshot snapshot{
+      .selection =
+          normalize(collect_positions(selection_color, group_minimum_y)),
+      .underline = normalize(collect_positions(focus_color, 71.0f)),
+      .border = normalize(border),
   };
   ImGui::DestroyContext();
   return snapshot;
@@ -213,6 +321,66 @@ TEST_CASE("product intents retain the source view revision") {
 
   REQUIRE(std::holds_alternative<InvokeCommand>(intent));
   REQUIRE(std::get<InvokeCommand>(intent).revision == 29);
+}
+
+TEST_CASE("toolbar contracts preserve typed order and edit targets") {
+  ContextToolbarView toolbar;
+  toolbar.items.emplace_back(ToolbarSegmentedView{
+      .id = {.value = "model.selection-tool"},
+      .choices =
+          {
+              {
+                  .id = {.value = "model.selection.pointer"},
+                  .label = "Pointer",
+                  .selected = true,
+                  .action =
+                      {
+                          .field = {.value = "model.selection-tool"},
+                          .value = SelectionTool::Pointer,
+                      },
+              },
+          },
+  });
+  toolbar.items.emplace_back(
+      ToolbarSeparatorView{.id = {.value = "selection.separator"}});
+  toolbar.items.emplace_back(ToolbarPopoverView{
+      .id = {.value = "model.grid"},
+      .label = "Grid: Mixed",
+      .items =
+          {
+              {
+                  .id = {.value = "model.grid.25"},
+                  .label = "25 mm",
+                  .action =
+                      {
+                          .field = {.value = "model.grid-spacing"},
+                          .value = std::int64_t{25},
+                          .target = UiId{.value = "bed.2"},
+                      },
+              },
+          },
+  });
+
+  REQUIRE(toolbar.items.size() == 3);
+  REQUIRE(std::holds_alternative<ToolbarSegmentedView>(toolbar.items[0]));
+  REQUIRE(std::holds_alternative<ToolbarSeparatorView>(toolbar.items[1]));
+  const ToolbarPopoverView &grid =
+      std::get<ToolbarPopoverView>(toolbar.items[2]);
+  REQUIRE(grid.items.front().action.target->value == "bed.2");
+  REQUIRE(std::get<std::int64_t>(grid.items.front().action.value) == 25);
+}
+
+TEST_CASE("field edits retain product target and typed mode values") {
+  UiIntent intent = EditField{
+      .revision = 31,
+      .field = {.value = "model.grid-spacing"},
+      .value = std::int64_t{10},
+      .target = UiId{.value = "all"},
+  };
+
+  const EditField &edit = std::get<EditField>(intent);
+  REQUIRE(edit.target->value == "all");
+  REQUIRE(std::get<std::int64_t>(edit.value) == 10);
 }
 
 TEST_CASE("session panels start independently visible") {
@@ -373,6 +541,19 @@ TEST_CASE("workspace switcher selected segments have mirrored geometry") {
   REQUIRE(model_geometry.selection == canvas_geometry.selection);
   REQUIRE(model_geometry.focus.size() == 4);
   REQUIRE(model_geometry.focus == canvas_geometry.focus);
+}
+
+TEST_CASE("toolbar segmented controls share connected mirrored geometry") {
+  const ToolbarSegmentGeometrySnapshot left = ToolbarSegmentGeometry(0);
+  const ToolbarSegmentGeometrySnapshot right = ToolbarSegmentGeometry(1);
+
+  CAPTURE(left.selection.size(), left.underline.size(), left.border.size());
+  REQUIRE_FALSE(left.selection.empty());
+  REQUIRE(left.selection == right.selection);
+  REQUIRE_FALSE(left.underline.empty());
+  REQUIRE(left.underline == right.underline);
+  REQUIRE_FALSE(left.border.empty());
+  REQUIRE(left.border == right.border);
 }
 
 static_assert(!std::is_convertible_v<fancy_ui::TextureHandle, bool>);

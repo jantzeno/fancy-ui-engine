@@ -3,6 +3,7 @@
 #include "fancy_ui/steppenface/ui_types.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <variant>
 
@@ -30,6 +31,7 @@ struct EditField {
   std::uint64_t revision = 0;
   UiId field;
   FieldValue value;
+  std::optional<UiId> target;
   EditPhase phase = EditPhase::Commit;
 };
 

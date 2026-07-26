@@ -42,9 +42,69 @@ struct ApplicationBarView {
 [[nodiscard]] const CommandView *
 FindMenuCommand(const ApplicationBarView &application_bar, CommandId command);
 
+struct ControlActionView {
+  UiId field;
+  FieldValue value;
+  std::optional<UiId> target;
+  Availability availability;
+};
+
+struct ToolbarChoiceView {
+  UiId id;
+  std::string label;
+  std::string icon;
+  std::string tooltip;
+  bool selected = false;
+  ControlActionView action;
+};
+
+struct ToolbarSegmentedView {
+  UiId id;
+  std::vector<ToolbarChoiceView> choices;
+};
+
+struct ToolbarActionView {
+  UiId id;
+  std::string label;
+  std::string icon;
+  std::string tooltip;
+  bool selected = false;
+  ControlActionView action;
+};
+
+struct ToolbarSeparatorView {
+  UiId id;
+};
+
+struct ToolbarSpacerView {
+  UiId id;
+};
+
+struct ToolbarMenuItemView {
+  UiId id;
+  std::string label;
+  std::string secondary_label;
+  bool selected = false;
+  bool separator_before = false;
+  ControlActionView action;
+};
+
+struct ToolbarPopoverView {
+  UiId id;
+  std::string label;
+  std::string icon;
+  std::string tooltip;
+  Availability availability;
+  std::vector<ToolbarMenuItemView> items;
+  std::vector<FieldView> fields;
+};
+
+using ToolbarItemView =
+    std::variant<CommandView, ToolbarSegmentedView, ToolbarActionView,
+                 ToolbarSeparatorView, ToolbarSpacerView, ToolbarPopoverView>;
+
 struct ContextToolbarView {
-  std::string context_label;
-  std::vector<CommandView> commands;
+  std::vector<ToolbarItemView> items;
 };
 
 struct ActivityView {
@@ -65,7 +125,8 @@ struct WorkspaceView {
   WorkspaceKind kind = WorkspaceKind::Model3d;
   std::string title;
   std::string empty_message;
-  std::vector<CommandView> overlay_commands;
+  std::vector<ToolbarItemView> viewport_toolbar;
+  SelectionTool model_selection_tool = SelectionTool::Pointer;
 };
 
 struct InspectorView {

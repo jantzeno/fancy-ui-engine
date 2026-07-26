@@ -45,7 +45,30 @@ enum class SemanticTone : std::uint8_t {
 enum class CommandVariant : std::uint8_t {
   Normal,
   Primary,
+  Tertiary,
   Destructive,
+};
+
+enum class SelectionScope : std::uint8_t {
+  Canvas,
+  Object,
+};
+
+enum class SelectionTool : std::uint8_t {
+  Pointer,
+  Rectangle,
+  Oval,
+};
+
+enum class ModelCameraPreset : std::uint8_t {
+  Custom,
+  Front,
+  Back,
+  Left,
+  Right,
+  Top,
+  Bottom,
+  Isometric,
 };
 
 struct Availability {
@@ -80,12 +103,15 @@ struct TreeRowView {
   std::optional<ColorRgba> color;
 };
 
-using FieldValue = std::variant<bool, std::int64_t, double, std::string>;
+using FieldValue =
+    std::variant<bool, std::int64_t, double, std::string, SelectionScope,
+                 SelectionTool, ModelCameraPreset>;
 
 struct FieldView {
   UiId id;
   std::string label;
   FieldValue value;
+  std::optional<UiId> target;
   std::string unit;
   std::string help;
   Availability availability;

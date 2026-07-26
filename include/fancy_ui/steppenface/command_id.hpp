@@ -25,6 +25,8 @@ enum class CommandId : std::uint16_t {
   RotateCW,
   RotateCCW,
   SelectAll,
+  SelectExternalFaces,
+  SelectInternalFaces,
   ClearSelection,
   ClearAssignment,
   DeleteObjects,

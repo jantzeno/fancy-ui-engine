@@ -7,7 +7,7 @@ target("fancy_ui")
     add_files(path.join(repo_dir, "src", "**.cpp"))
     add_includedirs(path.join(repo_dir, "include"), {public = true})
     add_includedirs(path.join(repo_dir, "src"))
-    add_deps("im2d_ui")
+    add_deps("im2d_ui", "workspace_vendor_lunasvg")
     add_packages("imgui")
 
 target("fancy_ui_tests")

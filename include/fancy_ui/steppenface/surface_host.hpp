@@ -29,6 +29,7 @@ struct PointerState {
 struct ModelSurfaceRequest {
   Vec2 logical_size;
   Vec2 framebuffer_scale{1.0f, 1.0f};
+  SelectionTool selection_tool = SelectionTool::Pointer;
   PointerState pointer;
 };
 
@@ -37,6 +38,7 @@ struct ModelSurfaceFrame {
   Vec2 logical_size;
   bool ready = false;
   bool input_captured = false;
+  std::optional<Rect> selection_marquee;
 };
 
 class ModelSurfaceHost {
