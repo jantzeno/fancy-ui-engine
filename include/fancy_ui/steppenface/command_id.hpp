@@ -1,0 +1,70 @@
+#pragma once
+
+#include <cstdint>
+
+namespace fancy_ui::steppenface {
+
+enum class CommandId : std::uint16_t {
+  Quit,
+  OpenFile,
+  ExportFile,
+  OpenSettings,
+  OpenLicense,
+  OpenLegalNotices,
+  SendToCanvas,
+  Undo,
+  Redo,
+  Cut,
+  Copy,
+  Paste,
+  ExtractSelection,
+  GroupSelection,
+  UngroupSelection,
+  FlipHorizontal,
+  FlipVertical,
+  RotateCW,
+  RotateCCW,
+  SelectAll,
+  ClearSelection,
+  ClearAssignment,
+  DeleteObjects,
+  HideAll,
+  ShowAll,
+  HideSelected,
+  IsolateSelected,
+  ZoomToFit,
+  ZoomToSelection,
+  ZoomActualSize,
+  AnalyzeContours,
+  ConvertObjectToPartBed,
+  ClearPreview,
+  PreviewGuideSplit,
+  ApplyGuideSplit,
+  PreviewAutoSplitHorizontal,
+  PreviewAutoSplitVertical,
+  PreviewAutoSplitBoth,
+  ApplyAutoSplit,
+  JoinOpenSegments,
+  RepairOrphanHoles,
+  ReindexObjects,
+  SelectDegenerateObjects,
+  SelectInvalidObjects,
+  SelectOpenObjects,
+  SelectSelfIntersectingObjects,
+  StartSearch,
+  StartCompact,
+  PauseOperation,
+  ResumeOperation,
+  CancelOperation,
+  ApplyOperation,
+  ClearOperation,
+};
+
+enum class BackendCapability : std::uint8_t {
+  None,
+  ExportJob,
+  SettingsPersistence,
+  LicenseManagement,
+};
+
+} // namespace fancy_ui::steppenface

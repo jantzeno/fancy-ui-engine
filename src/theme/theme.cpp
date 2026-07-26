@@ -1,14 +1,20 @@
 #include "fancy_ui/theme.hpp"
 
+#include <imgui.h>
+
 namespace fancy_ui {
 
 namespace {
 
-ImVec4 Rgb(const int red, const int green, const int blue) {
+ColorRgba Rgb(const int red, const int green, const int blue) {
   constexpr float scale = 1.0f / 255.0f;
-  return ImVec4(static_cast<float>(red) * scale,
-                static_cast<float>(green) * scale,
-                static_cast<float>(blue) * scale, 1.0f);
+  return ColorRgba{static_cast<float>(red) * scale,
+                   static_cast<float>(green) * scale,
+                   static_cast<float>(blue) * scale, 1.0f};
+}
+
+ImVec4 ToImVec4(const ColorRgba color) {
+  return ImVec4(color.red, color.green, color.blue, color.alpha);
 }
 
 SemanticPalette active_palette = PaletteFor(ResolvedTheme::Dark);
@@ -99,27 +105,31 @@ void ApplyTheme(const ResolvedTheme theme) {
   style.ItemInnerSpacing = ImVec2(8.0f, 4.0f);
   style.FrameRounding = 4.0f;
   style.FrameBorderSize = 1.0f;
+  style.PopupRounding = 4.0f;
+  style.PopupBorderSize = 1.0f;
 
   ImVec4 *colors = style.Colors;
-  colors[ImGuiCol_Text] = active_palette.text_primary;
-  colors[ImGuiCol_TextDisabled] = active_palette.text_disabled;
-  colors[ImGuiCol_WindowBg] = active_palette.application_surface;
-  colors[ImGuiCol_ChildBg] = active_palette.surface;
-  colors[ImGuiCol_PopupBg] = active_palette.surface_raised;
-  colors[ImGuiCol_Border] = active_palette.border;
-  colors[ImGuiCol_FrameBg] = active_palette.control;
-  colors[ImGuiCol_FrameBgHovered] = active_palette.control_hover;
-  colors[ImGuiCol_FrameBgActive] = active_palette.control_pressed;
-  colors[ImGuiCol_Button] = active_palette.control;
-  colors[ImGuiCol_ButtonHovered] = active_palette.control_hover;
-  colors[ImGuiCol_ButtonActive] = active_palette.control_pressed;
-  colors[ImGuiCol_Header] = active_palette.selection;
-  colors[ImGuiCol_HeaderHovered] = active_palette.control_hover;
-  colors[ImGuiCol_HeaderActive] = active_palette.control_pressed;
-  colors[ImGuiCol_CheckMark] = active_palette.action_primary;
-  colors[ImGuiCol_SliderGrab] = active_palette.action_primary;
-  colors[ImGuiCol_SliderGrabActive] = active_palette.action_primary_hover;
-  colors[ImGuiCol_NavCursor] = active_palette.focus;
+  colors[ImGuiCol_Text] = ToImVec4(active_palette.text_primary);
+  colors[ImGuiCol_TextDisabled] = ToImVec4(active_palette.text_disabled);
+  colors[ImGuiCol_WindowBg] = ToImVec4(active_palette.application_surface);
+  colors[ImGuiCol_MenuBarBg] = ToImVec4(active_palette.application_surface);
+  colors[ImGuiCol_ChildBg] = ToImVec4(active_palette.surface);
+  colors[ImGuiCol_PopupBg] = ToImVec4(active_palette.surface_raised);
+  colors[ImGuiCol_Border] = ToImVec4(active_palette.border);
+  colors[ImGuiCol_FrameBg] = ToImVec4(active_palette.control);
+  colors[ImGuiCol_FrameBgHovered] = ToImVec4(active_palette.control_hover);
+  colors[ImGuiCol_FrameBgActive] = ToImVec4(active_palette.control_pressed);
+  colors[ImGuiCol_Button] = ToImVec4(active_palette.control);
+  colors[ImGuiCol_ButtonHovered] = ToImVec4(active_palette.control_hover);
+  colors[ImGuiCol_ButtonActive] = ToImVec4(active_palette.control_pressed);
+  colors[ImGuiCol_Header] = ToImVec4(active_palette.selection);
+  colors[ImGuiCol_HeaderHovered] = ToImVec4(active_palette.control_hover);
+  colors[ImGuiCol_HeaderActive] = ToImVec4(active_palette.control_pressed);
+  colors[ImGuiCol_CheckMark] = ToImVec4(active_palette.action_primary);
+  colors[ImGuiCol_SliderGrab] = ToImVec4(active_palette.action_primary);
+  colors[ImGuiCol_SliderGrabActive] =
+      ToImVec4(active_palette.action_primary_hover);
+  colors[ImGuiCol_NavCursor] = ToImVec4(active_palette.focus);
 }
 
 const SemanticPalette &CurrentPalette() { return active_palette; }

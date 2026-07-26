@@ -2,8 +2,6 @@
 
 #include "fancy_ui/component_types.hpp"
 
-#include <imgui.h>
-
 #include <string_view>
 
 namespace fancy_ui {
@@ -21,7 +19,7 @@ struct ButtonSpec {
   std::string_view tooltip;
   ButtonVariant variant = ButtonVariant::Secondary;
   Availability availability;
-  ImVec2 size = ImVec2(0.0f, 32.0f);
+  Vec2 size = {0.0f, 32.0f};
 };
 
 struct ButtonResult : InteractionResult {

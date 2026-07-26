@@ -8,4 +8,5 @@
 #include "fancy_ui/components/navigation.hpp"
 #include "fancy_ui/components/spatial.hpp"
 #include "fancy_ui/shell/application.hpp"
+#include "fancy_ui/steppenface/application_ui.hpp"
 #include "fancy_ui/theme.hpp"

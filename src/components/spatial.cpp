@@ -11,7 +11,7 @@ SpatialControlResult SpatialControl(const SpatialControlSpec &spec) {
       .tooltip = spec.tooltip,
       .variant =
           spec.selected ? ButtonVariant::Primary : ButtonVariant::Secondary,
-      .size = ImVec2(0.0f, 32.0f),
+      .size = {0.0f, 32.0f},
   });
   return {.activated = result.activated};
 }

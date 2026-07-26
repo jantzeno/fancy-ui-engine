@@ -3,6 +3,8 @@
 #include "fancy_ui/theme.hpp"
 #include "internal/component_internal.hpp"
 
+#include <imgui.h>
+
 #include <string>
 
 namespace fancy_ui {
@@ -14,19 +16,22 @@ ButtonResult Button(const ButtonSpec &spec) {
                                            : std::string(spec.label));
   const SemanticPalette &palette = CurrentPalette();
 
-  ImVec4 rest = palette.control;
-  ImVec4 hover = palette.control_hover;
-  ImVec4 pressed = palette.control_pressed;
-  ImVec4 text = palette.text_primary;
+  const auto to_imgui = [](const ColorRgba color) {
+    return ImVec4(color.red, color.green, color.blue, color.alpha);
+  };
+  ImVec4 rest = to_imgui(palette.control);
+  ImVec4 hover = to_imgui(palette.control_hover);
+  ImVec4 pressed = to_imgui(palette.control_pressed);
+  ImVec4 text = to_imgui(palette.text_primary);
   if (spec.variant == ButtonVariant::Primary) {
-    rest = palette.action_primary;
-    hover = palette.action_primary_hover;
-    pressed = palette.action_primary_pressed;
-    text = palette.on_emphasis;
+    rest = to_imgui(palette.action_primary);
+    hover = to_imgui(palette.action_primary_hover);
+    pressed = to_imgui(palette.action_primary_pressed);
+    text = to_imgui(palette.on_emphasis);
   } else if (spec.variant == ButtonVariant::Tertiary) {
     rest.w = 0.0f;
   } else if (spec.variant == ButtonVariant::Destructive) {
-    text = palette.failure;
+    text = to_imgui(palette.failure);
   }
 
   ImGui::PushID(id.c_str());
@@ -35,7 +40,8 @@ ButtonResult Button(const ButtonSpec &spec) {
   ImGui::PushStyleColor(ImGuiCol_ButtonActive, pressed);
   ImGui::PushStyleColor(ImGuiCol_Text, text);
   detail::BeginAvailability(spec.availability);
-  const bool activated = ImGui::Button(label.c_str(), spec.size);
+  const bool activated =
+      ImGui::Button(label.c_str(), ImVec2(spec.size.x, spec.size.y));
   const InteractionResult interaction = detail::CaptureInteraction();
   detail::EndAvailability(spec.availability, spec.tooltip);
   ImGui::PopStyleColor(4);
