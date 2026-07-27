@@ -5,6 +5,7 @@
 #include "fancy_ui/components/data_display.hpp"
 #include "fancy_ui/components/navigation.hpp"
 #include "fancy_ui/shell/application.hpp"
+#include "fancy_ui/steppenface/ui_assets.hpp"
 #include "fancy_ui/theme.hpp"
 
 #include "ui/im2d_canvas_widget.h"
@@ -76,6 +77,11 @@ ImVec4 ToImVec4(const ColorRgba color) {
   return ImVec4(color.red, color.green, color.blue, color.alpha);
 }
 
+std::string IconAtlasKey(const std::string_view semantic_id,
+                         const UiIconSize size) {
+  return std::string(semantic_id) + "@" + std::to_string(LogicalPixels(size));
+}
+
 bool MatchesQuery(const TreeRowView &row, const std::string &query) {
   if (query.empty()) {
     return true;
@@ -124,7 +130,7 @@ public:
   };
 
   struct PendingIcon {
-    std::string name;
+    std::string key;
     lunasvg::Bitmap bitmap;
   };
 
@@ -180,7 +186,7 @@ public:
           }
         }
       }
-      icon_rects.emplace(icon.name, rect_id);
+      icon_rects.emplace(icon.key, rect_id);
     }
     pending_icons.clear();
   }
@@ -482,86 +488,29 @@ public:
     ImGui::EndMainMenuBar();
   }
 
+  bool DrawAtlasIcon(const std::string_view icon, const UiIconSize size,
+                     const ImVec2 minimum, const ImVec2 maximum,
+                     const ImU32 color) {
+    const auto found = icon_rects.find(IconAtlasKey(icon, size));
+    if (found == icon_rects.end()) {
+      return false;
+    }
+    ImFontAtlasRect rect;
+    if (!ImGui::GetIO().Fonts->GetCustomRect(found->second, &rect)) {
+      return false;
+    }
+    ImGui::GetWindowDrawList()->AddImage(ImGui::GetIO().Fonts->TexRef, minimum,
+                                         maximum, rect.uv0, rect.uv1, color);
+    return true;
+  }
+
   void DrawToolbarIcon(const std::string &icon, const ImVec2 minimum,
                        const ImVec2 maximum, const ImU32 color) {
-    ImDrawList *draw_list = ImGui::GetWindowDrawList();
     const ImVec2 center((minimum.x + maximum.x) * 0.5f,
                         (minimum.y + maximum.y) * 0.5f);
-    const float left = center.x - 7.0f;
-    const float right = center.x + 7.0f;
-    const float top = center.y - 7.0f;
-    const float bottom = center.y + 7.0f;
-    if (const auto found = icon_rects.find(icon); found != icon_rects.end()) {
-      ImFontAtlasRect rect;
-      if (ImGui::GetIO().Fonts->GetCustomRect(found->second, &rect)) {
-        draw_list->AddImage(ImGui::GetIO().Fonts->TexRef,
-                            ImVec2(center.x - 8.0f, center.y - 8.0f),
-                            ImVec2(center.x + 8.0f, center.y + 8.0f), rect.uv0,
-                            rect.uv1, color);
-        return;
-      }
-    }
-    if (icon == "fit") {
-      draw_list->AddRect(ImVec2(left + 2.0f, top + 3.0f),
-                         ImVec2(right - 2.0f, bottom - 3.0f), color, 1.5f,
-                         ImDrawFlags_RoundCornersAll, 1.5f);
-      draw_list->AddLine(ImVec2(left, top), ImVec2(left + 5.0f, top), color,
-                         1.5f);
-      draw_list->AddLine(ImVec2(left, top), ImVec2(left, top + 5.0f), color,
-                         1.5f);
-      draw_list->AddLine(ImVec2(right, bottom), ImVec2(right - 5.0f, bottom),
-                         color, 1.5f);
-      draw_list->AddLine(ImVec2(right, bottom), ImVec2(right, bottom - 5.0f),
-                         color, 1.5f);
-    } else if (icon == "focus") {
-      draw_list->AddCircle(center, 4.0f, color, 0, 1.5f);
-      draw_list->AddLine(ImVec2(center.x, top), ImVec2(center.x, top + 4.0f),
-                         color, 1.5f);
-      draw_list->AddLine(ImVec2(center.x, bottom - 4.0f),
-                         ImVec2(center.x, bottom), color, 1.5f);
-      draw_list->AddLine(ImVec2(left, center.y), ImVec2(left + 4.0f, center.y),
-                         color, 1.5f);
-      draw_list->AddLine(ImVec2(right - 4.0f, center.y),
-                         ImVec2(right, center.y), color, 1.5f);
-    } else if (icon == "view") {
-      const ImVec2 points[] = {
-          ImVec2(center.x, top),          ImVec2(right, center.y - 3.0f),
-          ImVec2(right, center.y + 5.0f), ImVec2(center.x, bottom),
-          ImVec2(left, center.y + 5.0f),  ImVec2(left, center.y - 3.0f),
-      };
-      draw_list->AddPolyline(points, 6, color, ImDrawFlags_Closed, 1.5f);
-      draw_list->AddLine(ImVec2(left, center.y - 3.0f), center, color, 1.5f);
-      draw_list->AddLine(ImVec2(right, center.y - 3.0f), center, color, 1.5f);
-      draw_list->AddLine(center, ImVec2(center.x, bottom), color, 1.5f);
-    } else if (icon == "visibility" || icon == "eye") {
-      draw_list->AddBezierCubic(
-          ImVec2(left, center.y), ImVec2(center.x - 3.0f, top),
-          ImVec2(center.x + 3.0f, top), ImVec2(right, center.y), color, 1.5f);
-      draw_list->AddBezierCubic(
-          ImVec2(right, center.y), ImVec2(center.x + 3.0f, bottom),
-          ImVec2(center.x - 3.0f, bottom), ImVec2(left, center.y), color, 1.5f);
-      draw_list->AddCircleFilled(center, 2.5f, color);
-    } else if (icon == "orbit-locked" || icon == "orbit-unlocked") {
-      draw_list->AddRect(ImVec2(center.x - 5.0f, center.y - 1.0f),
-                         ImVec2(center.x + 5.0f, bottom), color, 1.5f, 0, 1.5f);
-      draw_list->PathClear();
-      draw_list->PathArcTo(ImVec2(center.x, center.y - 1.0f), 4.0f, 3.1415927f,
-                           icon == "orbit-locked" ? 6.2831853f : 5.45f);
-      draw_list->PathStroke(color, 0, 1.5f);
-    } else if (icon == "send") {
-      draw_list->AddLine(ImVec2(left, center.y), ImVec2(right, center.y), color,
-                         1.5f);
-      draw_list->AddLine(ImVec2(right - 5.0f, top + 3.0f),
-                         ImVec2(right, center.y), color, 1.5f);
-      draw_list->AddLine(ImVec2(right - 5.0f, bottom - 3.0f),
-                         ImVec2(right, center.y), color, 1.5f);
-    } else {
-      const std::string fallback = icon.empty() ? "•" : icon.substr(0, 1);
-      const ImVec2 size = ImGui::CalcTextSize(fallback.c_str());
-      draw_list->AddText(
-          ImVec2(center.x - size.x * 0.5f, center.y - size.y * 0.5f), color,
-          fallback.c_str());
-    }
+    static_cast<void>(DrawAtlasIcon(
+        icon, UiIconSize::Small16, ImVec2(center.x - 8.0f, center.y - 8.0f),
+        ImVec2(center.x + 8.0f, center.y + 8.0f), color));
   }
 
   bool ToolbarButton(const std::string &id, const std::string &label,
@@ -959,14 +908,29 @@ public:
   }
 
   void DrawActivityRail(const ApplicationView &view) {
+    const WorkspaceKind active_workspace =
+        WorkspaceForDestination(session.active_destination);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
     for (const ActivityView &activity : view.activities) {
+      if (!activity.availability.visible ||
+          WorkspaceForDestination(activity.destination) != active_workspace) {
+        continue;
+      }
       const NavigationItemResult result = NavigationItem({
           .id = "activity." +
                 std::to_string(static_cast<int>(activity.destination)),
           .label = activity.label,
-          .tooltip = activity.availability.disabled_reason,
+          .tooltip = activity.label,
           .selected = activity.destination == session.active_destination,
           .availability = ToAvailability(activity.availability),
+          .draw_icon =
+              [this, &activity](const Rect &bounds, const ColorRgba color) {
+                static_cast<void>(
+                    DrawAtlasIcon(activity.icon, UiIconSize::Rail24,
+                                  ImVec2(bounds.minimum.x, bounds.minimum.y),
+                                  ImVec2(bounds.maximum.x, bounds.maximum.y),
+                                  ImGui::GetColorU32(ToImVec4(color))));
+              },
       });
       if (result.activated &&
           activity.destination != session.active_destination) {
@@ -974,6 +938,7 @@ public:
         navigation_changed = true;
       }
     }
+    ImGui::PopStyleVar();
   }
 
   void DrawExplorer(const ApplicationView &view) {
@@ -1353,9 +1318,9 @@ ApplicationUi::Initialize(const std::filesystem::path &asset_root,
   io.Fonts->Clear();
   const float scale = std::clamp(dpi_scale, 0.75f, 2.0f);
   impl_->application_menu_font_size = Impl::kApplicationMenuFontSize * scale;
-  const auto load = [&report, &asset_root](const char *name,
+  const auto load = [&report, &asset_root](const std::string_view name,
                                            const float size) -> ImFont * {
-    const std::filesystem::path path = asset_root / "fonts" / name;
+    const std::filesystem::path path = asset_root / "fonts" / std::string(name);
     if (!std::filesystem::is_regular_file(path)) {
       report.messages.push_back("Missing UI font: " + path.string());
       return nullptr;
@@ -1368,45 +1333,32 @@ ApplicationUi::Initialize(const std::filesystem::path &asset_root,
     return font;
   };
 
-  impl_->regular_font = load("NotoSans-Regular.ttf", 16.0f * scale);
-  impl_->bold_font = load("NotoSans-Bold.ttf", 18.0f * scale);
-  impl_->mono_font = load("NotoSansMono-Regular.ttf", 16.0f * scale);
-  constexpr std::array<const char *, 14> kRequiredIcons = {
-      "alert.svg",   "arrow-right.svg", "camera.svg",  "check.svg",
-      "compact.svg", "eye.svg",         "focus.svg",   "gear.svg",
-      "grain.svg",   "lock.svg",        "package.svg", "plus.svg",
-      "search.svg",  "unlock.svg",
-  };
-  for (const char *icon : kRequiredIcons) {
-    const std::filesystem::path path = asset_root / "icons" / icon;
-    if (!std::filesystem::is_regular_file(path)) {
-      report.messages.push_back("Missing UI icon: " + path.string());
-    }
-  }
+  const std::span<const std::string_view> fonts = RequiredUiFontFiles();
+  impl_->regular_font = load(fonts[0], 16.0f * scale);
+  impl_->bold_font = load(fonts[1], 18.0f * scale);
+  impl_->mono_font = load(fonts[2], 16.0f * scale);
   if (impl_->regular_font == nullptr) {
     impl_->regular_font = io.Fonts->AddFontDefault();
     report.used_fallback_font = true;
   }
-  const std::array icon_sources{
-      std::pair{"fit", "package.svg"},
-      std::pair{"focus", "focus.svg"},
-      std::pair{"view", "camera.svg"},
-      std::pair{"visibility", "eye.svg"},
-      std::pair{"orbit-locked", "lock.svg"},
-      std::pair{"orbit-unlocked", "unlock.svg"},
-      std::pair{"send", "arrow-right.svg"},
-  };
   impl_->icon_rects.clear();
   impl_->pending_icons.clear();
-  const int icon_pixels =
-      std::max(16, static_cast<int>(std::round(16.0f * scale)));
-  for (const auto &[name, filename] : icon_sources) {
-    const std::filesystem::path path = asset_root / "icons" / filename;
+  for (const UiIconAssetSpec &asset : UiIconAssets()) {
+    const std::filesystem::path path =
+        asset_root / "icons" / std::string(asset.filename);
+    if (!std::filesystem::is_regular_file(path)) {
+      report.messages.push_back("Missing UI icon: " + path.string());
+      continue;
+    }
     std::unique_ptr<lunasvg::Document> document =
         lunasvg::Document::loadFromFile(path.string());
     if (document == nullptr) {
+      report.messages.push_back("Could not load UI icon: " + path.string());
       continue;
     }
+    const int logical_pixels = LogicalPixels(asset.size);
+    const int icon_pixels = std::max(
+        logical_pixels, static_cast<int>(std::round(logical_pixels * scale)));
     lunasvg::Bitmap bitmap = document->renderToBitmap(icon_pixels, icon_pixels);
     if (bitmap.isNull()) {
       report.messages.push_back("Could not rasterize UI icon: " +
@@ -1414,7 +1366,9 @@ ApplicationUi::Initialize(const std::filesystem::path &asset_root,
       continue;
     }
     bitmap.convertToRGBA();
-    impl_->pending_icons.push_back({.name = name, .bitmap = std::move(bitmap)});
+    impl_->pending_icons.push_back(
+        {.key = IconAtlasKey(asset.semantic_id, asset.size),
+         .bitmap = std::move(bitmap)});
   }
   io.FontDefault = impl_->regular_font;
   ApplyTheme(ResolvedTheme::Dark);

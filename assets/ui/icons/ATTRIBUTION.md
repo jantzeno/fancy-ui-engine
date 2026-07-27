@@ -1,8 +1,19 @@
 # Icon attribution
 
-The SVG masters in this directory are adapted from Primer Octicons and are
-licensed under the MIT License. Their paths are kept as source assets so the
-runtime can color them from semantic theme tokens instead of shipping
-hard-coded raster colors.
+The stock SVG masters in this directory are adapted from
+[`@primer/octicons` 19.29.2](https://www.npmjs.com/package/@primer/octicons)
+and are licensed under the MIT License:
 
-Source: https://github.com/primer/octicons
+- Alert, Arrow Right, Camera, Check, Eye, Gear, Lock, Package, Plus, Pulse,
+  Search, Stack, and Unlock.
+- Fit All and Focus Selected are Octicon-derived application variants.
+
+Bed, Compact, and Grain Direction are original SteppenFace CNC icons drawn to
+the same 16 px and 24 px construction rules. Each size is an independent
+master rather than a scaled copy.
+
+The SVG paths remain source assets so the runtime can rasterize them at the
+effective UI scale and tint their monochrome alpha masks with semantic theme
+tokens.
+
+Primer Octicons source: https://github.com/primer/octicons

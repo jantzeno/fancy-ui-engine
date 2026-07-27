@@ -1,0 +1,48 @@
+#include "fancy_ui/steppenface/ui_assets.hpp"
+
+#include <array>
+
+namespace fancy_ui::steppenface {
+
+std::span<const std::string_view> RequiredUiFontFiles() {
+  static constexpr std::array kFonts{
+      std::string_view{"NotoSans-Regular.ttf"},
+      std::string_view{"NotoSans-Bold.ttf"},
+      std::string_view{"NotoSansMono-Regular.ttf"},
+  };
+  return kFonts;
+}
+
+std::span<const UiIconAssetSpec> UiIconAssets() {
+  static constexpr std::array kIcons{
+      UiIconAssetSpec{"alert", UiIconSize::Small16, "alert-16.svg"},
+      UiIconAssetSpec{"send", UiIconSize::Small16, "arrow-right-16.svg"},
+      UiIconAssetSpec{"view", UiIconSize::Small16, "camera-16.svg"},
+      UiIconAssetSpec{"check", UiIconSize::Small16, "check-16.svg"},
+      UiIconAssetSpec{"visibility", UiIconSize::Small16, "eye-16.svg"},
+      UiIconAssetSpec{"fit", UiIconSize::Small16, "fit-all-16.svg"},
+      UiIconAssetSpec{"focus", UiIconSize::Small16, "focus-selected-16.svg"},
+      UiIconAssetSpec{"settings", UiIconSize::Small16, "gear-16.svg"},
+      UiIconAssetSpec{"orbit-locked", UiIconSize::Small16, "lock-16.svg"},
+      UiIconAssetSpec{"plus", UiIconSize::Small16, "plus-16.svg"},
+      UiIconAssetSpec{"orbit-unlocked", UiIconSize::Small16, "unlock-16.svg"},
+      UiIconAssetSpec{"model", UiIconSize::Small16, "package-16.svg"},
+      UiIconAssetSpec{"model", UiIconSize::Rail24, "package-24.svg"},
+      UiIconAssetSpec{"bed", UiIconSize::Small16, "bed-16.svg"},
+      UiIconAssetSpec{"bed", UiIconSize::Rail24, "bed-24.svg"},
+      UiIconAssetSpec{"objects", UiIconSize::Small16, "stack-16.svg"},
+      UiIconAssetSpec{"objects", UiIconSize::Rail24, "stack-24.svg"},
+      UiIconAssetSpec{"grain", UiIconSize::Small16, "grain-direction-16.svg"},
+      UiIconAssetSpec{"grain", UiIconSize::Rail24, "grain-direction-24.svg"},
+      UiIconAssetSpec{"search", UiIconSize::Small16, "search-16.svg"},
+      UiIconAssetSpec{"search", UiIconSize::Rail24, "search-24.svg"},
+      UiIconAssetSpec{"compact", UiIconSize::Small16, "compact-16.svg"},
+      UiIconAssetSpec{"compact", UiIconSize::Rail24, "compact-24.svg"},
+      UiIconAssetSpec{"diagnostics", UiIconSize::Small16, "pulse-16.svg"},
+      UiIconAssetSpec{"diagnostics", UiIconSize::Rail24, "pulse-24.svg"},
+      UiIconAssetSpec{"settings", UiIconSize::Rail24, "gear-24.svg"},
+  };
+  return kIcons;
+}
+
+} // namespace fancy_ui::steppenface

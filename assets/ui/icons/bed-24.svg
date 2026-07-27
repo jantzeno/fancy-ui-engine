@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="24"
+     height="24"
+     viewBox="0 0 24 24"
+     fill="none"
+     aria-hidden="true"
+     focusable="false">
+  <path d="M5.75 15.75v-10a1 1 0 0 1 1-1h12.5a1 1 0 0 1 1 1v11.5a1 1 0 0 1-1 1h-11"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+  <rect x="4.75" y="17.25" width="2" height="2" rx="0.25" fill="currentColor"/>
+</svg>

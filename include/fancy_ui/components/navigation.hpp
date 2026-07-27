@@ -2,6 +2,7 @@
 
 #include "fancy_ui/component_types.hpp"
 
+#include <functional>
 #include <string_view>
 
 namespace fancy_ui {
@@ -12,6 +13,7 @@ struct NavigationItemSpec {
   std::string_view tooltip;
   bool selected = false;
   Availability availability;
+  std::function<void(const Rect &, ColorRgba)> draw_icon;
 };
 
 struct NavigationItemResult : InteractionResult {

@@ -65,6 +65,7 @@ ApplicationShellResult Application(const ApplicationShellSpec &spec,
   const float main_height =
       std::max(0.0f, ImGui::GetContentRegionAvail().y - reserved_height);
   const int column_count = MainColumnCount(spec, state);
+  ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(0.0f, 0.0f));
   if (ImGui::BeginTable("##fancy-ui-main-regions", column_count,
                         ImGuiTableFlags_Resizable |
                             ImGuiTableFlags_BordersInnerV |
@@ -95,7 +96,9 @@ ApplicationShellResult Application(const ApplicationShellSpec &spec,
     column = 0;
     if (spec.activity_rail.visible && spec.activity_rail.draw) {
       ImGui::TableSetColumnIndex(column++);
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
       DrawRegion(spec.activity_rail, ImVec2(0.0f, main_height));
+      ImGui::PopStyleVar();
     }
     if (state.explorer_visible && spec.explorer.visible && spec.explorer.draw) {
       ImGui::TableSetColumnIndex(column);
@@ -115,6 +118,7 @@ ApplicationShellResult Application(const ApplicationShellSpec &spec,
     }
     ImGui::EndTable();
   }
+  ImGui::PopStyleVar();
 
   if (state.operation_tray_visible) {
     DrawRegion(spec.operation_tray,
