@@ -5,10 +5,11 @@
      fill="none"
      aria-hidden="true"
      focusable="false">
-  <path d="M5.75 15.75v-10a1 1 0 0 1 1-1h12.5a1 1 0 0 1 1 1v11.5a1 1 0 0 1-1 1h-11"
+  <path d="M4.151727 15.23575V5.314436c0-.6421454.4846609-1.162707 1.08252-1.162707h13.53151c.597859 0 1.08252.5205619 1.08252 1.162707v13.37113c0 .642145-.484661 1.162707-1.08252 1.162707H8.700247"
         stroke="currentColor"
         stroke-width="1.5"
         stroke-linecap="round"
         stroke-linejoin="round"/>
-  <rect x="4.75" y="17.25" width="2" height="2" rx="0.25" fill="currentColor"/>
+  <path d="M2.625 17.09827h3.75a.625.625 0 0 1 .625.625v3.75a.625.625 0 0 1-.625.625h-3.75A.625.625 0 0 1 2 21.47327v-3.75a.625.625 0 0 1 .625-.625Z"
+        fill="currentColor"/>
 </svg>
