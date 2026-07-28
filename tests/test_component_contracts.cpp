@@ -6,9 +6,11 @@
 
 #include <imgui.h>
 
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <set>
+#include <span>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -194,6 +196,214 @@ TEST_CASE("duration and mixed toggle states remain within their contracts") {
   REQUIRE_FALSE(duration.changed);
   REQUIRE(checkbox.state == fancy_ui::ToggleState::Mixed);
   REQUIRE_FALSE(checkbox.changed);
+  ImGui::DestroyContext();
+}
+
+TEST_CASE("hierarchy visibility reducers preserve mixed group meaning") {
+  using fancy_ui::ToggleState;
+
+  REQUIRE(fancy_ui::AggregateVisibility(std::span<const ToggleState>{}) ==
+          ToggleState::Off);
+  static constexpr std::array all_visible{ToggleState::On, ToggleState::On};
+  static constexpr std::array all_hidden{ToggleState::Off, ToggleState::Off};
+  static constexpr std::array mixed{ToggleState::On, ToggleState::Off};
+  static constexpr std::array nested_mixed{ToggleState::On, ToggleState::Mixed};
+  REQUIRE(fancy_ui::AggregateVisibility(all_visible) == ToggleState::On);
+  REQUIRE(fancy_ui::AggregateVisibility(all_hidden) == ToggleState::Off);
+  REQUIRE(fancy_ui::AggregateVisibility(mixed) == ToggleState::Mixed);
+  REQUIRE(fancy_ui::AggregateVisibility(nested_mixed) == ToggleState::Mixed);
+  REQUIRE(fancy_ui::NextVisibilityState(ToggleState::On) == ToggleState::Off);
+  REQUIRE(fancy_ui::NextVisibilityState(ToggleState::Off) == ToggleState::On);
+  REQUIRE(fancy_ui::NextVisibilityState(ToggleState::Mixed) == ToggleState::On);
+}
+
+TEST_CASE("color swatch opens a transactional picker and commits on Enter") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  io.DisplaySize = ImVec2(640.0f, 480.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  fancy_ui::ColorRgba value{
+      .red = 0.2f,
+      .green = 0.4f,
+      .blue = 0.6f,
+  };
+  fancy_ui::ColorPickerState picker;
+  fancy_ui::ColorSwatchResult result;
+  ImVec2 swatch_minimum;
+  ImVec2 swatch_maximum;
+  const auto draw = [&] {
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(260.0f, 420.0f), ImGuiCond_Always);
+    ImGui::Begin("color-contract", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoSavedSettings);
+    result = fancy_ui::ColorSwatch(
+        {
+            .id = "color",
+            .label = "Bed color",
+            .value = value,
+            .colors = std::span<const fancy_ui::ColorRgba>(&value, 1),
+        },
+        picker);
+    if (!picker.editing) {
+      swatch_minimum = ImGui::GetItemRectMin();
+      swatch_maximum = ImGui::GetItemRectMax();
+    }
+    ImGui::End();
+    ImGui::Render();
+  };
+
+  draw();
+  const ImVec2 swatch_center((swatch_minimum.x + swatch_maximum.x) * 0.5f,
+                             (swatch_minimum.y + swatch_maximum.y) * 0.5f);
+  io.AddMousePosEvent(swatch_center.x, swatch_center.y);
+  draw();
+  io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+  draw();
+  io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+  draw();
+  REQUIRE(result.activated);
+  REQUIRE(result.picker_open);
+  REQUIRE(picker.editing);
+
+  picker.draft = {
+      .red = 0.8f,
+      .green = 0.3f,
+      .blue = 0.1f,
+      .alpha = 0.75f,
+  };
+  io.AddKeyEvent(ImGuiKey_Enter, true);
+  draw();
+  REQUIRE(result.changed);
+  REQUIRE(result.committed);
+  REQUIRE_FALSE(result.cancelled);
+  REQUIRE_FALSE(result.picker_open);
+  REQUIRE(result.value == picker.draft);
+  REQUIRE(picker.restore_focus);
+  value = result.value;
+  io.AddKeyEvent(ImGuiKey_Enter, false);
+  draw();
+
+  io.AddMousePosEvent(swatch_center.x, swatch_center.y);
+  draw();
+  io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+  draw();
+  io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+  draw();
+  REQUIRE(result.picker_open);
+  picker.draft = {
+      .red = 0.1f,
+      .green = 0.9f,
+      .blue = 0.4f,
+  };
+  io.AddKeyEvent(ImGuiKey_Escape, true);
+  draw();
+  REQUIRE(result.cancelled);
+  REQUIRE_FALSE(result.committed);
+  REQUIRE_FALSE(result.changed);
+  REQUIRE(result.value == value);
+  REQUIRE_FALSE(result.picker_open);
+  io.AddKeyEvent(ImGuiKey_Escape, false);
+
+  ImGui::DestroyContext();
+}
+
+TEST_CASE("hierarchy inline targets do not activate the selectable row") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(640.0f, 480.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  const fancy_ui::IconPainter icon = [](const fancy_ui::Rect &,
+                                        const fancy_ui::ColorRgba) {};
+  fancy_ui::HierarchyRowResult result;
+  ImVec2 row_minimum;
+  ImVec2 row_maximum;
+  const auto draw = [&] {
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(420.0f, 80.0f), ImGuiCond_Always);
+    ImGui::Begin("hierarchy-contract", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoSavedSettings);
+    row_minimum = ImGui::GetCursorScreenPos();
+    row_maximum = ImVec2(row_minimum.x + ImGui::GetContentRegionAvail().x,
+                         row_minimum.y + fancy_ui::Scale(32.0f));
+    result = fancy_ui::HierarchyRow({
+        .id = "part",
+        .label = "Face plate",
+        .secondary_label = "Part 4",
+        .expandable = true,
+        .expanded = true,
+        .color =
+            fancy_ui::ColorRgba{
+                .red = 0.27f,
+                .green = 0.58f,
+                .blue = 0.97f,
+            },
+        .action_icon = icon,
+        .visibility = fancy_ui::ToggleState::On,
+        .visible_icon = icon,
+        .hidden_icon = icon,
+    });
+    ImGui::End();
+    ImGui::Render();
+  };
+  const auto click = [&](const ImVec2 point) {
+    io.AddMousePosEvent(point.x, point.y);
+    draw();
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+    draw();
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+    draw();
+    return result;
+  };
+
+  draw();
+  const float center_y = (row_minimum.y + row_maximum.y) * 0.5f;
+  const fancy_ui::HierarchyRowResult row =
+      click(ImVec2(row_minimum.x + 100.0f, center_y));
+  REQUIRE(row.activated);
+  REQUIRE_FALSE(row.expansion_changed);
+  REQUIRE_FALSE(row.color_activated);
+  REQUIRE_FALSE(row.action_activated);
+  REQUIRE_FALSE(row.visibility_changed);
+
+  const fancy_ui::HierarchyRowResult expander =
+      click(ImVec2(row_minimum.x + fancy_ui::Scale(20.0f), center_y));
+  REQUIRE_FALSE(expander.activated);
+  REQUIRE(expander.expansion_changed);
+
+  const fancy_ui::HierarchyRowResult color =
+      click(ImVec2(row_maximum.x - fancy_ui::Scale(72.0f), center_y));
+  REQUIRE_FALSE(color.activated);
+  REQUIRE(color.color_activated);
+
+  const fancy_ui::HierarchyRowResult action =
+      click(ImVec2(row_maximum.x - fancy_ui::Scale(42.0f), center_y));
+  REQUIRE_FALSE(action.activated);
+  REQUIRE(action.action_activated);
+
+  const fancy_ui::HierarchyRowResult visibility =
+      click(ImVec2(row_maximum.x - fancy_ui::Scale(14.0f), center_y));
+  REQUIRE_FALSE(visibility.activated);
+  REQUIRE(visibility.visibility_changed);
+  REQUIRE(visibility.visibility == fancy_ui::ToggleState::Off);
   ImGui::DestroyContext();
 }
 

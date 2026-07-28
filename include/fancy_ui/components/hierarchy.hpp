@@ -3,9 +3,27 @@
 #include "fancy_ui/component_types.hpp"
 
 #include <optional>
+#include <span>
 #include <string_view>
 
 namespace fancy_ui {
+
+/**
+ * Resolves descendant visibility for a parent hierarchy row.
+ *
+ * Empty groups resolve Off. Any disagreement, including an already mixed
+ * descendant, resolves Mixed.
+ */
+[[nodiscard]] ToggleState
+AggregateVisibility(std::span<const ToggleState> descendants);
+
+/**
+ * Returns the value produced by activating a visibility control.
+ *
+ * On becomes Off. Off and Mixed become On so one action can reveal an entire
+ * partially hidden group.
+ */
+[[nodiscard]] ToggleState NextVisibilityState(ToggleState current);
 
 struct HierarchyRowSpec {
   std::string_view id;
@@ -17,11 +35,16 @@ struct HierarchyRowSpec {
   bool expanded = false;
   bool selected = false;
   SemanticStatus status = SemanticStatus::Neutral;
+  IconPainter leading_icon;
   std::optional<ColorRgba> color;
+  std::string_view color_tooltip = "Edit color";
+  bool request_color_focus = false;
   IconPainter action_icon;
+  std::string_view action_tooltip = "Row actions";
   std::optional<ToggleState> visibility;
   IconPainter visible_icon;
   IconPainter hidden_icon;
+  std::string_view visibility_tooltip;
   Availability availability;
 };
 

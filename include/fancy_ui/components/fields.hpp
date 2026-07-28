@@ -122,14 +122,70 @@ struct ColorSwatchSpec {
   std::string_view id;
   std::string_view label;
   std::string_view tooltip;
+  std::string_view picker_title = "Choose color";
+  ColorRgba value;
   std::span<const ColorRgba> colors;
+  bool show_alpha = true;
   Availability availability;
 };
 
-struct ColorSwatchResult : InteractionResult {
-  bool activated = false;
+/**
+ * Retains one transactional color edit without hiding state in the component.
+ *
+ * Callers store this beside the edited value. The component owns only the
+ * popup presentation: opening copies value into draft, Apply or Enter commits
+ * it, and Cancel or Escape leaves the caller's value unchanged.
+ */
+struct ColorPickerState {
+  bool editing = false;
+  bool restore_focus = false;
+  ColorRgba original;
+  ColorRgba draft;
 };
 
-[[nodiscard]] ColorSwatchResult ColorSwatch(const ColorSwatchSpec &spec);
+struct ColorPickerPopupSpec {
+  std::string_view id;
+  std::string_view title = "Choose color";
+  ColorRgba value;
+  bool request_open = false;
+  bool show_alpha = true;
+};
+
+struct ColorPickerPopupResult {
+  bool opened = false;
+  bool changed = false;
+  bool committed = false;
+  bool cancelled = false;
+  bool picker_open = false;
+  ColorRgba value;
+};
+
+/**
+ * Draws a transactional color-picker popup for an arbitrary trigger.
+ *
+ * This is shared by ColorSwatch and inline hierarchy color actions. The caller
+ * supplies a stable ID and owns both the committed color and ColorPickerState.
+ */
+[[nodiscard]] ColorPickerPopupResult
+ColorPickerPopup(const ColorPickerPopupSpec &spec, ColorPickerState &state);
+
+struct ColorSwatchResult : InteractionResult {
+  bool activated = false;
+  bool changed = false;
+  bool committed = false;
+  bool cancelled = false;
+  bool picker_open = false;
+  ColorRgba value;
+};
+
+/**
+ * Draws a color swatch button and its keyboard-accessible picker.
+ *
+ * When colors contains multiple values the button previews each value. A
+ * committed edit returns one replacement color so callers can clear their
+ * mixed state explicitly.
+ */
+[[nodiscard]] ColorSwatchResult ColorSwatch(const ColorSwatchSpec &spec,
+                                            ColorPickerState &state);
 
 } // namespace fancy_ui

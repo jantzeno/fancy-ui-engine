@@ -36,49 +36,87 @@ ColorRgba StatusForeground(const SemanticStatus status) {
   return palette.text_primary;
 }
 
-bool IconTarget(const char *id, const ImVec2 position,
-                const IconPainter &painter, const ColorRgba color,
-                const std::string_view tooltip) {
+struct InlineTargetResult {
+  bool activated = false;
+  InteractionResult interaction;
+  ImVec2 minimum;
+  ImVec2 maximum;
+};
+
+InlineTargetResult InlineTarget(const char *id, const ImVec2 position,
+                                const Availability &availability,
+                                const std::string_view tooltip) {
   ImGui::SetCursorScreenPos(position);
   ImGui::SetNextItemAllowOverlap();
+  detail::BeginAvailability(availability);
   const bool activated = ImGui::InvisibleButton(
       id, ImVec2(Scale(24.0f), Scale(24.0f)), ImGuiButtonFlags_EnableNav);
-  const InteractionResult interaction{
-      .hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled),
-      .focused = ImGui::IsItemFocused(),
-      .active = ImGui::IsItemActive(),
-  };
-  if (interaction.hovered) {
+  const InteractionResult interaction = detail::CaptureInteraction();
+  const ImVec2 minimum = ImGui::GetItemRectMin();
+  const ImVec2 maximum = ImGui::GetItemRectMax();
+  if (interaction.hovered && availability.enabled && !availability.busy) {
     ImGui::GetWindowDrawList()->AddRectFilled(
-        ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+        minimum, maximum,
         ImGui::GetColorU32(ToImVec4(CurrentPalette().control_hover)),
         Scale(3.0f));
   }
+  detail::DrawFocusRing(interaction);
+  detail::EndAvailability(availability, tooltip);
+  return {
+      .activated = activated && availability.enabled && !availability.busy,
+      .interaction = interaction,
+      .minimum = minimum,
+      .maximum = maximum,
+  };
+}
+
+InlineTargetResult IconTarget(const char *id, const ImVec2 position,
+                              const IconPainter &painter, const ColorRgba color,
+                              const std::string_view tooltip,
+                              const Availability &availability) {
+  const InlineTargetResult target =
+      InlineTarget(id, position, availability, tooltip);
   if (painter) {
-    const ImVec2 minimum = ImGui::GetItemRectMin();
     const float inset = Scale(4.0f);
-    painter({.minimum = {.x = minimum.x + inset, .y = minimum.y + inset},
-             .maximum = {.x = minimum.x + Scale(24.0f) - inset,
-                         .y = minimum.y + Scale(24.0f) - inset}},
+    painter({.minimum = {.x = target.minimum.x + inset,
+                         .y = target.minimum.y + inset},
+             .maximum = {.x = target.maximum.x - inset,
+                         .y = target.maximum.y - inset}},
             color);
   }
-  detail::DrawFocusRing(interaction);
-  if ((interaction.hovered ||
-       (interaction.focused && ImGui::GetIO().NavVisible)) &&
-      !tooltip.empty()) {
-    ImGui::SetTooltip("%s", detail::Owned(tooltip).c_str());
-  }
-  return activated;
+  return target;
 }
 
 } // namespace
+
+ToggleState
+AggregateVisibility(const std::span<const ToggleState> descendants) {
+  if (descendants.empty()) {
+    return ToggleState::Off;
+  }
+  const ToggleState first = descendants.front();
+  if (first == ToggleState::Mixed) {
+    return ToggleState::Mixed;
+  }
+  for (const ToggleState state : descendants.subspan(1)) {
+    if (state == ToggleState::Mixed || state != first) {
+      return ToggleState::Mixed;
+    }
+  }
+  return first;
+}
+
+ToggleState NextVisibilityState(const ToggleState current) {
+  return current == ToggleState::On ? ToggleState::Off : ToggleState::On;
+}
 
 HierarchyRowResult HierarchyRow(const HierarchyRowSpec &spec) {
   const std::string id = detail::Owned(spec.id);
   const bool disabled = !spec.availability.enabled || spec.availability.busy;
   const SemanticPalette &palette = CurrentPalette();
   const float height = Scale(32.0f);
-  const float available_width = ImGui::GetContentRegionAvail().x;
+  const float available_width =
+      std::max(ImGui::GetContentRegionAvail().x, Scale(1.0f));
   const float color_width = spec.color.has_value() ? Scale(32.0f) : 0.0f;
   const float action_width = spec.action_icon ? Scale(28.0f) : 0.0f;
   const float visibility_width =
@@ -109,6 +147,11 @@ HierarchyRowResult HierarchyRow(const HierarchyRowSpec &spec) {
     draw_list->AddRectFilled(minimum, maximum,
                              ImGui::GetColorU32(ToImVec4(colors.fill)));
   }
+  if (spec.selected) {
+    draw_list->AddRectFilled(minimum,
+                             ImVec2(minimum.x + Scale(3.0f), maximum.y),
+                             ImGui::GetColorU32(ToImVec4(palette.focus)));
+  }
   if (spec.status == SemanticStatus::Failure) {
     draw_list->AddRect(minimum, maximum,
                        ImGui::GetColorU32(ToImVec4(palette.failure)), 0.0f, 0,
@@ -123,11 +166,12 @@ HierarchyRowResult HierarchyRow(const HierarchyRowSpec &spec) {
   bool expanded = spec.expanded;
   if (spec.expandable) {
     const ImVec2 expander_position(text_x, center_y - Scale(12.0f));
-    ImGui::SetCursorScreenPos(expander_position);
-    ImGui::SetNextItemAllowOverlap();
-    if (ImGui::InvisibleButton("##expander",
-                               ImVec2(Scale(24.0f), Scale(24.0f))) &&
-        !disabled) {
+    const std::string expansion_tooltip =
+        std::string(spec.expanded ? "Collapse " : "Expand ") +
+        detail::Owned(spec.label);
+    const InlineTargetResult expander = InlineTarget(
+        "##expander", expander_position, spec.availability, expansion_tooltip);
+    if (expander.activated) {
       expansion_changed = true;
       expanded = !expanded;
     }
@@ -135,7 +179,7 @@ HierarchyRowResult HierarchyRow(const HierarchyRowSpec &spec) {
                         expander_position.y + Scale(12.0f));
     const ImU32 triangle_color = ImGui::GetColorU32(
         ToImVec4(disabled ? palette.text_disabled : palette.text_secondary));
-    if (spec.expanded) {
+    if (expanded) {
       draw_list->AddTriangleFilled(
           ImVec2(center.x - Scale(5.0f), center.y - Scale(2.0f)),
           ImVec2(center.x + Scale(5.0f), center.y - Scale(2.0f)),
@@ -149,6 +193,18 @@ HierarchyRowResult HierarchyRow(const HierarchyRowSpec &spec) {
     text_x += Scale(24.0f);
   } else {
     text_x += Scale(16.0f);
+  }
+
+  if (spec.leading_icon) {
+    const float icon_size = Scale(16.0f);
+    spec.leading_icon(
+        {
+            .minimum = {.x = text_x, .y = center_y - icon_size * 0.5f},
+            .maximum = {.x = text_x + icon_size,
+                        .y = center_y + icon_size * 0.5f},
+        },
+        disabled ? palette.text_disabled : StatusForeground(spec.status));
+    text_x += Scale(20.0f);
   }
 
   const ColorRgba label_color = disabled ? palette.text_disabled
@@ -178,14 +234,12 @@ HierarchyRowResult HierarchyRow(const HierarchyRowSpec &spec) {
   float trailing_x = maximum.x - trailing_width;
   bool color_activated = false;
   if (spec.color.has_value()) {
-    ImGui::SetCursorScreenPos(
-        ImVec2(trailing_x + Scale(4.0f), center_y - Scale(12.0f)));
-    ImGui::SetNextItemAllowOverlap();
-    color_activated =
-        ImGui::InvisibleButton("##color", ImVec2(Scale(24.0f), Scale(24.0f)),
-                               ImGuiButtonFlags_EnableNav);
-    const ImVec2 swatch_min(ImGui::GetItemRectMin().x + Scale(5.0f),
-                            ImGui::GetItemRectMin().y + Scale(5.0f));
+    const InlineTargetResult color_target = InlineTarget(
+        "##color", ImVec2(trailing_x + Scale(4.0f), center_y - Scale(12.0f)),
+        spec.availability, spec.color_tooltip);
+    color_activated = color_target.activated;
+    const ImVec2 swatch_min(color_target.minimum.x + Scale(5.0f),
+                            color_target.minimum.y + Scale(5.0f));
     const ImVec2 swatch_max(swatch_min.x + Scale(14.0f),
                             swatch_min.y + Scale(14.0f));
     draw_list->AddRectFilled(swatch_min, swatch_max,
@@ -194,16 +248,21 @@ HierarchyRowResult HierarchyRow(const HierarchyRowSpec &spec) {
     draw_list->AddRect(swatch_min, swatch_max,
                        ImGui::GetColorU32(ToImVec4(palette.border_strong)),
                        Scale(2.0f));
+    if (spec.request_color_focus) {
+      ImGui::SetKeyboardFocusHere(-1);
+    }
     trailing_x += color_width;
   }
 
   bool action_activated = false;
   if (spec.action_icon) {
-    action_activated = IconTarget(
-        "##action", ImVec2(trailing_x + Scale(2.0f), center_y - Scale(12.0f)),
-        spec.action_icon,
-        disabled ? palette.text_disabled : palette.text_secondary,
-        "Row actions");
+    action_activated =
+        IconTarget("##action",
+                   ImVec2(trailing_x + Scale(2.0f), center_y - Scale(12.0f)),
+                   spec.action_icon,
+                   disabled ? palette.text_disabled : palette.text_secondary,
+                   spec.action_tooltip, spec.availability)
+            .activated;
     trailing_x += action_width;
   }
 
@@ -212,14 +271,30 @@ HierarchyRowResult HierarchyRow(const HierarchyRowSpec &spec) {
   if (spec.visibility.has_value()) {
     const IconPainter &icon =
         visibility == ToggleState::Off ? spec.hidden_icon : spec.visible_icon;
-    visibility_changed = IconTarget(
+    const std::string visibility_tooltip =
+        !spec.visibility_tooltip.empty()
+            ? detail::Owned(spec.visibility_tooltip)
+        : visibility == ToggleState::On    ? "Hide"
+        : visibility == ToggleState::Mixed ? "Show all descendants"
+                                           : "Show";
+    const InlineTargetResult visibility_target = IconTarget(
         "##visibility",
         ImVec2(trailing_x + Scale(2.0f), center_y - Scale(12.0f)), icon,
         disabled ? palette.text_disabled : palette.text_secondary,
-        visibility == ToggleState::On ? "Hide" : "Show");
-    if (visibility_changed && !disabled) {
-      visibility =
-          visibility == ToggleState::On ? ToggleState::Off : ToggleState::On;
+        visibility_tooltip, spec.availability);
+    visibility_changed = visibility_target.activated;
+    if (visibility == ToggleState::Mixed) {
+      draw_list->AddLine(
+          ImVec2(visibility_target.minimum.x + Scale(7.0f),
+                 visibility_target.maximum.y - Scale(4.0f)),
+          ImVec2(visibility_target.maximum.x - Scale(7.0f),
+                 visibility_target.maximum.y - Scale(4.0f)),
+          ImGui::GetColorU32(ToImVec4(disabled ? palette.text_disabled
+                                               : palette.text_primary)),
+          Scale(2.0f));
+    }
+    if (visibility_changed) {
+      visibility = NextVisibilityState(visibility);
     }
   }
 

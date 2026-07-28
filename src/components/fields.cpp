@@ -1,5 +1,6 @@
 #include "fancy_ui/components/fields.hpp"
 
+#include "fancy_ui/components/button.hpp"
 #include "fancy_ui/components/checkbox.hpp"
 #include "fancy_ui/theme.hpp"
 #include "internal/component_internal.hpp"
@@ -8,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cfloat>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -23,6 +25,15 @@ ImVec4 ToImVec4(const ColorRgba color) {
 bool CancelledThisFrame(const InteractionResult &interaction) {
   return (interaction.active || interaction.focused) &&
          ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+}
+
+ColorRgba ClampColor(const ColorRgba color) {
+  return {
+      .red = std::clamp(color.red, 0.0f, 1.0f),
+      .green = std::clamp(color.green, 0.0f, 1.0f),
+      .blue = std::clamp(color.blue, 0.0f, 1.0f),
+      .alpha = std::clamp(color.alpha, 0.0f, 1.0f),
+  };
 }
 
 } // namespace
@@ -229,7 +240,105 @@ VisibilityToggleResult VisibilityToggle(const VisibilityToggleSpec &spec) {
   return result;
 }
 
-ColorSwatchResult ColorSwatch(const ColorSwatchSpec &spec) {
+ColorPickerPopupResult ColorPickerPopup(const ColorPickerPopupSpec &spec,
+                                        ColorPickerState &state) {
+  ColorPickerPopupResult result;
+  result.value = spec.value;
+  const bool was_editing = state.editing;
+
+  ImGui::PushID(detail::Owned(spec.id).c_str());
+  if (spec.request_open) {
+    state.editing = true;
+    state.restore_focus = false;
+    state.original = ClampColor(spec.value);
+    state.draft = state.original;
+    ImGui::OpenPopup("##color-picker");
+    result.opened = true;
+  }
+
+  ImGui::SetNextWindowSizeConstraints(ImVec2(Scale(280.0f), 0.0f),
+                                      ImVec2(Scale(360.0f), FLT_MAX));
+  if (ImGui::BeginPopup("##color-picker")) {
+    state.editing = true;
+    ImGui::TextUnformatted(detail::Owned(spec.title).c_str());
+    ImGui::Separator();
+    std::array<float, 4> draft{
+        state.draft.red,
+        state.draft.green,
+        state.draft.blue,
+        state.draft.alpha,
+    };
+    const std::array<float, 4> original{
+        state.original.red,
+        state.original.green,
+        state.original.blue,
+        state.original.alpha,
+    };
+    ImGuiColorEditFlags flags =
+        ImGuiColorEditFlags_AlphaPreviewHalf | ImGuiColorEditFlags_NoLabel;
+    if (spec.show_alpha) {
+      flags |= ImGuiColorEditFlags_AlphaBar;
+    } else {
+      flags |= ImGuiColorEditFlags_NoAlpha;
+    }
+    ImGui::SetNextItemWidth(Scale(260.0f));
+    if (ImGui::ColorPicker4("##value", draft.data(), flags, original.data())) {
+      state.draft = ClampColor({
+          .red = draft[0],
+          .green = draft[1],
+          .blue = draft[2],
+          .alpha = spec.show_alpha ? draft[3] : state.original.alpha,
+      });
+    }
+
+    const bool window_focused =
+        ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+    bool commit = window_focused && ImGui::IsKeyPressed(ImGuiKey_Enter, false);
+    bool cancel = window_focused && ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+    commit |= Button({
+                         .id = "apply",
+                         .label = "Apply",
+                         .variant = ButtonVariant::Primary,
+                         .size = {.x = 72.0f, .y = 28.0f},
+                     })
+                  .activated;
+    ImGui::SameLine();
+    cancel |= Button({
+                         .id = "cancel",
+                         .label = "Cancel",
+                         .size = {.x = 72.0f, .y = 28.0f},
+                     })
+                  .activated;
+
+    if (cancel) {
+      result.cancelled = true;
+      result.value = state.original;
+      state.editing = false;
+      state.restore_focus = true;
+      ImGui::CloseCurrentPopup();
+    } else if (commit) {
+      result.changed = state.draft != state.original;
+      result.committed = true;
+      result.value = state.draft;
+      state.editing = false;
+      state.restore_focus = true;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+  } else if (was_editing && !spec.request_open && state.editing) {
+    // Clicking outside a non-modal picker is equivalent to cancelling it.
+    result.cancelled = true;
+    result.value = state.original;
+    state.editing = false;
+    state.restore_focus = true;
+  }
+  result.picker_open = state.editing;
+  ImGui::PopID();
+  return result;
+}
+
+ColorSwatchResult ColorSwatch(const ColorSwatchSpec &spec,
+                              ColorPickerState &state) {
   ImGui::PushID(detail::Owned(spec.id).c_str());
   const detail::FieldLayout layout = detail::BeginFieldLayout(spec.label);
   detail::BeginAvailability(spec.availability);
@@ -265,14 +374,34 @@ ColorSwatchResult ColorSwatch(const ColorSwatchSpec &spec) {
                              ImGui::GetColorU32(ToImVec4(color)));
   }
   detail::DrawFocusRing(interaction, true);
+  if (state.restore_focus) {
+    ImGui::SetKeyboardFocusHere(-1);
+    state.restore_focus = false;
+  }
   detail::EndAvailability(spec.availability, spec.tooltip);
   detail::EndFieldLayout(layout, {});
+
+  const bool request_open =
+      activated && spec.availability.enabled && !spec.availability.busy;
+  const ColorPickerPopupResult picker = ColorPickerPopup(
+      {
+          .id = "picker",
+          .title = spec.picker_title,
+          .value = spec.value,
+          .request_open = request_open,
+          .show_alpha = spec.show_alpha,
+      },
+      state);
   ImGui::PopID();
 
   ColorSwatchResult result;
   static_cast<InteractionResult &>(result) = interaction;
-  result.activated =
-      activated && spec.availability.enabled && !spec.availability.busy;
+  result.activated = request_open;
+  result.changed = picker.changed;
+  result.committed = picker.committed;
+  result.cancelled = picker.cancelled;
+  result.picker_open = picker.picker_open;
+  result.value = picker.value;
   return result;
 }
 

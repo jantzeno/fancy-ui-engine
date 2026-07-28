@@ -6,30 +6,16 @@
 
 #include <imgui.h>
 
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <span>
 #include <string>
+#include <string_view>
 
 namespace fancy_ui::gallery {
 
 namespace {
-
-struct ExampleState {
-  double spacing = 8.0;
-  std::size_t rotation_option = 0;
-  int hours = 0;
-  int minutes = 5;
-  float explode = 38.0f;
-  int rotations = 8;
-  ToggleState checkbox = ToggleState::On;
-  ToggleState visible = ToggleState::On;
-  ToggleState enabled = ToggleState::On;
-  ToggleState locked = ToggleState::On;
-  bool assembly_expanded = true;
-};
-
-ExampleState examples;
 
 void Heading(const char *title, ImFont *font) {
   if (font != nullptr) {
@@ -44,7 +30,8 @@ void Heading(const char *title, ImFont *font) {
 }
 
 void GalleryCard(const char *id, const char *title, ImFont *heading_font,
-                 const std::function<void()> &draw) {
+                 const std::function<void()> &draw,
+                 const bool scrollable = false) {
   ImGui::TableNextColumn();
   ImGui::PushID(id);
   ImGui::PushStyleColor(
@@ -53,7 +40,8 @@ void GalleryCard(const char *id, const char *title, ImFont *heading_font,
              CurrentPalette().surface.blue, CurrentPalette().surface.alpha));
   if (ImGui::BeginChild("##card", ImVec2(Scale(300.0f), Scale(236.0f)),
                         ImGuiChildFlags_Borders,
-                        ImGuiWindowFlags_NoScrollbar)) {
+                        scrollable ? ImGuiWindowFlags_NoSavedSettings
+                                   : ImGuiWindowFlags_NoScrollbar)) {
     Heading(title, heading_font);
     draw();
   }
@@ -62,33 +50,50 @@ void GalleryCard(const char *id, const char *title, ImFont *heading_font,
   ImGui::PopID();
 }
 
-void PreviewButton(const char *id, const char *label,
-                   const detail::InteractionPreview preview) {
+ButtonResult PreviewButton(const char *id, const char *label,
+                           const detail::InteractionPreview preview) {
   const detail::ScopedInteractionPreview state(preview);
-  static_cast<void>(Button({
+  return Button({
       .id = id,
       .label = label,
       .size = {.x = 64.0f, .y = 32.0f},
-  }));
+  });
 }
 
-void DrawButtons() {
-  PreviewButton("default", "Default", detail::InteractionPreview::Rest);
+void DrawButtons(GalleryState &state) {
+  if (PreviewButton("default", "Default", detail::InteractionPreview::Rest)
+          .activated) {
+    state.button_feedback = "Default button activated.";
+  }
   ImGui::SameLine();
-  PreviewButton("hovered", "Hovered", detail::InteractionPreview::Hovered);
+  if (PreviewButton("hovered", "Hovered", detail::InteractionPreview::Hovered)
+          .activated) {
+    state.button_feedback = "Hovered preview activated.";
+  }
   ImGui::SameLine();
-  PreviewButton("pressed", "Pressed", detail::InteractionPreview::Pressed);
+  if (PreviewButton("pressed", "Pressed", detail::InteractionPreview::Pressed)
+          .activated) {
+    state.button_feedback = "Pressed preview activated.";
+  }
   ImGui::SameLine();
-  PreviewButton("focused", "Focused", detail::InteractionPreview::Focused);
+  if (PreviewButton("focused", "Focused", detail::InteractionPreview::Focused)
+          .activated) {
+    state.button_feedback = "Focused preview activated.";
+  }
+  ImGui::Spacing();
+  ImGui::TextDisabled("%s", state.button_feedback.c_str());
 }
 
-void DrawAvailability() {
-  static_cast<void>(Button({
+void DrawAvailability(GalleryState &state) {
+  const ButtonResult selected = Button({
       .id = "selected",
       .label = "Selected",
-      .selected = true,
+      .selected = state.availability_selected,
       .size = {.x = 82.0f, .y = 32.0f},
-  }));
+  });
+  if (selected.activated) {
+    state.availability_selected = !state.availability_selected;
+  }
   ImGui::SameLine();
   static_cast<void>(Button({
       .id = "disabled",
@@ -101,7 +106,7 @@ void DrawAvailability() {
       .size = {.x = 82.0f, .y = 32.0f},
   }));
   ImGui::SameLine();
-  static_cast<void>(Button({
+  const ButtonResult invalid = Button({
       .id = "invalid",
       .label = "Invalid",
       .validation =
@@ -109,22 +114,24 @@ void DrawAvailability() {
               .invalid = true,
           },
       .size = {.x = 76.0f, .y = 32.0f},
-  }));
+  });
   ImGui::Spacing();
-  ImGui::TextDisabled("Disabled - select an eligible object");
+  ImGui::TextDisabled(
+      "%s", invalid.activated ? "Invalid control activated; validation remains."
+                              : "Disabled - select an eligible object");
 }
 
-void DrawInputs() {
+void DrawInputs(GalleryState &state) {
   const NumericInputResult spacing = NumericInput({
       .id = "spacing",
       .label = "Spacing",
       .unit = "mm",
-      .value = examples.spacing,
+      .value = state.spacing,
       .minimum = 0.0,
       .format = "%.1f",
   });
   if (spacing.changed) {
-    examples.spacing = spacing.value;
+    state.spacing = spacing.value;
   }
   static constexpr std::array options{
       SelectOption{.id = "quarters", .label = "0°, 90°"},
@@ -134,35 +141,35 @@ void DrawInputs() {
       .id = "rotation",
       .label = "Rotation",
       .options = options,
-      .selected_index = examples.rotation_option,
+      .selected_index = state.rotation_option,
   });
   if (rotation.changed) {
-    examples.rotation_option = rotation.selected_index;
+    state.rotation_option = rotation.selected_index;
   }
   const DurationResult duration = Duration({
       .id = "duration",
       .label = "Duration",
-      .hours = examples.hours,
-      .minutes = examples.minutes,
+      .hours = state.hours,
+      .minutes = state.minutes,
   });
   if (duration.changed) {
-    examples.hours = duration.hours;
-    examples.minutes = duration.minutes;
+    state.hours = duration.hours;
+    state.minutes = duration.minutes;
   }
 }
 
-void DrawSlider() {
+void DrawSlider(GalleryState &state) {
   const SliderResult result = Slider({
       .id = "explode",
       .label = "Explode",
       .unit = "%",
-      .value = examples.explode,
+      .value = state.explode,
       .minimum = 0.0f,
       .maximum = 100.0f,
       .format = "%.0f",
   });
   if (result.changed) {
-    examples.explode = result.value;
+    state.explode = result.value;
   }
   ImGui::Spacing();
   if (ImGui::BeginTable("##slider-scale", 3,
@@ -180,11 +187,11 @@ void DrawSlider() {
   }
 }
 
-void DrawCompass(const bool inherited) {
+void DrawCompass(GalleryState &state, const bool inherited) {
   const RotationCompassResult result = RotationCompass({
       .id = inherited ? "inherited" : "local",
       .label = inherited ? "Allowed rotations" : "Rotations",
-      .count = examples.rotations,
+      .count = state.rotations,
       .inherited = inherited,
       .availability =
           inherited ? Availability{.enabled = false,
@@ -192,29 +199,35 @@ void DrawCompass(const bool inherited) {
                     : Availability{},
   });
   if (result.changed) {
-    examples.rotations = result.count;
+    state.rotations = result.count;
   }
 }
 
-void DrawCheckboxes() {
-  const CheckboxResult state = Checkbox({
+void DrawCheckboxes(GalleryState &state) {
+  const CheckboxResult checkbox = Checkbox({
       .id = "on",
       .label = "Enabled",
-      .state = examples.checkbox,
+      .state = state.checkbox,
   });
-  if (state.changed) {
-    examples.checkbox = state.state;
+  if (checkbox.changed) {
+    state.checkbox = checkbox.state;
   }
-  static_cast<void>(Checkbox({
+  const CheckboxResult off = Checkbox({
       .id = "off",
-      .label = "Disabled",
-      .state = ToggleState::Off,
-  }));
-  static_cast<void>(Checkbox({
+      .label = "Off",
+      .state = state.checkbox_off,
+  });
+  if (off.changed) {
+    state.checkbox_off = off.state;
+  }
+  const CheckboxResult mixed = Checkbox({
       .id = "mixed",
       .label = "Mixed",
-      .state = ToggleState::Mixed,
-  }));
+      .state = state.checkbox_mixed,
+  });
+  if (mixed.changed) {
+    state.checkbox_mixed = mixed.state;
+  }
   static_cast<void>(Checkbox({
       .id = "unavailable",
       .label = "Unavailable",
@@ -227,57 +240,63 @@ void DrawCheckboxes() {
   }));
 }
 
-void DrawVisibility(detail::UiAssetAtlas &assets) {
+void DrawVisibility(detail::UiAssetAtlas &assets, GalleryState &state) {
   const IconPainter visible = assets.Painter("visibility");
   const IconPainter hidden = assets.Painter("visibility-off");
   const VisibilityToggleResult result = VisibilityToggle({
       .id = "visible",
       .label = "Overlay",
-      .state = examples.visible,
+      .state = state.visible,
       .visible_icon = visible,
       .hidden_icon = hidden,
   });
   if (result.changed) {
-    examples.visible = result.state;
+    state.visible = result.state;
   }
-  static_cast<void>(VisibilityToggle({
-      .id = "hidden",
+  const VisibilityToggleResult guides = VisibilityToggle({
+      .id = "guides",
       .label = "Guides",
-      .state = ToggleState::Off,
+      .state = state.guides_visible,
       .visible_icon = visible,
       .hidden_icon = hidden,
-  }));
-  static_cast<void>(VisibilityToggle({
+  });
+  if (guides.changed) {
+    state.guides_visible = guides.state;
+  }
+  const VisibilityToggleResult selection = VisibilityToggle({
       .id = "mixed",
       .label = "Selection",
-      .state = ToggleState::Mixed,
+      .state = state.selection_visible,
       .visible_icon = visible,
       .hidden_icon = hidden,
-  }));
+  });
+  if (selection.changed) {
+    state.selection_visible = selection.state;
+  }
 }
 
-void DrawEnabledLocked(detail::UiAssetAtlas &assets) {
+void DrawEnabledLocked(detail::UiAssetAtlas &assets, GalleryState &state) {
   const IconPainter enabled = assets.Painter("check");
   const IconPainter locked = assets.Painter("orbit-locked");
   const IconPainter unlocked = assets.Painter("orbit-unlocked");
   const CheckboxResult enabled_result = Checkbox({
       .id = "enabled",
       .label = "Direction enabled",
-      .state = examples.enabled,
+      .state = state.enabled,
       .on_icon = enabled,
   });
   if (enabled_result.changed) {
-    examples.enabled = enabled_result.state;
+    state.enabled = enabled_result.state;
   }
   const CheckboxResult locked_result = Checkbox({
       .id = "locked",
       .label = "Direction locked",
-      .state = examples.locked,
+      .state = state.locked,
       .on_icon = locked,
       .off_icon = unlocked,
   });
   if (locked_result.changed) {
-    examples.locked = locked_result.state;
+    state.locked = locked_result.state;
   }
   static_cast<void>(Checkbox({
       .id = "inherited",
@@ -293,76 +312,327 @@ void DrawEnabledLocked(detail::UiAssetAtlas &assets) {
   }));
 }
 
-void DrawTreeRows(detail::UiAssetAtlas &assets) {
-  const IconPainter visible = assets.Painter("visibility");
-  const IconPainter hidden = assets.Painter("visibility-off");
-  const IconPainter more = assets.Painter("more");
-  const HierarchyRowResult assembly = HierarchyRow({
-      .id = "assembly",
-      .label = "Front housing",
-      .secondary_label = "Assembly",
-      .expandable = true,
-      .expanded = examples.assembly_expanded,
-      .selected = true,
-      .action_icon = more,
-      .visibility = ToggleState::On,
-      .visible_icon = visible,
-      .hidden_icon = hidden,
-  });
-  if (assembly.expansion_changed) {
-    examples.assembly_expanded = assembly.expanded;
+template <std::size_t Size>
+void ApplySelection(std::array<bool, Size> &selection, int &anchor,
+                    const int index, const bool additive, const bool range) {
+  if (range && anchor >= 0) {
+    selection.fill(false);
+    const int first = std::min(anchor, index);
+    const int last = std::max(anchor, index);
+    for (int selected = first; selected <= last; ++selected) {
+      selection[static_cast<std::size_t>(selected)] = true;
+    }
+    return;
   }
-  static_cast<void>(HierarchyRow({
-      .id = "part",
-      .label = "Face plate",
-      .secondary_label = "Part 4",
-      .depth = 1,
-      .color = ColorRgba{.red = 0.27f, .green = 0.58f, .blue = 0.97f},
-      .visibility = ToggleState::Off,
-      .visible_icon = visible,
-      .hidden_icon = hidden,
-  }));
-  {
-    const detail::ScopedInteractionPreview focus(
-        detail::InteractionPreview::Focused);
-    static_cast<void>(HierarchyRow({
-        .id = "path",
-        .label = "Outer contour",
-        .secondary_label = "Path 184",
-        .depth = 2,
-        .action_icon = more,
-        .visibility = ToggleState::On,
-        .visible_icon = visible,
-        .hidden_icon = hidden,
-    }));
+  if (additive) {
+    selection[static_cast<std::size_t>(index)] =
+        !selection[static_cast<std::size_t>(index)];
+  } else {
+    selection.fill(false);
+    selection[static_cast<std::size_t>(index)] = true;
   }
+  anchor = index;
 }
 
-void DrawIssueHierarchy(detail::UiAssetAtlas &assets) {
-  const IconPainter more = assets.Painter("more");
+void DrawTreeRows(detail::UiAssetAtlas &assets, GalleryState &state) {
+  static constexpr std::array<std::string_view, 3> labels{
+      "Front housing",
+      "Face plate",
+      "Outer contour",
+  };
   const IconPainter visible = assets.Painter("visibility");
   const IconPainter hidden = assets.Painter("visibility-off");
-  static_cast<void>(HierarchyRow({
-      .id = "warning",
-      .label = "Open contours",
-      .secondary_label = "4 issues",
+  const IconPainter more = assets.Painter("more");
+  bool request_color_picker = false;
+  const ToggleState assembly_visibility =
+      AggregateVisibility(state.tree_visibility);
+
+  const HierarchyRowResult assembly = HierarchyRow({
+      .id = "assembly",
+      .label = labels[0],
+      .secondary_label = assembly_visibility == ToggleState::Mixed
+                             ? "Assembly · mixed visibility"
+                             : "Assembly · 2 descendants",
       .expandable = true,
-      .expanded = true,
-      .status = SemanticStatus::Warning,
+      .expanded = state.assembly_expanded,
+      .selected = state.tree_selected[0],
       .action_icon = more,
-  }));
-  static_cast<void>(HierarchyRow({
-      .id = "failure",
-      .label = "Orphan hole",
-      .secondary_label = "Path 184 - invalid",
-      .depth = 1,
-      .status = SemanticStatus::Failure,
-      .color = ColorRgba{.red = 0.97f, .green = 0.32f, .blue = 0.29f},
-      .action_icon = more,
-      .visibility = ToggleState::Off,
+      .action_tooltip = "Front housing actions",
+      .visibility = assembly_visibility,
       .visible_icon = visible,
       .hidden_icon = hidden,
-  }));
+      .visibility_tooltip = "Show or hide all descendants",
+  });
+  if (assembly.expansion_changed) {
+    state.assembly_expanded = assembly.expanded;
+  }
+  if (assembly.activated) {
+    ApplySelection(state.tree_selected, state.tree_selection_anchor, 0,
+                   assembly.additive, assembly.range);
+    state.tree_feedback = "Selected: Front housing · Assembly";
+  }
+  if (assembly.visibility_changed) {
+    state.tree_visibility.fill(assembly.visibility);
+    state.tree_feedback = assembly.visibility == ToggleState::On
+                              ? "Front housing descendants are visible."
+                              : "Front housing descendants are hidden.";
+  }
+  if (assembly.action_activated) {
+    state.tree_action_row = 0;
+    ImGui::OpenPopup("##tree-actions");
+  }
+
+  if (state.assembly_expanded) {
+    const bool request_color_focus = state.tree_color_picker.restore_focus;
+    const HierarchyRowResult part = HierarchyRow({
+        .id = "part",
+        .label = labels[1],
+        .secondary_label = "Part 4 · 1 path",
+        .depth = 1,
+        .expandable = true,
+        .expanded = state.part_expanded,
+        .selected = state.tree_selected[1],
+        .color = state.part_color,
+        .color_tooltip = "Edit Face plate color",
+        .request_color_focus = request_color_focus,
+        .action_icon = more,
+        .action_tooltip = "Face plate actions",
+        .visibility = state.tree_visibility[0],
+        .visible_icon = visible,
+        .hidden_icon = hidden,
+        .visibility_tooltip = "Show or hide Face plate",
+    });
+    if (request_color_focus) {
+      state.tree_color_picker.restore_focus = false;
+    }
+    if (part.expansion_changed) {
+      state.part_expanded = part.expanded;
+    }
+    if (part.activated) {
+      ApplySelection(state.tree_selected, state.tree_selection_anchor, 1,
+                     part.additive, part.range);
+      state.tree_feedback = "Selected: Face plate · Part 4";
+    }
+    if (part.visibility_changed) {
+      state.tree_visibility[0] = part.visibility;
+      state.tree_feedback = part.visibility == ToggleState::On
+                                ? "Face plate is visible."
+                                : "Face plate is hidden.";
+    }
+    request_color_picker = part.color_activated;
+    if (part.action_activated) {
+      state.tree_action_row = 1;
+      ImGui::OpenPopup("##tree-actions");
+    }
+
+    if (state.part_expanded) {
+      const HierarchyRowResult path = HierarchyRow({
+          .id = "path",
+          .label = labels[2],
+          .secondary_label = "Path 184 · closed contour",
+          .depth = 2,
+          .selected = state.tree_selected[2],
+          .action_icon = more,
+          .action_tooltip = "Outer contour actions",
+          .visibility = state.tree_visibility[1],
+          .visible_icon = visible,
+          .hidden_icon = hidden,
+          .visibility_tooltip = "Show or hide Outer contour",
+      });
+      if (path.activated) {
+        ApplySelection(state.tree_selected, state.tree_selection_anchor, 2,
+                       path.additive, path.range);
+        state.tree_feedback = "Selected: Outer contour · Path 184";
+      }
+      if (path.visibility_changed) {
+        state.tree_visibility[1] = path.visibility;
+        state.tree_feedback = path.visibility == ToggleState::On
+                                  ? "Outer contour is visible."
+                                  : "Outer contour is hidden.";
+      }
+      if (path.action_activated) {
+        state.tree_action_row = 2;
+        ImGui::OpenPopup("##tree-actions");
+      }
+    }
+  }
+
+  const ColorPickerPopupResult color = ColorPickerPopup(
+      {
+          .id = "tree-color",
+          .title = "Face plate color",
+          .value = state.part_color,
+          .request_open = request_color_picker,
+      },
+      state.tree_color_picker);
+  if (color.changed) {
+    state.part_color = color.value;
+    state.tree_feedback = "Updated Face plate color.";
+  } else if (color.cancelled) {
+    state.tree_feedback = "Face plate color edit cancelled.";
+  }
+
+  if (ImGui::BeginPopup("##tree-actions")) {
+    const int row = std::clamp(state.tree_action_row, 0, 2);
+    ImGui::TextUnformatted(
+        std::string(labels[static_cast<std::size_t>(row)]).c_str());
+    ImGui::Separator();
+    if (ImGui::MenuItem("Frame in view")) {
+      state.tree_feedback = "Frame requested: " +
+                            std::string(labels[static_cast<std::size_t>(row)]);
+    }
+    if (ImGui::MenuItem("Inspect properties")) {
+      state.tree_feedback = "Inspection scope: " +
+                            std::string(labels[static_cast<std::size_t>(row)]);
+    }
+    ImGui::EndPopup();
+  }
+  ImGui::Spacing();
+  ImGui::TextDisabled("%s", state.tree_feedback.c_str());
+}
+
+void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
+  struct IssueDefinition {
+    std::string_view id;
+    std::string_view label;
+    std::string_view detail;
+    SemanticStatus status;
+    std::string_view icon;
+  };
+  struct GroupDefinition {
+    std::string_view id;
+    std::string_view label;
+    SemanticStatus status;
+    std::string_view icon;
+    std::size_t first_issue;
+    std::size_t issue_count;
+  };
+  static constexpr std::array issues{
+      IssueDefinition{"orphan-hole", "Orphan hole",
+                      "Path 184 · invalid geometry", SemanticStatus::Failure,
+                      "failure"},
+      IssueDefinition{"self-intersection", "Self intersection",
+                      "Path 211 · invalid geometry", SemanticStatus::Failure,
+                      "failure"},
+      IssueDefinition{"reversed-loop", "Reversed loop",
+                      "Path 92 · repair available", SemanticStatus::Information,
+                      "information"},
+      IssueDefinition{"open-contour", "Open contour",
+                      "Path 307 · review endpoint", SemanticStatus::Warning,
+                      "alert"},
+      IssueDefinition{"thin-feature", "Thin feature",
+                      "Path 418 · below tool width", SemanticStatus::Warning,
+                      "alert"},
+  };
+  static constexpr std::array groups{
+      GroupDefinition{"invalid", "Invalid", SemanticStatus::Failure, "failure",
+                      0, 2},
+      GroupDefinition{"repairable", "Repairable", SemanticStatus::Information,
+                      "information", 2, 1},
+      GroupDefinition{"warnings", "Warnings", SemanticStatus::Warning, "alert",
+                      3, 2},
+  };
+
+  const IconPainter visible = assets.Painter("visibility");
+  const IconPainter hidden = assets.Painter("visibility-off");
+  const IconPainter review = assets.Painter("focus");
+
+  const CheckboxResult labels = Checkbox({
+      .id = "show-labels",
+      .label = "Show issue labels in View",
+      .state = state.show_issue_labels ? ToggleState::On : ToggleState::Off,
+  });
+  if (labels.changed) {
+    state.show_issue_labels = labels.state == ToggleState::On;
+    state.issue_feedback = state.show_issue_labels
+                               ? "Issue labels shown in View."
+                               : "Issue labels hidden in View.";
+  }
+
+  for (std::size_t group_index = 0; group_index < groups.size();
+       ++group_index) {
+    const GroupDefinition &group = groups[group_index];
+    const std::span<const ToggleState> descendants(
+        state.issue_visibility.data() + group.first_issue, group.issue_count);
+    const ToggleState group_visibility = AggregateVisibility(descendants);
+    const std::string count = std::to_string(group.issue_count) +
+                              (group.issue_count == 1 ? " issue" : " issues");
+    const HierarchyRowResult group_result = HierarchyRow({
+        .id = group.id,
+        .label = group.label,
+        .secondary_label = count,
+        .expandable = true,
+        .expanded = state.issue_groups_expanded[group_index],
+        .status = group.status,
+        .leading_icon = assets.Painter(group.icon),
+        .visibility = group_visibility,
+        .visible_icon = visible,
+        .hidden_icon = hidden,
+        .visibility_tooltip = "Show or hide every issue in this group",
+    });
+    if (group_result.expansion_changed) {
+      state.issue_groups_expanded[group_index] = group_result.expanded;
+    } else if (group_result.activated) {
+      state.issue_groups_expanded[group_index] =
+          !state.issue_groups_expanded[group_index];
+    }
+    if (group_result.visibility_changed) {
+      std::fill_n(state.issue_visibility.begin() +
+                      static_cast<std::ptrdiff_t>(group.first_issue),
+                  group.issue_count, group_result.visibility);
+      state.issue_feedback =
+          std::string(group.label) + (group_result.visibility == ToggleState::On
+                                          ? " issues are visible."
+                                          : " issues are hidden.");
+    }
+
+    if (!state.issue_groups_expanded[group_index]) {
+      continue;
+    }
+    for (std::size_t offset = 0; offset < group.issue_count; ++offset) {
+      const std::size_t issue_index = group.first_issue + offset;
+      const IssueDefinition &issue = issues[issue_index];
+      const HierarchyRowResult issue_result = HierarchyRow({
+          .id = issue.id,
+          .label = issue.label,
+          .secondary_label = issue.detail,
+          .depth = 1,
+          .selected = state.issue_selected[issue_index],
+          .status = issue.status,
+          .leading_icon = assets.Painter(issue.icon),
+          .action_icon = review,
+          .action_tooltip = "Review issue in View",
+          .visibility = state.issue_visibility[issue_index],
+          .visible_icon = visible,
+          .hidden_icon = hidden,
+          .visibility_tooltip = "Show or hide this issue marker",
+      });
+      if (issue_result.activated) {
+        ApplySelection(state.issue_selected, state.issue_selection_anchor,
+                       static_cast<int>(issue_index), issue_result.additive,
+                       issue_result.range);
+        state.issue_feedback = "Selected: " + std::string(issue.label) + " · " +
+                               std::string(issue.detail);
+      }
+      if (issue_result.visibility_changed) {
+        state.issue_visibility[issue_index] = issue_result.visibility;
+        state.issue_feedback =
+            std::string(issue.label) +
+            (issue_result.visibility == ToggleState::On ? " marker is visible."
+                                                        : " marker is hidden.");
+      }
+      if (issue_result.action_activated) {
+        state.issue_selected.fill(false);
+        state.issue_selected[issue_index] = true;
+        state.issue_selection_anchor = static_cast<int>(issue_index);
+        state.issue_feedback =
+            "Review requested in View: " + std::string(issue.label);
+      }
+    }
+  }
+  ImGui::Spacing();
+  ImGui::TextDisabled("Issue details");
+  ImGui::TextWrapped("%s", state.issue_feedback.c_str());
 }
 
 void DrawStatusTypes(detail::UiAssetAtlas &assets) {
@@ -390,7 +660,11 @@ void DrawStatusTypes(detail::UiAssetAtlas &assets) {
   }
 }
 
-void DrawOperation(detail::UiAssetAtlas &assets) {
+void DrawOperation(detail::UiAssetAtlas &assets, GalleryState &state) {
+  const std::string operation_message = !state.operation_running ? "Stopped"
+                                        : state.operation_paused
+                                            ? "Paused at iteration 24"
+                                            : "Iteration 24";
   if (ImGui::BeginTable("##operation-status", 2,
                         ImGuiTableFlags_SizingStretchSame)) {
     ImGui::TableNextColumn();
@@ -403,61 +677,102 @@ void DrawOperation(detail::UiAssetAtlas &assets) {
     ImGui::TableNextColumn();
     StatusCard({
         .id = "busy",
-        .message = "Iteration 24",
-        .status = SemanticStatus::Busy,
-        .icon = assets.Painter("busy"),
+        .message = operation_message,
+        .status = !state.operation_running ? SemanticStatus::Failure
+                  : state.operation_paused ? SemanticStatus::Warning
+                                           : SemanticStatus::Busy,
+        .icon = assets.Painter(!state.operation_running ? "failure"
+                               : state.operation_paused ? "alert"
+                                                        : "busy"),
     });
     ImGui::EndTable();
   }
   ImGui::Spacing();
   ProgressBar({
       .id = "search-progress",
-      .label = "Search progress: 62%",
-      .value = 0.62f,
+      .label = state.operation_running ? "Search progress" : "Search stopped",
+      .value = state.operation_progress,
+      .status = !state.operation_running ? SemanticStatus::Failure
+                                         : SemanticStatus::Busy,
   });
   ImGui::Spacing();
-  static_cast<void>(Button({
+  const ButtonResult pause = Button({
       .id = "pause",
-      .label = "Pause",
+      .label = state.operation_paused ? "Resume" : "Pause",
+      .availability =
+          state.operation_running
+              ? Availability{}
+              : Availability{
+                    .enabled = false,
+                    .reason = "Start the operation before pausing",
+                },
       .size = {.x = 72.0f, .y = 28.0f},
-  }));
+  });
+  if (pause.activated) {
+    state.operation_paused = !state.operation_paused;
+  }
   ImGui::SameLine();
-  static_cast<void>(Button({
+  const ButtonResult stop = Button({
       .id = "stop",
-      .label = "Stop",
-      .variant = ButtonVariant::Destructive,
+      .label = state.operation_running ? "Stop" : "Start",
+      .variant = state.operation_running ? ButtonVariant::Destructive
+                                         : ButtonVariant::Primary,
       .size = {.x = 72.0f, .y = 28.0f},
-  }));
+  });
+  if (stop.activated) {
+    state.operation_running = !state.operation_running;
+    state.operation_paused = false;
+    state.operation_progress = state.operation_running ? 0.08f : 0.0f;
+  }
 }
 
-void DrawMixedValues(detail::UiAssetAtlas &assets) {
+void DrawMixedValues(detail::UiAssetAtlas &assets, GalleryState &state) {
   static_cast<void>(ValueDisplay({
       .id = "margin",
       .label = "Margin",
-      .mixed = true,
+      .value = state.bed_color_mixed ? std::string_view{} : "Single value",
+      .mixed = state.bed_color_mixed,
   }));
   ImGui::Spacing();
   static constexpr std::array colors{
       ColorRgba{.red = 0.27f, .green = 0.58f, .blue = 0.97f},
       ColorRgba{.red = 0.64f, .green = 0.44f, .blue = 0.97f},
   };
-  static_cast<void>(ColorSwatch({
-      .id = "color",
-      .label = "Bed color",
-      .colors = colors,
-  }));
-  static_cast<void>(Checkbox({
+  const std::span<const ColorRgba> preview =
+      state.bed_color_mixed ? std::span<const ColorRgba>(colors)
+                            : std::span<const ColorRgba>(&state.bed_color, 1);
+  const ColorSwatchResult color = ColorSwatch(
+      {
+          .id = "color",
+          .label = "Bed color",
+          .tooltip = "Open color picker",
+          .picker_title = "Bed color",
+          .value = state.bed_color,
+          .colors = preview,
+      },
+      state.bed_color_picker);
+  if (color.changed) {
+    state.bed_color = color.value;
+    state.bed_color_mixed = false;
+  }
+  const CheckboxResult margins = Checkbox({
       .id = "checkbox",
       .label = "Margins - Mixed",
-      .state = ToggleState::Mixed,
-  }));
-  static_cast<void>(VisibilityToggle({
+      .state = state.margins,
+  });
+  if (margins.changed) {
+    state.margins = margins.state;
+  }
+  const VisibilityToggleResult visibility = VisibilityToggle({
       .id = "visibility",
       .label = "Visibility",
-      .state = ToggleState::Mixed,
+      .state = state.mixed_visibility,
       .visible_icon = assets.Painter("visibility"),
       .hidden_icon = assets.Painter("visibility-off"),
-  }));
+  });
+  if (visibility.changed) {
+    state.mixed_visibility = visibility.state;
+  }
 }
 
 void DrawEmptyOverflow() {
@@ -529,31 +844,35 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
         ImGui::TableSetupColumn("component", ImGuiTableColumnFlags_WidthFixed,
                                 Scale(300.0f));
       }
-      GalleryCard("buttons", "Buttons", assets.bold_font(), DrawButtons);
+      GalleryCard("buttons", "Buttons", assets.bold_font(),
+                  [&state] { DrawButtons(state); });
       GalleryCard("availability", "Availability", assets.bold_font(),
-                  DrawAvailability);
-      GalleryCard("inputs", "Inputs", assets.bold_font(), DrawInputs);
-      GalleryCard("slider", "Slider", assets.bold_font(), DrawSlider);
+                  [&state] { DrawAvailability(state); });
+      GalleryCard("inputs", "Inputs", assets.bold_font(),
+                  [&state] { DrawInputs(state); });
+      GalleryCard("slider", "Slider", assets.bold_font(),
+                  [&state] { DrawSlider(state); });
       GalleryCard("compass", "Compass", assets.bold_font(),
-                  [] { DrawCompass(false); });
+                  [&state] { DrawCompass(state, false); });
       GalleryCard("compass-inherited", "Compass inherited", assets.bold_font(),
-                  [] { DrawCompass(true); });
+                  [&state] { DrawCompass(state, true); });
       GalleryCard("checkboxes", "Checkboxes", assets.bold_font(),
-                  DrawCheckboxes);
+                  [&state] { DrawCheckboxes(state); });
       GalleryCard("visibility", "Visibility", assets.bold_font(),
-                  [&assets] { DrawVisibility(assets); });
+                  [&assets, &state] { DrawVisibility(assets, state); });
       GalleryCard("enabled-locked", "Enabled & locked", assets.bold_font(),
-                  [&assets] { DrawEnabledLocked(assets); });
+                  [&assets, &state] { DrawEnabledLocked(assets, state); });
       GalleryCard("tree-rows", "Tree rows", assets.bold_font(),
-                  [&assets] { DrawTreeRows(assets); });
-      GalleryCard("issue-hierarchy", "Issue hierarchy", assets.bold_font(),
-                  [&assets] { DrawIssueHierarchy(assets); });
+                  [&assets, &state] { DrawTreeRows(assets, state); });
+      GalleryCard(
+          "issue-hierarchy", "Issue hierarchy", assets.bold_font(),
+          [&assets, &state] { DrawIssueHierarchy(assets, state); }, true);
       GalleryCard("status-types", "Status types", assets.bold_font(),
                   [&assets] { DrawStatusTypes(assets); });
       GalleryCard("operation", "Operation", assets.bold_font(),
-                  [&assets] { DrawOperation(assets); });
+                  [&assets, &state] { DrawOperation(assets, state); });
       GalleryCard("mixed-values", "Mixed values", assets.bold_font(),
-                  [&assets] { DrawMixedValues(assets); });
+                  [&assets, &state] { DrawMixedValues(assets, state); });
       GalleryCard("empty-overflow", "Empty & overflow", assets.bold_font(),
                   DrawEmptyOverflow);
       ImGui::EndTable();
