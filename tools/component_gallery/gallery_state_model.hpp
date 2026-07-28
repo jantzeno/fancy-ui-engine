@@ -49,6 +49,7 @@ inline constexpr float kStatusFactLabelGap = 8.0f;
 inline constexpr float kStatusFactGroupGap = 16.0f;
 inline constexpr float kStatusFactCellPadding = 8.0f;
 inline constexpr float kStatusZoomCommandHeight = 32.0f;
+inline constexpr float kStatusZoomCommandSpacing = 4.0f;
 inline constexpr float kStatusZoomPanelPadding = 8.0f;
 inline constexpr float kStatusZoomPanelItemSpacing = 8.0f;
 inline constexpr float kStatusZoomMinimumPercent = 10.0f;
