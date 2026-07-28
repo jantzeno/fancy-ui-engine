@@ -113,6 +113,7 @@ void ApplyTheme(const ResolvedTheme theme, const float ui_scale) {
   style.FramePadding = ImVec2(Scale(12.0f), Scale(6.0f));
   style.ItemSpacing = ImVec2(Scale(8.0f), Scale(8.0f));
   style.ItemInnerSpacing = ImVec2(Scale(8.0f), Scale(4.0f));
+  style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
   style.FrameRounding = Scale(4.0f);
   style.FrameBorderSize = Scale(1.0f);
   style.PopupRounding = Scale(4.0f);

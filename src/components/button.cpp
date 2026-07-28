@@ -50,6 +50,13 @@ ButtonResult Button(const ButtonSpec &spec) {
   const auto scaled_extent = [](const float value) {
     return value <= 0.0f ? value : Scale(value);
   };
+  const ImVec2 scaled_size(scaled_extent(spec.size.x),
+                           scaled_extent(spec.size.y));
+  const float vertical_padding = detail::ResolveButtonVerticalPadding(
+      scaled_size.y, ImGui::CalcTextSize(label.c_str()).y,
+      ImGui::GetStyle().FramePadding.y);
+  const bool uses_compact_padding =
+      vertical_padding < ImGui::GetStyle().FramePadding.y;
 
   ImGui::PushID(id.c_str());
   ImGui::PushStyleColor(ImGuiCol_Button, to_imgui(rest.fill));
@@ -57,15 +64,21 @@ ButtonResult Button(const ButtonSpec &spec) {
   ImGui::PushStyleColor(ImGuiCol_ButtonActive, to_imgui(pressed.fill));
   ImGui::PushStyleColor(ImGuiCol_Text, to_imgui(rest.text));
   ImGui::PushStyleColor(ImGuiCol_Border, to_imgui(rest.border));
+  if (uses_compact_padding) {
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_FramePadding,
+        ImVec2(ImGui::GetStyle().FramePadding.x, vertical_padding));
+  }
   detail::BeginAvailability(spec.availability);
-  const bool activated =
-      ImGui::Button(label.c_str(), ImVec2(scaled_extent(spec.size.x),
-                                          scaled_extent(spec.size.y)));
+  const bool activated = ImGui::Button(label.c_str(), scaled_size);
   const InteractionResult interaction = detail::CaptureInteraction();
   detail::DrawFocusRing(interaction,
                         spec.variant == ButtonVariant::Primary ||
                             spec.variant == ButtonVariant::Destructive);
   detail::EndAvailability(spec.availability, spec.tooltip);
+  if (uses_compact_padding) {
+    ImGui::PopStyleVar();
+  }
   ImGui::PopStyleColor(5);
   ImGui::PopID();
   detail::DrawValidationHint(spec.validation);

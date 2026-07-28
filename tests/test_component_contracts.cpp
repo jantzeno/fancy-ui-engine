@@ -1,5 +1,6 @@
 #include "fancy_ui/fancy_ui.hpp"
 #include "fancy_ui/steppenface/ui_assets.hpp"
+#include "internal/component_internal.hpp"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -8,6 +9,7 @@
 #include <imgui_internal.h>
 
 #include <array>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <set>
@@ -15,6 +17,30 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+namespace {
+
+float LinearChannel(const float channel) {
+  return channel <= 0.04045f ? channel / 12.92f
+                             : std::pow((channel + 0.055f) / 1.055f, 2.4f);
+}
+
+float RelativeLuminance(const fancy_ui::ColorRgba color) {
+  return 0.2126f * LinearChannel(color.red) +
+         0.7152f * LinearChannel(color.green) +
+         0.0722f * LinearChannel(color.blue);
+}
+
+float ContrastRatio(const fancy_ui::ColorRgba first,
+                    const fancy_ui::ColorRgba second) {
+  const float first_luminance = RelativeLuminance(first);
+  const float second_luminance = RelativeLuminance(second);
+  const float lighter = std::max(first_luminance, second_luminance);
+  const float darker = std::min(first_luminance, second_luminance);
+  return (lighter + 0.05f) / (darker + 0.05f);
+}
+
+} // namespace
 
 TEST_CASE("component availability carries the caller-provided reason") {
   const fancy_ui::Availability availability{
@@ -42,6 +68,45 @@ TEST_CASE("light and dark palettes expose distinct semantic surfaces") {
   REQUIRE(dark.control_disabled_fill != dark.control);
 }
 
+TEST_CASE("operation and destructive control colors meet contrast targets") {
+  ImGui::CreateContext();
+  for (const fancy_ui::ResolvedTheme theme :
+       {fancy_ui::ResolvedTheme::Light, fancy_ui::ResolvedTheme::Dark}) {
+    fancy_ui::ApplyTheme(theme);
+    const fancy_ui::SemanticPalette palette = fancy_ui::PaletteFor(theme);
+
+    REQUIRE(ContrastRatio(palette.text_primary, palette.surface_muted) >=
+            7.0f);
+    REQUIRE(ContrastRatio(palette.text_secondary, palette.surface_muted) >=
+            4.5f);
+    for (const fancy_ui::ColorRgba background :
+         {palette.information_background, palette.success_background,
+          palette.warning_background, palette.failure_background}) {
+      REQUIRE(ContrastRatio(palette.text_primary, background) >= 4.5f);
+    }
+
+    for (const fancy_ui::detail::ControlState state :
+         {fancy_ui::detail::ControlState{.destructive = true},
+          fancy_ui::detail::ControlState{
+              .hovered = true,
+              .destructive = true,
+          },
+          fancy_ui::detail::ControlState{
+              .hovered = true,
+              .pressed = true,
+              .destructive = true,
+          }}) {
+      const fancy_ui::detail::ControlColors colors =
+          fancy_ui::detail::ResolveControlColors(state);
+      REQUIRE(colors.text == palette.text_primary);
+      REQUIRE(colors.border == palette.failure);
+      REQUIRE(ContrastRatio(colors.text, colors.fill) >= 4.5f);
+      REQUIRE(ContrastRatio(colors.border, colors.fill) >= 3.0f);
+    }
+  }
+  ImGui::DestroyContext();
+}
+
 TEST_CASE("theme scale clamps and scales shared interaction metrics") {
   ImGui::CreateContext();
 
@@ -49,6 +114,8 @@ TEST_CASE("theme scale clamps and scales shared interaction metrics") {
   REQUIRE(fancy_ui::CurrentUiScale() == Catch::Approx(2.0f));
   REQUIRE(ImGui::GetStyle().FramePadding.x == Catch::Approx(24.0f));
   REQUIRE(ImGui::GetStyle().ItemSpacing.y == Catch::Approx(16.0f));
+  REQUIRE(ImGui::GetStyle().ButtonTextAlign.x == Catch::Approx(0.5f));
+  REQUIRE(ImGui::GetStyle().ButtonTextAlign.y == Catch::Approx(0.5f));
   REQUIRE(ImGui::GetStyle().DisabledAlpha == Catch::Approx(1.0f));
   const fancy_ui::SemanticPalette dark =
       fancy_ui::PaletteFor(fancy_ui::ResolvedTheme::Dark);
@@ -60,6 +127,46 @@ TEST_CASE("theme scale clamps and scales shared interaction metrics") {
   fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Light, 0.5f);
   REQUIRE(fancy_ui::CurrentUiScale() == Catch::Approx(0.75f));
   REQUIRE(fancy_ui::Scale(32.0f) == Catch::Approx(24.0f));
+  ImGui::DestroyContext();
+}
+
+TEST_CASE("compact buttons center labels without leaking frame padding") {
+  REQUIRE(fancy_ui::detail::ResolveButtonVerticalPadding(0.0f, 16.0f, 6.0f) ==
+          Catch::Approx(6.0f));
+  REQUIRE(fancy_ui::detail::ResolveButtonVerticalPadding(32.0f, 16.0f, 6.0f) ==
+          Catch::Approx(6.0f));
+  REQUIRE(fancy_ui::detail::ResolveButtonVerticalPadding(24.0f, 16.0f, 6.0f) ==
+          Catch::Approx(4.0f));
+  REQUIRE(fancy_ui::detail::ResolveButtonVerticalPadding(12.0f, 16.0f, 6.0f) ==
+          Catch::Approx(0.0f));
+
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(320.0f, 240.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+  const ImVec2 frame_padding = ImGui::GetStyle().FramePadding;
+
+  ImGui::NewFrame();
+  ImGui::Begin("compact-button-contract");
+  static_cast<void>(fancy_ui::Button({
+      .id = "compact",
+      .label = "Compact",
+      .size = {.x = 96.0f, .y = 24.0f},
+  }));
+  const ImVec2 minimum = ImGui::GetItemRectMin();
+  const ImVec2 maximum = ImGui::GetItemRectMax();
+  ImGui::End();
+  ImGui::Render();
+
+  REQUIRE(maximum.y - minimum.y == Catch::Approx(24.0f));
+  REQUIRE(ImGui::GetStyle().FramePadding.x == Catch::Approx(frame_padding.x));
+  REQUIRE(ImGui::GetStyle().FramePadding.y == Catch::Approx(frame_padding.y));
   ImGui::DestroyContext();
 }
 
@@ -605,8 +712,8 @@ TEST_CASE("UI icon manifest has unique size variants backed by SVG masters") {
   }
   for (const char *semantic_id :
        {"information", "success", "alert", "failure", "busy", "check",
-        "visibility", "visibility-off", "more", "focus", "orbit-locked",
-        "orbit-unlocked"}) {
+        "chevron-down", "triangle-down", "visibility", "visibility-off", "more",
+        "focus", "orbit-locked", "orbit-unlocked"}) {
     REQUIRE(small_icons.contains(semantic_id));
   }
 }

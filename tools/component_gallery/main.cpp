@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -28,6 +29,7 @@ namespace {
 struct HostOptions {
   fancy_ui::gallery::GalleryState gallery;
   std::filesystem::path screenshot;
+  bool valid = true;
 };
 
 GLADloadproc SdlGlProcLoader() {
@@ -47,6 +49,17 @@ HostOptions ParseOptions(const int argc, char **argv) {
           std::clamp(std::strtof(argv[++index], nullptr), 0.75f, 2.0f);
     } else if (argument == "--screenshot" && index + 1 < argc) {
       options.screenshot = argv[++index];
+    } else if (argument == "--tab" && index + 1 < argc) {
+      const std::string_view value(argv[++index]);
+      const std::optional<fancy_ui::gallery::GalleryTab> tab =
+          fancy_ui::gallery::ParseGalleryTab(value);
+      if (!tab.has_value()) {
+        std::cerr << "Unknown gallery tab: " << value
+                  << " (expected components, operations, or status)\n";
+        options.valid = false;
+      } else {
+        options.gallery.active_tab = *tab;
+      }
     }
   }
   return options;
@@ -81,6 +94,9 @@ bool WriteScreenshot(const std::filesystem::path &path, const int width,
 
 int main(const int argc, char **argv) {
   HostOptions options = ParseOptions(argc, argv);
+  if (!options.valid) {
+    return 2;
+  }
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
     return Fail("SDL initialization failed");
   }
@@ -97,8 +113,17 @@ int main(const int argc, char **argv) {
   } else {
     window_flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
   }
+  int window_height = 1024;
+  if (!options.screenshot.empty()) {
+    if (options.gallery.active_tab !=
+        fancy_ui::gallery::GalleryTab::Components) {
+      window_height = 1440;
+    } else {
+      window_height = 1200;
+    }
+  }
   SDL_Window *window =
-      SDL_CreateWindow("Fancy UI - Component states", 1280, 1024, window_flags);
+      SDL_CreateWindow("Fancy UI gallery", 1280, window_height, window_flags);
   if (window == nullptr) {
     SDL_Quit();
     return Fail("Window creation failed");

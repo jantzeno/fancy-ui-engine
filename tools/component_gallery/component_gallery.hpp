@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gallery_state_model.hpp"
+
 #include "fancy_ui/components/fields.hpp"
 #include "fancy_ui/theme.hpp"
 
@@ -13,6 +15,7 @@ class UiAssetAtlas;
 namespace fancy_ui::gallery {
 
 struct GalleryState {
+  GalleryTab active_tab = GalleryTab::Components;
   ResolvedTheme theme = ResolvedTheme::Dark;
   float scale = 1.0f;
   double spacing = 8.0;
@@ -31,9 +34,6 @@ struct GalleryState {
   ToggleState selection_visible = ToggleState::Mixed;
   ToggleState enabled = ToggleState::On;
   ToggleState locked = ToggleState::Off;
-  bool operation_running = true;
-  bool operation_paused = false;
-  float operation_progress = 0.62f;
   ToggleState margins = ToggleState::Mixed;
   ToggleState mixed_visibility = ToggleState::Mixed;
 
@@ -83,8 +83,17 @@ struct GalleryState {
       .alpha = 0.86f,
   };
   ColorPickerState compact_picker;
+
+  std::array<OperationPresentationState, kOperationSampleCount>
+      operation_states = DefaultOperationPresentationStates();
+  std::array<StatusZoomPresentationState, kStatusSampleCount>
+      status_zoom_states = DefaultStatusZoomPresentationStates();
 };
 
 void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state);
+void DrawOperationStateGallery(detail::UiAssetAtlas &assets,
+                               GalleryState &state);
+void DrawStatusBarStateGallery(detail::UiAssetAtlas &assets,
+                               GalleryState &state);
 
 } // namespace fancy_ui::gallery

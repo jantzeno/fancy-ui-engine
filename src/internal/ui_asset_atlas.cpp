@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -171,7 +172,8 @@ void UiAssetAtlas::InstallPendingIcons() {
 
 bool UiAssetAtlas::DrawIcon(const std::string_view semantic_id,
                             const steppenface::UiIconSize size,
-                            const Rect &bounds, const ColorRgba color) const {
+                            const Rect &bounds, const ColorRgba color,
+                            const float rotation_radians) const {
   const auto found = impl_->icon_rects.find(IconAtlasKey(semantic_id, size));
   if (found == impl_->icon_rects.end()) {
     return false;
@@ -180,10 +182,32 @@ bool UiAssetAtlas::DrawIcon(const std::string_view semantic_id,
   if (!ImGui::GetIO().Fonts->GetCustomRect(found->second, &rect)) {
     return false;
   }
-  ImGui::GetWindowDrawList()->AddImage(
-      ImGui::GetIO().Fonts->TexRef, ImVec2(bounds.minimum.x, bounds.minimum.y),
-      ImVec2(bounds.maximum.x, bounds.maximum.y), rect.uv0, rect.uv1,
-      ImGui::GetColorU32(ToImVec4(color)));
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  const ImU32 tint = ImGui::GetColorU32(ToImVec4(color));
+  if (std::abs(rotation_radians) < std::numeric_limits<float>::epsilon()) {
+    draw_list->AddImage(ImGui::GetIO().Fonts->TexRef,
+                        ImVec2(bounds.minimum.x, bounds.minimum.y),
+                        ImVec2(bounds.maximum.x, bounds.maximum.y), rect.uv0,
+                        rect.uv1, tint);
+    return true;
+  }
+
+  const ImVec2 center((bounds.minimum.x + bounds.maximum.x) * 0.5f,
+                      (bounds.minimum.y + bounds.maximum.y) * 0.5f);
+  const float half_width = (bounds.maximum.x - bounds.minimum.x) * 0.5f;
+  const float half_height = (bounds.maximum.y - bounds.minimum.y) * 0.5f;
+  const float cosine = std::cos(rotation_radians);
+  const float sine = std::sin(rotation_radians);
+  const auto rotate = [center, cosine, sine](const float x, const float y) {
+    return ImVec2(center.x + x * cosine - y * sine,
+                  center.y + x * sine + y * cosine);
+  };
+  draw_list->AddImageQuad(
+      ImGui::GetIO().Fonts->TexRef, rotate(-half_width, -half_height),
+      rotate(half_width, -half_height), rotate(half_width, half_height),
+      rotate(-half_width, half_height), rect.uv0,
+      ImVec2(rect.uv1.x, rect.uv0.y), rect.uv1, ImVec2(rect.uv0.x, rect.uv1.y),
+      tint);
   return true;
 }
 

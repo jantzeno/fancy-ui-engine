@@ -61,6 +61,9 @@ struct FieldLayout {
 };
 
 [[nodiscard]] std::string Owned(std::string_view value);
+[[nodiscard]] float ResolveButtonVerticalPadding(float requested_height,
+                                                 float text_height,
+                                                 float default_padding);
 [[nodiscard]] FieldLayout BeginFieldLayout(std::string_view label);
 void EndFieldLayout(FieldLayout layout, const Validation &validation);
 void PushFieldControlState(const Availability &availability,

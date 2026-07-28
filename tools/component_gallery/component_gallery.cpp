@@ -670,72 +670,6 @@ void DrawStatusTypes(detail::UiAssetAtlas &assets) {
   }
 }
 
-void DrawOperation(detail::UiAssetAtlas &assets, GalleryState &state) {
-  const std::string operation_message = !state.operation_running ? "Stopped"
-                                        : state.operation_paused
-                                            ? "Paused at iteration 24"
-                                            : "Iteration 24";
-  if (ImGui::BeginTable("##operation-status", 2,
-                        ImGuiTableFlags_SizingStretchSame)) {
-    ImGui::TableNextColumn();
-    StatusCard({
-        .id = "preview",
-        .message = "8 pieces ready",
-        .status = SemanticStatus::Preview,
-        .icon = assets.Painter("visibility"),
-    });
-    ImGui::TableNextColumn();
-    StatusCard({
-        .id = "busy",
-        .message = operation_message,
-        .status = !state.operation_running ? SemanticStatus::Failure
-                  : state.operation_paused ? SemanticStatus::Warning
-                                           : SemanticStatus::Busy,
-        .icon = assets.Painter(!state.operation_running ? "failure"
-                               : state.operation_paused ? "alert"
-                                                        : "busy"),
-    });
-    ImGui::EndTable();
-  }
-  ImGui::Spacing();
-  ProgressBar({
-      .id = "search-progress",
-      .label = state.operation_running ? "Search progress" : "Search stopped",
-      .value = state.operation_progress,
-      .status = !state.operation_running ? SemanticStatus::Failure
-                                         : SemanticStatus::Busy,
-  });
-  ImGui::Spacing();
-  const ButtonResult pause = Button({
-      .id = "pause",
-      .label = state.operation_paused ? "Resume" : "Pause",
-      .availability =
-          state.operation_running
-              ? Availability{}
-              : Availability{
-                    .enabled = false,
-                    .reason = "Start the operation before pausing",
-                },
-      .size = {.x = 72.0f, .y = 28.0f},
-  });
-  if (pause.activated) {
-    state.operation_paused = !state.operation_paused;
-  }
-  ImGui::SameLine();
-  const ButtonResult stop = Button({
-      .id = "stop",
-      .label = state.operation_running ? "Stop" : "Start",
-      .variant = state.operation_running ? ButtonVariant::Destructive
-                                         : ButtonVariant::Primary,
-      .size = {.x = 72.0f, .y = 28.0f},
-  });
-  if (stop.activated) {
-    state.operation_running = !state.operation_running;
-    state.operation_paused = false;
-    state.operation_progress = state.operation_running ? 0.08f : 0.0f;
-  }
-}
-
 void DrawMixedValues(detail::UiAssetAtlas &assets, GalleryState &state) {
   static_cast<void>(ValueDisplay({
       .id = "margin",
@@ -851,7 +785,7 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
   if (assets.bold_font() != nullptr) {
     ImGui::PushFont(assets.bold_font());
   }
-  ImGui::TextUnformatted("Component states");
+  ImGui::TextUnformatted("Fancy UI gallery");
   if (assets.bold_font() != nullptr) {
     ImGui::PopFont();
   }
@@ -881,52 +815,91 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
       "Canonical light/dark parity; pointer and keyboard states remain live.");
   ImGui::Spacing();
 
-  const float table_width = Scale(4.0f * 300.0f + 3.0f * 8.0f);
-  if (ImGui::BeginChild("##gallery-scroll", ImVec2(0.0f, 0.0f), false,
-                        ImGuiWindowFlags_HorizontalScrollbar)) {
-    if (ImGui::BeginTable("##component-grid", 4, ImGuiTableFlags_SizingFixedFit,
-                          ImVec2(table_width, 0.0f))) {
-      for (int column = 0; column < 4; ++column) {
-        ImGui::TableSetupColumn("component", ImGuiTableColumnFlags_WidthFixed,
-                                Scale(300.0f));
+  const auto move_tab = [&state](const int delta) {
+    constexpr int tab_count = 3;
+    const int current = static_cast<int>(state.active_tab);
+    state.active_tab =
+        static_cast<GalleryTab>((current + delta + tab_count) % tab_count);
+  };
+  if (ImGui::BeginTabBar("##gallery-tabs",
+                         ImGuiTabBarFlags_FittingPolicyResizeDown)) {
+    const auto tab = [&](const char *label, const GalleryTab gallery_tab,
+                         const std::function<void()> &draw) {
+      const ImGuiTabItemFlags flags = state.active_tab == gallery_tab
+                                          ? ImGuiTabItemFlags_SetSelected
+                                          : ImGuiTabItemFlags_None;
+      const bool visible = ImGui::BeginTabItem(label, nullptr, flags);
+      const bool focused = ImGui::IsItemFocused();
+      if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+        state.active_tab = gallery_tab;
       }
-      GalleryCard("buttons", "Buttons", assets.bold_font(),
-                  [&state] { DrawButtons(state); });
-      GalleryCard("availability", "Availability", assets.bold_font(),
-                  [&state] { DrawAvailability(state); });
-      GalleryCard("inputs", "Inputs", assets.bold_font(),
-                  [&state] { DrawInputs(state); });
-      GalleryCard("slider", "Slider", assets.bold_font(),
-                  [&state] { DrawSlider(state); });
-      GalleryCard("compass", "Compass", assets.bold_font(),
-                  [&state] { DrawCompass(state, false); });
-      GalleryCard("compass-inherited", "Compass inherited", assets.bold_font(),
-                  [&state] { DrawCompass(state, true); });
-      GalleryCard("checkboxes", "Checkboxes", assets.bold_font(),
-                  [&state] { DrawCheckboxes(state); });
-      GalleryCard("visibility", "Visibility", assets.bold_font(),
-                  [&assets, &state] { DrawVisibility(assets, state); });
-      GalleryCard("enabled-locked", "Enabled & locked", assets.bold_font(),
-                  [&assets, &state] { DrawEnabledLocked(assets, state); });
-      GalleryCard("tree-rows", "Tree rows", assets.bold_font(),
-                  [&assets, &state] { DrawTreeRows(assets, state); });
-      GalleryCard(
-          "issue-hierarchy", "Issue hierarchy", assets.bold_font(),
-          [&assets, &state] { DrawIssueHierarchy(assets, state); }, true);
-      GalleryCard("status-types", "Status types", assets.bold_font(),
-                  [&assets] { DrawStatusTypes(assets); });
-      GalleryCard("operation", "Operation", assets.bold_font(),
-                  [&assets, &state] { DrawOperation(assets, state); });
-      GalleryCard("mixed-values", "Mixed values", assets.bold_font(),
-                  [&assets, &state] { DrawMixedValues(assets, state); });
-      GalleryCard("empty-overflow", "Empty & overflow", assets.bold_font(),
-                  DrawEmptyOverflow);
-      GalleryCard("color-pickers", "Color pickers", assets.bold_font(),
-                  [&state] { DrawColorPickers(state); });
-      ImGui::EndTable();
-    }
+      if (focused && ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
+        move_tab(-1);
+      } else if (focused && ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
+        move_tab(1);
+      }
+      if (visible) {
+        draw();
+        ImGui::EndTabItem();
+      }
+    };
+    tab("Components", GalleryTab::Components, [&assets, &state] {
+      ImGui::TextDisabled(
+          "Shared controls, hierarchy rows, semantic feedback, and values.");
+      ImGui::Spacing();
+      const float table_width = Scale(4.0f * 300.0f + 3.0f * 8.0f);
+      if (ImGui::BeginChild("##gallery-scroll", ImVec2(0.0f, 0.0f), false,
+                            ImGuiWindowFlags_HorizontalScrollbar)) {
+        if (ImGui::BeginTable("##component-grid", 4,
+                              ImGuiTableFlags_SizingFixedFit,
+                              ImVec2(table_width, 0.0f))) {
+          for (int column = 0; column < 4; ++column) {
+            ImGui::TableSetupColumn(
+                "component", ImGuiTableColumnFlags_WidthFixed, Scale(300.0f));
+          }
+          GalleryCard("buttons", "Buttons", assets.bold_font(),
+                      [&state] { DrawButtons(state); });
+          GalleryCard("availability", "Availability", assets.bold_font(),
+                      [&state] { DrawAvailability(state); });
+          GalleryCard("inputs", "Inputs", assets.bold_font(),
+                      [&state] { DrawInputs(state); });
+          GalleryCard("slider", "Slider", assets.bold_font(),
+                      [&state] { DrawSlider(state); });
+          GalleryCard("compass", "Compass", assets.bold_font(),
+                      [&state] { DrawCompass(state, false); });
+          GalleryCard("compass-inherited", "Compass inherited",
+                      assets.bold_font(),
+                      [&state] { DrawCompass(state, true); });
+          GalleryCard("checkboxes", "Checkboxes", assets.bold_font(),
+                      [&state] { DrawCheckboxes(state); });
+          GalleryCard("visibility", "Visibility", assets.bold_font(),
+                      [&assets, &state] { DrawVisibility(assets, state); });
+          GalleryCard("enabled-locked", "Enabled & locked", assets.bold_font(),
+                      [&assets, &state] { DrawEnabledLocked(assets, state); });
+          GalleryCard("tree-rows", "Tree rows", assets.bold_font(),
+                      [&assets, &state] { DrawTreeRows(assets, state); });
+          GalleryCard(
+              "issue-hierarchy", "Issue hierarchy", assets.bold_font(),
+              [&assets, &state] { DrawIssueHierarchy(assets, state); }, true);
+          GalleryCard("status-types", "Status types", assets.bold_font(),
+                      [&assets] { DrawStatusTypes(assets); });
+          GalleryCard("mixed-values", "Mixed values", assets.bold_font(),
+                      [&assets, &state] { DrawMixedValues(assets, state); });
+          GalleryCard("empty-overflow", "Empty & overflow", assets.bold_font(),
+                      DrawEmptyOverflow);
+          GalleryCard("color-pickers", "Color pickers", assets.bold_font(),
+                      [&state] { DrawColorPickers(state); });
+          ImGui::EndTable();
+        }
+      }
+      ImGui::EndChild();
+    });
+    tab("Operation strip & tray", GalleryTab::Operations,
+        [&assets, &state] { DrawOperationStateGallery(assets, state); });
+    tab("Status bar", GalleryTab::Status,
+        [&assets, &state] { DrawStatusBarStateGallery(assets, state); });
+    ImGui::EndTabBar();
   }
-  ImGui::EndChild();
   ImGui::End();
 }
 

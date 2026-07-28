@@ -34,7 +34,8 @@ public:
 
   [[nodiscard]] bool DrawIcon(std::string_view semantic_id,
                               steppenface::UiIconSize size, const Rect &bounds,
-                              ColorRgba color) const;
+                              ColorRgba color,
+                              float rotation_radians = 0.0f) const;
   [[nodiscard]] IconPainter
   Painter(std::string_view semantic_id,
           steppenface::UiIconSize size = steppenface::UiIconSize::Small16);

@@ -3,6 +3,7 @@
 #include "fancy_ui/theme.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 namespace fancy_ui::detail {
@@ -29,6 +30,17 @@ ScopedInteractionPreview::~ScopedInteractionPreview() {
 
 std::string Owned(const std::string_view value) {
   return std::string(value.data(), value.size());
+}
+
+float ResolveButtonVerticalPadding(const float requested_height,
+                                   const float text_height,
+                                   const float default_padding) {
+  if (requested_height <= 0.0f) {
+    return default_padding;
+  }
+  const float centered_padding =
+      std::floor(std::max(0.0f, (requested_height - text_height) * 0.5f));
+  return std::min(default_padding, centered_padding);
 }
 
 FieldLayout BeginFieldLayout(const std::string_view label) {
@@ -158,7 +170,8 @@ ControlColors ResolveControlColors(const ControlState &state) {
     colors.fill.alpha = 0.0f;
     colors.border.alpha = 0.0f;
   } else if (state.destructive) {
-    colors.text = palette.failure;
+    colors.border = palette.failure;
+    colors.text = palette.text_primary;
   }
 
   if (state.hovered && !state.selected) {

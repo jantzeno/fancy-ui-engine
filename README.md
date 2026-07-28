@@ -41,13 +41,16 @@ xmake run fancy_ui_component_gallery --theme dark --scale 1
 
 `--theme` accepts `light` or `dark`. `--scale` accepts values from `0.75` to
 `2`, with `1`, `1.25`, `1.5`, and `2` as the standard review modes. Larger
-layouts scroll instead of omitting component groups.
+layouts scroll instead of omitting component groups. `--tab` accepts
+`components`, `operations`, or `status`; the interactive gallery exposes the
+same pages as keyboard-navigable tabs.
 
 For deterministic review artifacts, pass a PNG destination. The gallery
 renders a few frames so the font and SVG atlas is installed before capture:
 
 ```sh
 xmake run fancy_ui_component_gallery \
+  --tab components \
   --theme dark --scale 1 \
   --screenshot /tmp/fancy-ui-components-dark.png
 ```
@@ -60,8 +63,13 @@ with full Current/Original and compact layouts shown side by side. Tree rows
 keep 32 px targets in a dense native hierarchy with connector lines, and own
 expansion and Ctrl/Shift selection separately from inline color, action, and
 visibility targets. Issue groups aggregate descendant visibility without
-coupling it to issue selection or review navigation.
-The regenerated 1280×1024 references are stored in
+coupling it to issue selection or review navigation. The operation page covers
+preview, running, paused, stopping, finalizing, completed, failed, and overflow
+states with live disclosure and 160–240 px tray resizing. The status page
+covers Canvas and 3D facts, long and narrow content, operation independence,
+and the logarithmic 10–1600% Canvas zoom control.
+
+The regenerated light and dark references are stored in
 [`docs/ui-mockups/260727/`](docs/ui-mockups/260727/).
 
 ## Boundaries
