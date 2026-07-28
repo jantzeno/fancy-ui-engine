@@ -13,9 +13,13 @@ namespace fancy_ui::gallery {
 
 enum class GalleryTab : std::uint8_t {
   Components,
+  Shell,
+  Settings,
   Operations,
   Status,
 };
+
+inline constexpr int kGalleryTabCount = 5;
 
 enum class OperationPhase : std::uint8_t {
   Preview,
@@ -152,6 +156,12 @@ StatusZoomSliderPositionFromPercent(const float percent) {
 ParseGalleryTab(const std::string_view value) {
   if (value == "components") {
     return GalleryTab::Components;
+  }
+  if (value == "shell") {
+    return GalleryTab::Shell;
+  }
+  if (value == "settings") {
+    return GalleryTab::Settings;
   }
   if (value == "operations") {
     return GalleryTab::Operations;

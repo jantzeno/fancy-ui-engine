@@ -44,6 +44,7 @@ HostOptions ParseOptions(const int argc, char **argv) {
       const std::string_view value(argv[++index]);
       options.gallery.theme = value == "light" ? fancy_ui::ResolvedTheme::Light
                                                : fancy_ui::ResolvedTheme::Dark;
+      options.gallery.settings.system_theme = options.gallery.theme;
     } else if (argument == "--scale" && index + 1 < argc) {
       options.gallery.scale =
           std::clamp(std::strtof(argv[++index], nullptr), 0.75f, 2.0f);
@@ -55,7 +56,8 @@ HostOptions ParseOptions(const int argc, char **argv) {
           fancy_ui::gallery::ParseGalleryTab(value);
       if (!tab.has_value()) {
         std::cerr << "Unknown gallery tab: " << value
-                  << " (expected components, operations, or status)\n";
+                  << " (expected components, shell, settings, operations, or "
+                     "status)\n";
         options.valid = false;
       } else {
         options.gallery.active_tab = *tab;

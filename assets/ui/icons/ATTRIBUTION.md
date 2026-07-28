@@ -4,9 +4,9 @@ The stock SVG masters in this directory are adapted from
 [`@primer/octicons` 19.29.2](https://www.npmjs.com/package/@primer/octicons)
 and are licensed under the MIT License:
 
-- Alert, Arrow Right, Camera, Check, Check Circle, Chevron Down, Ellipsis, Eye,
-  Eye Closed, Gear, Info, Lock, Package, Plus, Pulse, Search, Stack, Sync,
-  Triangle Down, Unlock, and X Circle.
+- Alert, Arrow Right, Camera, Check, Check Circle, Chevron Down, CPU, Ellipsis,
+  Eye, Eye Closed, Gear, Info, Key, Law, Lock, Package, Paintbrush, Plus,
+  Pulse, Search, Stack, Sync, Triangle Down, Unlock, and X Circle.
 - Fit All and Focus Selected are Octicon-derived application variants.
 
 Bed, Compact, and Grain Direction are original SteppenFace CNC icons drawn to

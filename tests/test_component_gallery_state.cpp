@@ -10,6 +10,8 @@ using namespace fancy_ui::gallery;
 
 TEST_CASE("gallery tab names select deterministic state sheets") {
   REQUIRE(ParseGalleryTab("components") == GalleryTab::Components);
+  REQUIRE(ParseGalleryTab("shell") == GalleryTab::Shell);
+  REQUIRE(ParseGalleryTab("settings") == GalleryTab::Settings);
   REQUIRE(ParseGalleryTab("operations") == GalleryTab::Operations);
   REQUIRE(ParseGalleryTab("status") == GalleryTab::Status);
   REQUIRE_FALSE(ParseGalleryTab("operation"));

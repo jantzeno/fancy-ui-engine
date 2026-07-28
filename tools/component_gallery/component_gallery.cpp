@@ -770,6 +770,10 @@ void DrawColorPickers(GalleryState &state) {
 
 } // namespace
 
+void DrawHierarchySample(detail::UiAssetAtlas &assets, GalleryState &state) {
+  DrawTreeRows(assets, state);
+}
+
 void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
   ApplyTheme(state.theme, state.scale);
   assets.InstallPendingIcons();
@@ -800,6 +804,7 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
              })
           .activated) {
     state.theme = ResolvedTheme::Light;
+    state.settings.system_theme = ResolvedTheme::Light;
   }
   ImGui::SameLine();
   if (Button({
@@ -810,16 +815,17 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
              })
           .activated) {
     state.theme = ResolvedTheme::Dark;
+    state.settings.system_theme = ResolvedTheme::Dark;
   }
   ImGui::TextDisabled(
       "Canonical light/dark parity; pointer and keyboard states remain live.");
   ImGui::Spacing();
 
   const auto move_tab = [&state](const int delta) {
-    constexpr int tab_count = 3;
     const int current = static_cast<int>(state.active_tab);
     state.active_tab =
-        static_cast<GalleryTab>((current + delta + tab_count) % tab_count);
+        static_cast<GalleryTab>((current + delta + kGalleryTabCount) %
+                                kGalleryTabCount);
   };
   if (ImGui::BeginTabBar("##gallery-tabs",
                          ImGuiTabBarFlags_FittingPolicyResizeDown)) {
@@ -894,6 +900,10 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
       }
       ImGui::EndChild();
     });
+    tab("Application shell", GalleryTab::Shell,
+        [&assets, &state] { DrawApplicationShellGallery(assets, state); });
+    tab("Settings", GalleryTab::Settings,
+        [&assets, &state] { DrawSettingsGallery(assets, state); });
     tab("Operation strip & tray", GalleryTab::Operations,
         [&assets, &state] { DrawOperationStateGallery(assets, state); });
     tab("Status bar", GalleryTab::Status,
@@ -901,6 +911,12 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
     ImGui::EndTabBar();
   }
   ImGui::End();
+
+  if (state.active_tab == GalleryTab::Settings &&
+      (state.settings.window_open ||
+       state.settings.discard_confirmation_open)) {
+    DrawSettingsGalleryWindow(assets, state);
+  }
 }
 
 } // namespace fancy_ui::gallery

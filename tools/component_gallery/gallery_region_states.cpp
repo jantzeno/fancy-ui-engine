@@ -1218,4 +1218,31 @@ void DrawStatusBarStateGallery(detail::UiAssetAtlas &assets,
   ImGui::EndChild();
 }
 
+void DrawShellOperationTray(detail::UiAssetAtlas &,
+                            GalleryState &state) {
+  ImGui::PushID("shell-operation-tray");
+  ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
+  DrawOperationTray(OperationSamples()[1], state.shell.operation, nullptr);
+  ImGui::PopID();
+}
+
+void DrawShellOperationStrip(detail::UiAssetAtlas &assets,
+                             GalleryState &state) {
+  ImGui::PushID("shell-operation-strip");
+  ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
+  DrawOperationStrip(assets, OperationSamples()[1], state.shell.operation);
+  ImGui::PopID();
+}
+
+void DrawShellStatusBar(detail::UiAssetAtlas &assets, GalleryState &state) {
+  ImGui::PushID("shell-status-bar");
+  ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
+  const StatusBarResult result =
+      DrawStatusBar(assets, StatusSamples()[0], state.status_zoom_states[0]);
+  if (result.zoom_activated) {
+    state.status_zoom_states[0].open = !state.status_zoom_states[0].open;
+  }
+  ImGui::PopID();
+}
+
 } // namespace fancy_ui::gallery

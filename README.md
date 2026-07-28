@@ -42,8 +42,8 @@ xmake run fancy_ui_component_gallery --theme dark --scale 1
 `--theme` accepts `light` or `dark`. `--scale` accepts values from `0.75` to
 `2`, with `1`, `1.25`, `1.5`, and `2` as the standard review modes. Larger
 layouts scroll instead of omitting component groups. `--tab` accepts
-`components`, `operations`, or `status`; the interactive gallery exposes the
-same pages as keyboard-navigable tabs.
+`components`, `shell`, `settings`, `operations`, or `status`; the interactive
+gallery exposes the same pages as keyboard-navigable tabs.
 
 For deterministic review artifacts, pass a PNG destination. The gallery
 renders a few frames so the font and SVG atlas is installed before capture:
@@ -69,8 +69,21 @@ states with live disclosure and 160–240 px tray resizing. The status page
 covers Canvas and 3D facts, long and narrow content, operation independence,
 and the logarithmic 10–1600% Canvas zoom control.
 
+The application-shell page composes all nine canonical regions. Its
+application-bar controls independently collapse and restore the Explorer and
+Inspector, while the operation strip owns tray disclosure. The Explorer
+contains the shared hierarchy sample, the Workspace deliberately shows an
+empty-state surface, and the Inspector includes one live example from every
+component family allowed in that region.
+
+The Settings page opens one modeless 880 × 560 System Settings window with
+General, Appearance, Machines, License, and Legal navigation. General,
+Appearance, and Machines edit one staged transaction; theme selection previews
+immediately and rolls back on discard. License actions are immediate, and
+Legal remains read-only.
+
 The regenerated light and dark references are stored in
-[`docs/ui-mockups/260727/`](docs/ui-mockups/260727/).
+[`docs/ui-mockups/260728/`](docs/ui-mockups/260728/).
 
 ## Boundaries
 
