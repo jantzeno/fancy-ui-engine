@@ -110,29 +110,95 @@ ToggleState NextVisibilityState(const ToggleState current) {
   return current == ToggleState::On ? ToggleState::Off : ToggleState::On;
 }
 
-HierarchyRowResult HierarchyRow(const HierarchyRowSpec &spec) {
+HierarchyTree::HierarchyTree() {
+  const float vertical_padding =
+      std::max((Scale(32.0f) - ImGui::GetFontSize()) * 0.5f, 0.0f);
+  const ImGuiStyle &style = ImGui::GetStyle();
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                      ImVec2(style.ItemSpacing.x, Scale(1.0f)));
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                      ImVec2(Scale(4.0f), vertical_padding));
+  ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, Scale(24.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_TreeLinesSize, Scale(1.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_TreeLinesRounding, Scale(4.0f));
+}
+
+HierarchyTree::~HierarchyTree() {
+  const bool unbalanced = open_nodes_ != 0;
+  while (open_nodes_ > 0) {
+    ImGui::TreePop();
+    --open_nodes_;
+  }
+  ImGui::PopStyleVar(5);
+  IM_ASSERT(!unbalanced &&
+            "Every expanded hierarchy row must have a matching Pop()");
+}
+
+void HierarchyTree::Pop() {
+  IM_ASSERT(open_nodes_ > 0 && "Cannot pop a hierarchy with no open parent");
+  if (open_nodes_ <= 0) {
+    return;
+  }
+  ImGui::TreePop();
+  --open_nodes_;
+}
+
+HierarchyRowResult HierarchyRow(HierarchyTree &tree,
+                                const HierarchyRowSpec &spec) {
   const std::string id = detail::Owned(spec.id);
   const bool disabled = !spec.availability.enabled || spec.availability.busy;
   const SemanticPalette &palette = CurrentPalette();
-  const float height = Scale(32.0f);
-  const float available_width =
-      std::max(ImGui::GetContentRegionAvail().x, Scale(1.0f));
   const float color_width = spec.color.has_value() ? Scale(32.0f) : 0.0f;
   const float action_width = spec.action_icon ? Scale(28.0f) : 0.0f;
   const float visibility_width =
       spec.visibility.has_value() ? Scale(28.0f) : 0.0f;
   const float trailing_width = color_width + action_width + visibility_width;
 
-  ImGui::PushID(id.c_str());
+  const ImVec2 node_cursor = ImGui::GetCursorScreenPos();
+  const std::string native_id = "##" + id;
+  ImGuiTreeNodeFlags flags =
+      ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_OpenOnArrow |
+      ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding |
+      ImGuiTreeNodeFlags_NavLeftJumpsToParent |
+      ImGuiTreeNodeFlags_DrawLinesFull;
+  if (spec.selected) {
+    flags |= ImGuiTreeNodeFlags_Selected;
+  }
+  if (!spec.expandable) {
+    flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+  } else {
+    ImGui::SetNextItemOpen(spec.expanded, ImGuiCond_Always);
+  }
+
   detail::BeginAvailability(spec.availability);
   ImGui::SetNextItemAllowOverlap();
-  const bool row_clicked = ImGui::InvisibleButton(
-      "##row", ImVec2(available_width, height), ImGuiButtonFlags_EnableNav);
+  ImGui::PushStyleColor(
+      ImGuiCol_Text,
+      ToImVec4(disabled ? palette.text_disabled : palette.text_secondary));
+  const bool native_open = ImGui::TreeNodeEx(native_id.c_str(), flags);
+  ImGui::PopStyleColor();
   const InteractionResult interaction = detail::CaptureInteraction();
   const ImVec2 minimum = ImGui::GetItemRectMin();
   const ImVec2 maximum = ImGui::GetItemRectMax();
   const ImVec2 cursor_after = ImGui::GetCursorScreenPos();
+  const bool expansion_changed = spec.expandable && ImGui::IsItemToggledOpen();
+  const bool pointer_over_trailing =
+      trailing_width > 0.0f &&
+      ImGui::GetIO().MousePos.x >= maximum.x - trailing_width &&
+      ImGui::GetIO().MousePos.x < maximum.x &&
+      ImGui::GetIO().MousePos.y >= minimum.y &&
+      ImGui::GetIO().MousePos.y < maximum.y;
+  const bool pointer_activated = ImGui::IsItemClicked(ImGuiMouseButton_Left) &&
+                                 !pointer_over_trailing && !expansion_changed;
+  const bool keyboard_activated =
+      interaction.focused &&
+      (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
+       ImGui::IsKeyPressed(ImGuiKey_Space, false)) &&
+      !expansion_changed;
   detail::EndAvailability(spec.availability, spec.tooltip);
+  if (spec.expandable && native_open) {
+    ++tree.open_nodes_;
+  }
 
   detail::ControlColors colors = detail::ResolveControlColors({
       .disabled = disabled,
@@ -143,10 +209,6 @@ HierarchyRowResult HierarchyRow(const HierarchyRowSpec &spec) {
       .focused = interaction.focused,
   });
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  if (spec.selected || interaction.hovered || interaction.active) {
-    draw_list->AddRectFilled(minimum, maximum,
-                             ImGui::GetColorU32(ToImVec4(colors.fill)));
-  }
   if (spec.selected) {
     draw_list->AddRectFilled(minimum,
                              ImVec2(minimum.x + Scale(3.0f), maximum.y),
@@ -159,41 +221,8 @@ HierarchyRowResult HierarchyRow(const HierarchyRowSpec &spec) {
   }
   detail::DrawFocusRing(interaction);
 
-  float text_x = minimum.x + Scale(8.0f) +
-                 Scale(12.0f) * static_cast<float>(std::max(spec.depth, 0));
+  float text_x = node_cursor.x + ImGui::GetTreeNodeToLabelSpacing();
   const float center_y = (minimum.y + maximum.y) * 0.5f;
-  bool expansion_changed = false;
-  bool expanded = spec.expanded;
-  if (spec.expandable) {
-    const ImVec2 expander_position(text_x, center_y - Scale(12.0f));
-    const std::string expansion_tooltip =
-        std::string(spec.expanded ? "Collapse " : "Expand ") +
-        detail::Owned(spec.label);
-    const InlineTargetResult expander = InlineTarget(
-        "##expander", expander_position, spec.availability, expansion_tooltip);
-    if (expander.activated) {
-      expansion_changed = true;
-      expanded = !expanded;
-    }
-    const ImVec2 center(expander_position.x + Scale(12.0f),
-                        expander_position.y + Scale(12.0f));
-    const ImU32 triangle_color = ImGui::GetColorU32(
-        ToImVec4(disabled ? palette.text_disabled : palette.text_secondary));
-    if (expanded) {
-      draw_list->AddTriangleFilled(
-          ImVec2(center.x - Scale(5.0f), center.y - Scale(2.0f)),
-          ImVec2(center.x + Scale(5.0f), center.y - Scale(2.0f)),
-          ImVec2(center.x, center.y + Scale(4.0f)), triangle_color);
-    } else {
-      draw_list->AddTriangleFilled(
-          ImVec2(center.x - Scale(2.0f), center.y - Scale(5.0f)),
-          ImVec2(center.x - Scale(2.0f), center.y + Scale(5.0f)),
-          ImVec2(center.x + Scale(4.0f), center.y), triangle_color);
-    }
-    text_x += Scale(24.0f);
-  } else {
-    text_x += Scale(16.0f);
-  }
 
   if (spec.leading_icon) {
     const float icon_size = Scale(16.0f);
@@ -231,6 +260,7 @@ HierarchyRowResult HierarchyRow(const HierarchyRowSpec &spec) {
   }
   draw_list->PopClipRect();
 
+  ImGui::PushID(id.c_str());
   float trailing_x = maximum.x - trailing_width;
   bool color_activated = false;
   if (spec.color.has_value()) {
@@ -298,31 +328,25 @@ HierarchyRowResult HierarchyRow(const HierarchyRowSpec &spec) {
     }
   }
 
-  bool keyboard_expansion = false;
-  if (interaction.focused) {
-    if (spec.expandable && spec.expanded &&
-        ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false)) {
-      expanded = false;
-      keyboard_expansion = true;
-    } else if (spec.expandable && !spec.expanded &&
-               ImGui::IsKeyPressed(ImGuiKey_RightArrow, false)) {
-      expanded = true;
-      keyboard_expansion = true;
-    }
-  }
-  ImGui::SetCursorScreenPos(cursor_after);
-  ImGui::Dummy(ImVec2(0.0f, 0.0f));
   ImGui::PopID();
+  if (trailing_width > 0.0f) {
+    // Inline targets temporarily move the layout cursor back over the row.
+    // Submit a zero-size item so ImGui accepts the restored boundary, offset
+    // by ItemSpacing so the submission does not add a second row gap.
+    ImGui::SetCursorScreenPos(ImVec2(
+        cursor_after.x, cursor_after.y - ImGui::GetStyle().ItemSpacing.y));
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+  }
 
   HierarchyRowResult result;
   static_cast<InteractionResult &>(result) = interaction;
-  result.activated = row_clicked && !disabled && !expansion_changed &&
+  result.activated = (pointer_activated || keyboard_activated) && !disabled &&
                      !color_activated && !action_activated &&
                      !visibility_changed;
   result.additive = result.activated && ImGui::GetIO().KeyCtrl;
   result.range = result.activated && ImGui::GetIO().KeyShift;
-  result.expansion_changed = expansion_changed || keyboard_expansion;
-  result.expanded = expanded;
+  result.expansion_changed = expansion_changed;
+  result.expanded = spec.expandable && native_open;
   result.color_activated = color_activated && !disabled;
   result.action_activated = action_activated && !disabled;
   result.visibility_changed = visibility_changed && !disabled;

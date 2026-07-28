@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include <array>
 #include <filesystem>
@@ -49,6 +50,12 @@ TEST_CASE("theme scale clamps and scales shared interaction metrics") {
   REQUIRE(ImGui::GetStyle().FramePadding.x == Catch::Approx(24.0f));
   REQUIRE(ImGui::GetStyle().ItemSpacing.y == Catch::Approx(16.0f));
   REQUIRE(ImGui::GetStyle().DisabledAlpha == Catch::Approx(1.0f));
+  const fancy_ui::SemanticPalette dark =
+      fancy_ui::PaletteFor(fancy_ui::ResolvedTheme::Dark);
+  const ImVec4 tree_lines = ImGui::GetStyle().Colors[ImGuiCol_TreeLines];
+  REQUIRE(tree_lines.x == Catch::Approx(dark.border_strong.red));
+  REQUIRE(tree_lines.y == Catch::Approx(dark.border_strong.green));
+  REQUIRE(tree_lines.z == Catch::Approx(dark.border_strong.blue));
 
   fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Light, 0.5f);
   REQUIRE(fancy_ui::CurrentUiScale() == Catch::Approx(0.75f));
@@ -235,6 +242,12 @@ TEST_CASE("color swatch opens a transactional picker and commits on Enter") {
       .green = 0.4f,
       .blue = 0.6f,
   };
+  fancy_ui::ColorPickerLayout layout =
+      fancy_ui::ColorPickerLayout::CurrentAndOriginal;
+  SECTION("current and original layout") {
+    layout = fancy_ui::ColorPickerLayout::CurrentAndOriginal;
+  }
+  SECTION("compact layout") { layout = fancy_ui::ColorPickerLayout::Compact; }
   fancy_ui::ColorPickerState picker;
   fancy_ui::ColorSwatchResult result;
   ImVec2 swatch_minimum;
@@ -252,6 +265,7 @@ TEST_CASE("color swatch opens a transactional picker and commits on Enter") {
             .label = "Bed color",
             .value = value,
             .colors = std::span<const fancy_ui::ColorRgba>(&value, 1),
+            .picker_layout = layout,
         },
         picker);
     if (!picker.editing) {
@@ -344,23 +358,30 @@ TEST_CASE("hierarchy inline targets do not activate the selectable row") {
     row_minimum = ImGui::GetCursorScreenPos();
     row_maximum = ImVec2(row_minimum.x + ImGui::GetContentRegionAvail().x,
                          row_minimum.y + fancy_ui::Scale(32.0f));
-    result = fancy_ui::HierarchyRow({
-        .id = "part",
-        .label = "Face plate",
-        .secondary_label = "Part 4",
-        .expandable = true,
-        .expanded = true,
-        .color =
-            fancy_ui::ColorRgba{
-                .red = 0.27f,
-                .green = 0.58f,
-                .blue = 0.97f,
-            },
-        .action_icon = icon,
-        .visibility = fancy_ui::ToggleState::On,
-        .visible_icon = icon,
-        .hidden_icon = icon,
-    });
+    {
+      fancy_ui::HierarchyTree tree;
+      result = fancy_ui::HierarchyRow(
+          tree, {
+                    .id = "part",
+                    .label = "Face plate",
+                    .secondary_label = "Part 4",
+                    .expandable = true,
+                    .expanded = true,
+                    .color =
+                        fancy_ui::ColorRgba{
+                            .red = 0.27f,
+                            .green = 0.58f,
+                            .blue = 0.97f,
+                        },
+                    .action_icon = icon,
+                    .visibility = fancy_ui::ToggleState::On,
+                    .visible_icon = icon,
+                    .hidden_icon = icon,
+                });
+      if (result.expanded) {
+        tree.Pop();
+      }
+    }
     ImGui::End();
     ImGui::Render();
   };
@@ -369,9 +390,17 @@ TEST_CASE("hierarchy inline targets do not activate the selectable row") {
     draw();
     io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
     draw();
+    fancy_ui::HierarchyRowResult clicked = result;
     io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
     draw();
-    return result;
+    clicked.activated |= result.activated;
+    clicked.expansion_changed |= result.expansion_changed;
+    clicked.color_activated |= result.color_activated;
+    clicked.action_activated |= result.action_activated;
+    clicked.visibility_changed |= result.visibility_changed;
+    clicked.expanded = result.expanded;
+    clicked.visibility = result.visibility;
+    return clicked;
   };
 
   draw();
@@ -405,6 +434,140 @@ TEST_CASE("hierarchy inline targets do not activate the selectable row") {
   REQUIRE(visibility.visibility_changed);
   REQUIRE(visibility.visibility == fancy_ui::ToggleState::Off);
   ImGui::DestroyContext();
+}
+
+TEST_CASE("hierarchy trees keep dense 32 pixel row targets") {
+  const auto verify_scale = [](const float scale) {
+    ImGui::CreateContext();
+    ImGuiIO &io = ImGui::GetIO();
+    io.DisplaySize = ImVec2(1280.0f, 1024.0f);
+    io.DeltaTime = 1.0f / 60.0f;
+    io.Fonts->AddFontDefault();
+    unsigned char *pixels = nullptr;
+    int width = 0;
+    int height = 0;
+    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+    fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, scale);
+
+    ImVec2 parent_minimum;
+    ImVec2 parent_maximum;
+    ImVec2 child_minimum;
+    ImVec2 child_maximum;
+    float scoped_spacing = 0.0f;
+    float restored_spacing = 0.0f;
+    bool parent_expanded = false;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(840.0f, 320.0f), ImGuiCond_Always);
+    ImGui::Begin("hierarchy-density", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoSavedSettings);
+    {
+      fancy_ui::HierarchyTree tree;
+      scoped_spacing = ImGui::GetStyle().ItemSpacing.y;
+      const fancy_ui::HierarchyRowResult parent =
+          fancy_ui::HierarchyRow(tree, {
+                                           .id = "parent",
+                                           .label = "Parent",
+                                           .expandable = true,
+                                           .expanded = true,
+                                       });
+      parent_expanded = parent.expanded;
+      parent_minimum = ImGui::GetItemRectMin();
+      parent_maximum = ImGui::GetItemRectMax();
+      static_cast<void>(fancy_ui::HierarchyRow(tree, {
+                                                         .id = "child",
+                                                         .label = "Child",
+                                                     }));
+      child_minimum = ImGui::GetItemRectMin();
+      child_maximum = ImGui::GetItemRectMax();
+      tree.Pop();
+    }
+    restored_spacing = ImGui::GetStyle().ItemSpacing.y;
+    ImGui::End();
+    ImGui::Render();
+    ImGui::DestroyContext();
+
+    REQUIRE(parent_expanded);
+    REQUIRE(parent_maximum.y - parent_minimum.y ==
+            Catch::Approx(32.0f * scale));
+    REQUIRE(child_maximum.y - child_minimum.y == Catch::Approx(32.0f * scale));
+    REQUIRE(child_minimum.y - parent_maximum.y == Catch::Approx(1.0f * scale));
+    REQUIRE(child_minimum.x == Catch::Approx(parent_minimum.x));
+    REQUIRE(scoped_spacing == Catch::Approx(1.0f * scale));
+    REQUIRE(restored_spacing == Catch::Approx(8.0f * scale));
+  };
+
+  verify_scale(1.0f);
+  verify_scale(2.0f);
+}
+
+TEST_CASE("color picker layouts fit their popup work area at the right edge") {
+  const auto verify_layout = [](const fancy_ui::ColorPickerLayout layout,
+                                const float scale) {
+    ImGui::CreateContext();
+    ImGuiIO &io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.DisplaySize = ImVec2(1280.0f, 1024.0f);
+    io.DeltaTime = 1.0f / 60.0f;
+    io.Fonts->AddFontDefault();
+    unsigned char *pixels = nullptr;
+    int width = 0;
+    int height = 0;
+    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+    fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, scale);
+    io.AddMousePosEvent(1260.0f, 100.0f);
+
+    fancy_ui::ColorPickerState picker;
+    const auto draw = [&](const bool request_open) {
+      ImGui::NewFrame();
+      ImGui::SetNextWindowPos(ImVec2(1040.0f, 32.0f), ImGuiCond_Always);
+      ImGui::SetNextWindowSize(ImVec2(220.0f, 180.0f), ImGuiCond_Always);
+      ImGui::Begin("picker-layout-contract", nullptr,
+                   ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                       ImGuiWindowFlags_NoSavedSettings);
+      static_cast<void>(fancy_ui::ColorPickerPopup(
+          {
+              .id = "picker",
+              .title = layout == fancy_ui::ColorPickerLayout::CurrentAndOriginal
+                           ? "Current and original"
+                           : "Compact",
+              .value =
+                  {
+                      .red = 0.3f,
+                      .green = 0.5f,
+                      .blue = 0.8f,
+                      .alpha = 0.75f,
+                  },
+              .request_open = request_open,
+              .layout = layout,
+          },
+          picker));
+      ImGui::End();
+      ImGui::Render();
+    };
+
+    draw(true);
+    draw(false);
+    draw(false);
+
+    REQUIRE_FALSE(GImGui->OpenPopupStack.empty());
+    ImGuiWindow *popup = GImGui->OpenPopupStack.back().Window;
+    REQUIRE(popup != nullptr);
+    REQUIRE(popup->ContentSize.x <=
+            popup->WorkRect.GetWidth() + fancy_ui::Scale(1.0f));
+    const ImGuiViewport *viewport = ImGui::GetMainViewport();
+    REQUIRE(popup->Pos.x >= viewport->WorkPos.x);
+    REQUIRE(popup->Pos.x + popup->Size.x <=
+            viewport->WorkPos.x + viewport->WorkSize.x + fancy_ui::Scale(1.0f));
+
+    ImGui::DestroyContext();
+  };
+
+  verify_layout(fancy_ui::ColorPickerLayout::CurrentAndOriginal, 1.0f);
+  verify_layout(fancy_ui::ColorPickerLayout::Compact, 1.0f);
+  verify_layout(fancy_ui::ColorPickerLayout::CurrentAndOriginal, 2.0f);
+  verify_layout(fancy_ui::ColorPickerLayout::Compact, 2.0f);
 }
 
 TEST_CASE("UI icon manifest has unique size variants backed by SVG masters") {
@@ -441,24 +604,31 @@ TEST_CASE("UI icon manifest has unique size variants backed by SVG masters") {
     REQUIRE(rail_icons.contains(semantic_id));
   }
   for (const char *semantic_id :
-       {"information", "success", "alert", "failure", "busy", "visibility",
-        "visibility-off", "more", "orbit-locked", "orbit-unlocked"}) {
+       {"information", "success", "alert", "failure", "busy", "check",
+        "visibility", "visibility-off", "more", "focus", "orbit-locked",
+        "orbit-unlocked"}) {
     REQUIRE(small_icons.contains(semantic_id));
   }
 }
 
 TEST_CASE("the complete source UI asset bundle loads and rasterizes") {
-  ImGui::CreateContext();
-  fancy_ui::steppenface::ApplicationUi ui;
   const std::filesystem::path asset_root =
       std::filesystem::path(FANCY_UI_TEST_SOURCE_ROOT) / "assets" / "ui";
 
-  const fancy_ui::steppenface::AssetLoadReport report =
-      ui.Initialize(asset_root, 1.25f);
-  for (const std::string &message : report.messages) {
-    INFO(message);
+  for (const float scale : std::array{1.0f, 1.25f, 1.5f, 2.0f}) {
+    ImGui::CreateContext();
+    fancy_ui::steppenface::AssetLoadReport report;
+    {
+      fancy_ui::steppenface::ApplicationUi ui;
+      report = ui.Initialize(asset_root, scale);
+    }
+    ImGui::DestroyContext();
+
+    INFO("UI scale: " << scale);
+    for (const std::string &message : report.messages) {
+      INFO(message);
+    }
+    REQUIRE(report.ok());
+    REQUIRE_FALSE(report.used_fallback_font);
   }
-  REQUIRE(report.ok());
-  REQUIRE_FALSE(report.used_fallback_font);
-  ImGui::DestroyContext();
 }

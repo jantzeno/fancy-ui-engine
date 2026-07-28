@@ -118,6 +118,11 @@ struct VisibilityToggleResult : InteractionResult {
 [[nodiscard]] VisibilityToggleResult
 VisibilityToggle(const VisibilityToggleSpec &spec);
 
+enum class ColorPickerLayout {
+  CurrentAndOriginal,
+  Compact,
+};
+
 struct ColorSwatchSpec {
   std::string_view id;
   std::string_view label;
@@ -126,6 +131,7 @@ struct ColorSwatchSpec {
   ColorRgba value;
   std::span<const ColorRgba> colors;
   bool show_alpha = true;
+  ColorPickerLayout picker_layout = ColorPickerLayout::CurrentAndOriginal;
   Availability availability;
 };
 
@@ -149,6 +155,7 @@ struct ColorPickerPopupSpec {
   ColorRgba value;
   bool request_open = false;
   bool show_alpha = true;
+  ColorPickerLayout layout = ColorPickerLayout::CurrentAndOriginal;
 };
 
 struct ColorPickerPopupResult {
@@ -165,6 +172,8 @@ struct ColorPickerPopupResult {
  *
  * This is shared by ColorSwatch and inline hierarchy color actions. The caller
  * supplies a stable ID and owns both the committed color and ColorPickerState.
+ * CurrentAndOriginal keeps ImGui's reference previews; Compact reserves the
+ * same editing and commit behavior without the preview column.
  */
 [[nodiscard]] ColorPickerPopupResult
 ColorPickerPopup(const ColorPickerPopupSpec &spec, ColorPickerState &state);

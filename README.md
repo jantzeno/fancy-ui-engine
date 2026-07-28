@@ -56,9 +56,11 @@ The forced hover, pressed, and focus examples are private to the gallery.
 Public components always report actual Dear ImGui pointer and keyboard input.
 The gallery's value controls retain their example state. Color swatches open a
 transactional picker (Apply or Enter commits; Cancel or Escape rolls back),
-tree rows own expansion and Ctrl/Shift selection separately from inline color,
-action, and visibility targets, and issue groups aggregate descendant
-visibility without coupling it to issue selection or review navigation.
+with full Current/Original and compact layouts shown side by side. Tree rows
+keep 32 px targets in a dense native hierarchy with connector lines, and own
+expansion and Ctrl/Shift selection separately from inline color, action, and
+visibility targets. Issue groups aggregate descendant visibility without
+coupling it to issue selection or review navigation.
 The regenerated 1280×1024 references are stored in
 [`docs/ui-mockups/260727/`](docs/ui-mockups/260727/).
 

@@ -30,7 +30,7 @@ struct GalleryState {
   ToggleState guides_visible = ToggleState::Off;
   ToggleState selection_visible = ToggleState::Mixed;
   ToggleState enabled = ToggleState::On;
-  ToggleState locked = ToggleState::On;
+  ToggleState locked = ToggleState::Off;
   bool operation_running = true;
   bool operation_paused = false;
   float operation_progress = 0.62f;
@@ -68,6 +68,21 @@ struct GalleryState {
       .blue = 0.97f,
   };
   ColorPickerState bed_color_picker;
+
+  ColorRgba preview_picker_color{
+      .red = 0.64f,
+      .green = 0.44f,
+      .blue = 0.97f,
+      .alpha = 0.78f,
+  };
+  ColorPickerState preview_picker;
+  ColorRgba compact_picker_color{
+      .red = 0.82f,
+      .green = 0.60f,
+      .blue = 0.13f,
+      .alpha = 0.86f,
+  };
+  ColorPickerState compact_picker;
 };
 
 void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state);

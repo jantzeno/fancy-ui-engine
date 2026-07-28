@@ -36,6 +36,20 @@ ColorRgba ClampColor(const ColorRgba color) {
   };
 }
 
+float ColorPickerPopupWidth(const ColorPickerPopupSpec &spec) {
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const float picker_width = Scale(260.0f);
+  float content_width = picker_width;
+  if (spec.layout == ColorPickerLayout::CurrentAndOriginal) {
+    content_width += style.ItemInnerSpacing.x + ImGui::GetFrameHeight() * 3.0f;
+  }
+  content_width = std::max(
+      content_width, ImGui::CalcTextSize(detail::Owned(spec.title).c_str()).x);
+  content_width =
+      std::max(content_width, Scale(72.0f * 2.0f) + style.ItemSpacing.x);
+  return content_width + style.WindowPadding.x * 2.0f;
+}
+
 } // namespace
 
 NumericInputResult NumericInput(const NumericInputSpec &spec) {
@@ -256,8 +270,9 @@ ColorPickerPopupResult ColorPickerPopup(const ColorPickerPopupSpec &spec,
     result.opened = true;
   }
 
-  ImGui::SetNextWindowSizeConstraints(ImVec2(Scale(280.0f), 0.0f),
-                                      ImVec2(Scale(360.0f), FLT_MAX));
+  const float popup_width = ColorPickerPopupWidth(spec);
+  ImGui::SetNextWindowSizeConstraints(ImVec2(popup_width, 0.0f),
+                                      ImVec2(popup_width, FLT_MAX));
   if (ImGui::BeginPopup("##color-picker")) {
     state.editing = true;
     ImGui::TextUnformatted(detail::Owned(spec.title).c_str());
@@ -276,6 +291,9 @@ ColorPickerPopupResult ColorPickerPopup(const ColorPickerPopupSpec &spec,
     };
     ImGuiColorEditFlags flags =
         ImGuiColorEditFlags_AlphaPreviewHalf | ImGuiColorEditFlags_NoLabel;
+    if (spec.layout == ColorPickerLayout::Compact) {
+      flags |= ImGuiColorEditFlags_NoSidePreview;
+    }
     if (spec.show_alpha) {
       flags |= ImGuiColorEditFlags_AlphaBar;
     } else {
@@ -390,6 +408,7 @@ ColorSwatchResult ColorSwatch(const ColorSwatchSpec &spec,
           .value = spec.value,
           .request_open = request_open,
           .show_alpha = spec.show_alpha,
+          .layout = spec.picker_layout,
       },
       state);
   ImGui::PopID();

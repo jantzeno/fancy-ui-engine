@@ -290,7 +290,8 @@ void DrawEnabledLocked(detail::UiAssetAtlas &assets, GalleryState &state) {
   }
   const CheckboxResult locked_result = Checkbox({
       .id = "locked",
-      .label = "Direction locked",
+      .label = state.locked == ToggleState::On ? "Direction locked"
+                                               : "Direction unlocked",
       .state = state.locked,
       .on_icon = locked,
       .off_icon = unlocked,
@@ -347,113 +348,119 @@ void DrawTreeRows(detail::UiAssetAtlas &assets, GalleryState &state) {
   const ToggleState assembly_visibility =
       AggregateVisibility(state.tree_visibility);
 
-  const HierarchyRowResult assembly = HierarchyRow({
-      .id = "assembly",
-      .label = labels[0],
-      .secondary_label = assembly_visibility == ToggleState::Mixed
-                             ? "Assembly · mixed visibility"
-                             : "Assembly · 2 descendants",
-      .expandable = true,
-      .expanded = state.assembly_expanded,
-      .selected = state.tree_selected[0],
-      .action_icon = more,
-      .action_tooltip = "Front housing actions",
-      .visibility = assembly_visibility,
-      .visible_icon = visible,
-      .hidden_icon = hidden,
-      .visibility_tooltip = "Show or hide all descendants",
-  });
-  if (assembly.expansion_changed) {
-    state.assembly_expanded = assembly.expanded;
-  }
-  if (assembly.activated) {
-    ApplySelection(state.tree_selected, state.tree_selection_anchor, 0,
-                   assembly.additive, assembly.range);
-    state.tree_feedback = "Selected: Front housing · Assembly";
-  }
-  if (assembly.visibility_changed) {
-    state.tree_visibility.fill(assembly.visibility);
-    state.tree_feedback = assembly.visibility == ToggleState::On
-                              ? "Front housing descendants are visible."
-                              : "Front housing descendants are hidden.";
-  }
-  if (assembly.action_activated) {
-    state.tree_action_row = 0;
-    ImGui::OpenPopup("##tree-actions");
-  }
-
-  if (state.assembly_expanded) {
-    const bool request_color_focus = state.tree_color_picker.restore_focus;
-    const HierarchyRowResult part = HierarchyRow({
-        .id = "part",
-        .label = labels[1],
-        .secondary_label = "Part 4 · 1 path",
-        .depth = 1,
-        .expandable = true,
-        .expanded = state.part_expanded,
-        .selected = state.tree_selected[1],
-        .color = state.part_color,
-        .color_tooltip = "Edit Face plate color",
-        .request_color_focus = request_color_focus,
-        .action_icon = more,
-        .action_tooltip = "Face plate actions",
-        .visibility = state.tree_visibility[0],
-        .visible_icon = visible,
-        .hidden_icon = hidden,
-        .visibility_tooltip = "Show or hide Face plate",
-    });
-    if (request_color_focus) {
-      state.tree_color_picker.restore_focus = false;
+  {
+    HierarchyTree tree;
+    const HierarchyRowResult assembly = HierarchyRow(
+        tree, {
+                  .id = "assembly",
+                  .label = labels[0],
+                  .secondary_label = assembly_visibility == ToggleState::Mixed
+                                         ? "Assembly · mixed visibility"
+                                         : "Assembly · 2 descendants",
+                  .expandable = true,
+                  .expanded = state.assembly_expanded,
+                  .selected = state.tree_selected[0],
+                  .action_icon = more,
+                  .action_tooltip = "Front housing actions",
+                  .visibility = assembly_visibility,
+                  .visible_icon = visible,
+                  .hidden_icon = hidden,
+                  .visibility_tooltip = "Show or hide all descendants",
+              });
+    if (assembly.expansion_changed) {
+      state.assembly_expanded = assembly.expanded;
     }
-    if (part.expansion_changed) {
-      state.part_expanded = part.expanded;
+    if (assembly.activated) {
+      ApplySelection(state.tree_selected, state.tree_selection_anchor, 0,
+                     assembly.additive, assembly.range);
+      state.tree_feedback = "Selected: Front housing · Assembly";
     }
-    if (part.activated) {
-      ApplySelection(state.tree_selected, state.tree_selection_anchor, 1,
-                     part.additive, part.range);
-      state.tree_feedback = "Selected: Face plate · Part 4";
+    if (assembly.visibility_changed) {
+      state.tree_visibility.fill(assembly.visibility);
+      state.tree_feedback = assembly.visibility == ToggleState::On
+                                ? "Front housing descendants are visible."
+                                : "Front housing descendants are hidden.";
     }
-    if (part.visibility_changed) {
-      state.tree_visibility[0] = part.visibility;
-      state.tree_feedback = part.visibility == ToggleState::On
-                                ? "Face plate is visible."
-                                : "Face plate is hidden.";
-    }
-    request_color_picker = part.color_activated;
-    if (part.action_activated) {
-      state.tree_action_row = 1;
+    if (assembly.action_activated) {
+      state.tree_action_row = 0;
       ImGui::OpenPopup("##tree-actions");
     }
 
-    if (state.part_expanded) {
-      const HierarchyRowResult path = HierarchyRow({
-          .id = "path",
-          .label = labels[2],
-          .secondary_label = "Path 184 · closed contour",
-          .depth = 2,
-          .selected = state.tree_selected[2],
-          .action_icon = more,
-          .action_tooltip = "Outer contour actions",
-          .visibility = state.tree_visibility[1],
-          .visible_icon = visible,
-          .hidden_icon = hidden,
-          .visibility_tooltip = "Show or hide Outer contour",
-      });
-      if (path.activated) {
-        ApplySelection(state.tree_selected, state.tree_selection_anchor, 2,
-                       path.additive, path.range);
-        state.tree_feedback = "Selected: Outer contour · Path 184";
+    if (assembly.expanded) {
+      const bool request_color_focus = state.tree_color_picker.restore_focus;
+      const HierarchyRowResult part = HierarchyRow(
+          tree, {
+                    .id = "part",
+                    .label = labels[1],
+                    .secondary_label = "Part 4 · 1 path",
+                    .expandable = true,
+                    .expanded = state.part_expanded,
+                    .selected = state.tree_selected[1],
+                    .color = state.part_color,
+                    .color_tooltip = "Edit Face plate color",
+                    .request_color_focus = request_color_focus,
+                    .action_icon = more,
+                    .action_tooltip = "Face plate actions",
+                    .visibility = state.tree_visibility[0],
+                    .visible_icon = visible,
+                    .hidden_icon = hidden,
+                    .visibility_tooltip = "Show or hide Face plate",
+                });
+      if (request_color_focus) {
+        state.tree_color_picker.restore_focus = false;
       }
-      if (path.visibility_changed) {
-        state.tree_visibility[1] = path.visibility;
-        state.tree_feedback = path.visibility == ToggleState::On
-                                  ? "Outer contour is visible."
-                                  : "Outer contour is hidden.";
+      if (part.expansion_changed) {
+        state.part_expanded = part.expanded;
       }
-      if (path.action_activated) {
-        state.tree_action_row = 2;
+      if (part.activated) {
+        ApplySelection(state.tree_selected, state.tree_selection_anchor, 1,
+                       part.additive, part.range);
+        state.tree_feedback = "Selected: Face plate · Part 4";
+      }
+      if (part.visibility_changed) {
+        state.tree_visibility[0] = part.visibility;
+        state.tree_feedback = part.visibility == ToggleState::On
+                                  ? "Face plate is visible."
+                                  : "Face plate is hidden.";
+      }
+      request_color_picker = part.color_activated;
+      if (part.action_activated) {
+        state.tree_action_row = 1;
         ImGui::OpenPopup("##tree-actions");
       }
+
+      if (part.expanded) {
+        const HierarchyRowResult path = HierarchyRow(
+            tree, {
+                      .id = "path",
+                      .label = labels[2],
+                      .secondary_label = "Path 184 · closed contour",
+                      .selected = state.tree_selected[2],
+                      .action_icon = more,
+                      .action_tooltip = "Outer contour actions",
+                      .visibility = state.tree_visibility[1],
+                      .visible_icon = visible,
+                      .hidden_icon = hidden,
+                      .visibility_tooltip = "Show or hide Outer contour",
+                  });
+        if (path.activated) {
+          ApplySelection(state.tree_selected, state.tree_selection_anchor, 2,
+                         path.additive, path.range);
+          state.tree_feedback = "Selected: Outer contour · Path 184";
+        }
+        if (path.visibility_changed) {
+          state.tree_visibility[1] = path.visibility;
+          state.tree_feedback = path.visibility == ToggleState::On
+                                    ? "Outer contour is visible."
+                                    : "Outer contour is hidden.";
+        }
+        if (path.action_activated) {
+          state.tree_action_row = 2;
+          ImGui::OpenPopup("##tree-actions");
+        }
+        tree.Pop();
+      }
+      tree.Pop();
     }
   }
 
@@ -549,85 +556,88 @@ void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
                                : "Issue labels hidden in View.";
   }
 
-  for (std::size_t group_index = 0; group_index < groups.size();
-       ++group_index) {
-    const GroupDefinition &group = groups[group_index];
-    const std::span<const ToggleState> descendants(
-        state.issue_visibility.data() + group.first_issue, group.issue_count);
-    const ToggleState group_visibility = AggregateVisibility(descendants);
-    const std::string count = std::to_string(group.issue_count) +
-                              (group.issue_count == 1 ? " issue" : " issues");
-    const HierarchyRowResult group_result = HierarchyRow({
-        .id = group.id,
-        .label = group.label,
-        .secondary_label = count,
-        .expandable = true,
-        .expanded = state.issue_groups_expanded[group_index],
-        .status = group.status,
-        .leading_icon = assets.Painter(group.icon),
-        .visibility = group_visibility,
-        .visible_icon = visible,
-        .hidden_icon = hidden,
-        .visibility_tooltip = "Show or hide every issue in this group",
-    });
-    if (group_result.expansion_changed) {
-      state.issue_groups_expanded[group_index] = group_result.expanded;
-    } else if (group_result.activated) {
-      state.issue_groups_expanded[group_index] =
-          !state.issue_groups_expanded[group_index];
-    }
-    if (group_result.visibility_changed) {
-      std::fill_n(state.issue_visibility.begin() +
-                      static_cast<std::ptrdiff_t>(group.first_issue),
-                  group.issue_count, group_result.visibility);
-      state.issue_feedback =
-          std::string(group.label) + (group_result.visibility == ToggleState::On
-                                          ? " issues are visible."
-                                          : " issues are hidden.");
-    }
+  {
+    HierarchyTree tree;
+    for (std::size_t group_index = 0; group_index < groups.size();
+         ++group_index) {
+      const GroupDefinition &group = groups[group_index];
+      const std::span<const ToggleState> descendants(
+          state.issue_visibility.data() + group.first_issue, group.issue_count);
+      const ToggleState group_visibility = AggregateVisibility(descendants);
+      const std::string count = std::to_string(group.issue_count) +
+                                (group.issue_count == 1 ? " issue" : " issues");
+      const HierarchyRowResult group_result = HierarchyRow(
+          tree,
+          {
+              .id = group.id,
+              .label = group.label,
+              .secondary_label = count,
+              .expandable = true,
+              .expanded = state.issue_groups_expanded[group_index],
+              .status = group.status,
+              .leading_icon = assets.Painter(group.icon),
+              .visibility = group_visibility,
+              .visible_icon = visible,
+              .hidden_icon = hidden,
+              .visibility_tooltip = "Show or hide every issue in this group",
+          });
+      if (group_result.expansion_changed) {
+        state.issue_groups_expanded[group_index] = group_result.expanded;
+      }
+      if (group_result.visibility_changed) {
+        std::fill_n(state.issue_visibility.begin() +
+                        static_cast<std::ptrdiff_t>(group.first_issue),
+                    group.issue_count, group_result.visibility);
+        state.issue_feedback = std::string(group.label) +
+                               (group_result.visibility == ToggleState::On
+                                    ? " issues are visible."
+                                    : " issues are hidden.");
+      }
 
-    if (!state.issue_groups_expanded[group_index]) {
-      continue;
-    }
-    for (std::size_t offset = 0; offset < group.issue_count; ++offset) {
-      const std::size_t issue_index = group.first_issue + offset;
-      const IssueDefinition &issue = issues[issue_index];
-      const HierarchyRowResult issue_result = HierarchyRow({
-          .id = issue.id,
-          .label = issue.label,
-          .secondary_label = issue.detail,
-          .depth = 1,
-          .selected = state.issue_selected[issue_index],
-          .status = issue.status,
-          .leading_icon = assets.Painter(issue.icon),
-          .action_icon = review,
-          .action_tooltip = "Review issue in View",
-          .visibility = state.issue_visibility[issue_index],
-          .visible_icon = visible,
-          .hidden_icon = hidden,
-          .visibility_tooltip = "Show or hide this issue marker",
-      });
-      if (issue_result.activated) {
-        ApplySelection(state.issue_selected, state.issue_selection_anchor,
-                       static_cast<int>(issue_index), issue_result.additive,
-                       issue_result.range);
-        state.issue_feedback = "Selected: " + std::string(issue.label) + " · " +
-                               std::string(issue.detail);
+      if (!group_result.expanded) {
+        continue;
       }
-      if (issue_result.visibility_changed) {
-        state.issue_visibility[issue_index] = issue_result.visibility;
-        state.issue_feedback =
-            std::string(issue.label) +
-            (issue_result.visibility == ToggleState::On ? " marker is visible."
-                                                        : " marker is hidden.");
+      for (std::size_t offset = 0; offset < group.issue_count; ++offset) {
+        const std::size_t issue_index = group.first_issue + offset;
+        const IssueDefinition &issue = issues[issue_index];
+        const HierarchyRowResult issue_result = HierarchyRow(
+            tree, {
+                      .id = issue.id,
+                      .label = issue.label,
+                      .secondary_label = issue.detail,
+                      .selected = state.issue_selected[issue_index],
+                      .status = issue.status,
+                      .leading_icon = assets.Painter(issue.icon),
+                      .action_icon = review,
+                      .action_tooltip = "Review issue in View",
+                      .visibility = state.issue_visibility[issue_index],
+                      .visible_icon = visible,
+                      .hidden_icon = hidden,
+                      .visibility_tooltip = "Show or hide this issue marker",
+                  });
+        if (issue_result.activated) {
+          ApplySelection(state.issue_selected, state.issue_selection_anchor,
+                         static_cast<int>(issue_index), issue_result.additive,
+                         issue_result.range);
+          state.issue_feedback = "Selected: " + std::string(issue.label) +
+                                 " · " + std::string(issue.detail);
+        }
+        if (issue_result.visibility_changed) {
+          state.issue_visibility[issue_index] = issue_result.visibility;
+          state.issue_feedback = std::string(issue.label) +
+                                 (issue_result.visibility == ToggleState::On
+                                      ? " marker is visible."
+                                      : " marker is hidden.");
+        }
+        if (issue_result.action_activated) {
+          state.issue_selected.fill(false);
+          state.issue_selected[issue_index] = true;
+          state.issue_selection_anchor = static_cast<int>(issue_index);
+          state.issue_feedback =
+              "Review requested in View: " + std::string(issue.label);
+        }
       }
-      if (issue_result.action_activated) {
-        state.issue_selected.fill(false);
-        state.issue_selected[issue_index] = true;
-        state.issue_selection_anchor = static_cast<int>(issue_index);
-        state.issue_feedback =
-            "Review requested in View: " + std::string(issue.label);
-      }
+      tree.Pop();
     }
   }
   ImGui::Spacing();
@@ -788,6 +798,42 @@ void DrawEmptyOverflow() {
   }));
 }
 
+void DrawColorPickers(GalleryState &state) {
+  const std::span<const ColorRgba> preview_color(&state.preview_picker_color,
+                                                 1);
+  const ColorSwatchResult preview = ColorSwatch(
+      {
+          .id = "preview",
+          .label = "Current and original",
+          .tooltip = "Open full color picker",
+          .picker_title = "Current and original",
+          .value = state.preview_picker_color,
+          .colors = preview_color,
+          .picker_layout = ColorPickerLayout::CurrentAndOriginal,
+      },
+      state.preview_picker);
+  if (preview.changed) {
+    state.preview_picker_color = preview.value;
+  }
+
+  const std::span<const ColorRgba> compact_color(&state.compact_picker_color,
+                                                 1);
+  const ColorSwatchResult compact = ColorSwatch(
+      {
+          .id = "compact",
+          .label = "Compact",
+          .tooltip = "Open compact color picker",
+          .picker_title = "Compact color",
+          .value = state.compact_picker_color,
+          .colors = compact_color,
+          .picker_layout = ColorPickerLayout::Compact,
+      },
+      state.compact_picker);
+  if (compact.changed) {
+    state.compact_picker_color = compact.value;
+  }
+}
+
 } // namespace
 
 void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
@@ -875,6 +921,8 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
                   [&assets, &state] { DrawMixedValues(assets, state); });
       GalleryCard("empty-overflow", "Empty & overflow", assets.bold_font(),
                   DrawEmptyOverflow);
+      GalleryCard("color-pickers", "Color pickers", assets.bold_font(),
+                  [&state] { DrawColorPickers(state); });
       ImGui::EndTable();
     }
   }

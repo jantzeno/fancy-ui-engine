@@ -117,6 +117,8 @@ void ApplyTheme(const ResolvedTheme theme, const float ui_scale) {
   style.FrameBorderSize = Scale(1.0f);
   style.PopupRounding = Scale(4.0f);
   style.PopupBorderSize = Scale(1.0f);
+  style.TreeLinesSize = Scale(1.0f);
+  style.TreeLinesRounding = Scale(4.0f);
   // Components supply explicit disabled colors. Keeping alpha at one prevents
   // Dear ImGui from washing those semantic roles out a second time.
   style.DisabledAlpha = 1.0f;
@@ -138,6 +140,7 @@ void ApplyTheme(const ResolvedTheme theme, const float ui_scale) {
   colors[ImGuiCol_Header] = ToImVec4(active_palette.selection);
   colors[ImGuiCol_HeaderHovered] = ToImVec4(active_palette.control_hover);
   colors[ImGuiCol_HeaderActive] = ToImVec4(active_palette.control_pressed);
+  colors[ImGuiCol_TreeLines] = ToImVec4(active_palette.border_strong);
   colors[ImGuiCol_CheckMark] = ToImVec4(active_palette.action_primary);
   colors[ImGuiCol_SliderGrab] = ToImVec4(active_palette.action_primary);
   colors[ImGuiCol_SliderGrabActive] =

@@ -30,7 +30,6 @@ struct HierarchyRowSpec {
   std::string_view label;
   std::string_view secondary_label;
   std::string_view tooltip;
-  int depth = 0;
   bool expandable = false;
   bool expanded = false;
   bool selected = false;
@@ -61,11 +60,39 @@ struct HierarchyRowResult : InteractionResult {
 };
 
 /**
+ * Scopes one structurally nested hierarchy.
+ *
+ * The scope keeps native ImGui tree pushes balanced without exposing ImGui
+ * types through the public API. Draw an expanded row's children immediately
+ * after it, then call Pop() once before drawing its next sibling.
+ */
+class HierarchyTree {
+public:
+  HierarchyTree();
+  ~HierarchyTree();
+
+  HierarchyTree(const HierarchyTree &) = delete;
+  HierarchyTree &operator=(const HierarchyTree &) = delete;
+  HierarchyTree(HierarchyTree &&) = delete;
+  HierarchyTree &operator=(HierarchyTree &&) = delete;
+
+  void Pop();
+
+private:
+  friend HierarchyRowResult HierarchyRow(HierarchyTree &tree,
+                                         const HierarchyRowSpec &spec);
+
+  int open_nodes_ = 0;
+};
+
+/**
  * Draws one full-width hierarchy row with independent inline actions.
  *
  * Inline color, overflow, and visibility targets suppress row activation so
- * one pointer gesture has exactly one owner.
+ * one pointer gesture has exactly one owner. ImGui derives indentation and
+ * connector lines from the order of HierarchyRow() and HierarchyTree::Pop().
  */
-[[nodiscard]] HierarchyRowResult HierarchyRow(const HierarchyRowSpec &spec);
+[[nodiscard]] HierarchyRowResult HierarchyRow(HierarchyTree &tree,
+                                              const HierarchyRowSpec &spec);
 
 } // namespace fancy_ui
