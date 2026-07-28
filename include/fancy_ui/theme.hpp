@@ -23,10 +23,13 @@ struct SemanticPalette {
   ColorRgba application_surface;
   ColorRgba canvas;
   ColorRgba surface;
+  ColorRgba surface_muted;
   ColorRgba surface_raised;
   ColorRgba control;
   ColorRgba control_hover;
   ColorRgba control_pressed;
+  ColorRgba control_disabled_fill;
+  ColorRgba control_disabled_border;
   ColorRgba border;
   ColorRgba border_strong;
   ColorRgba text_primary;
@@ -57,8 +60,10 @@ ResolveTheme(ThemeMode mode,
  * Applies a resolved semantic palette to Dear ImGui and stores it for shared
  * components drawn during subsequent frames.
  */
-void ApplyTheme(ResolvedTheme theme);
+void ApplyTheme(ResolvedTheme theme, float ui_scale = 1.0f);
 
 [[nodiscard]] const SemanticPalette &CurrentPalette();
+[[nodiscard]] float CurrentUiScale();
+[[nodiscard]] float Scale(float logical_pixels);
 
 } // namespace fancy_ui

@@ -23,6 +23,40 @@ product commands, or contain export/nesting rules.
 The library is intentionally workspace-coupled. Its xmake target can depend on
 the independent `im2d_ui` adapter, but `im2d` must never depend on `fancy_ui`.
 
+## Component states
+
+Shared components model availability, validation, selection, and mixed values
+as separate inputs. Components resolve those inputs with the same precedence:
+disabled, selected, validation, focus, pressed, hover, then rest. Disabled
+controls use explicit palette roles instead of opacity so contrast remains
+predictable in both themes.
+
+The standalone gallery is the native review surface for the component-state
+reference:
+
+```sh
+xmake build fancy_ui_component_gallery
+xmake run fancy_ui_component_gallery --theme dark --scale 1
+```
+
+`--theme` accepts `light` or `dark`. `--scale` accepts values from `0.75` to
+`2`, with `1`, `1.25`, `1.5`, and `2` as the standard review modes. Larger
+layouts scroll instead of omitting component groups.
+
+For deterministic review artifacts, pass a PNG destination. The gallery
+renders a few frames so the font and SVG atlas is installed before capture:
+
+```sh
+xmake run fancy_ui_component_gallery \
+  --theme dark --scale 1 \
+  --screenshot /tmp/fancy-ui-components-dark.png
+```
+
+The forced hover, pressed, and focus examples are private to the gallery.
+Public components always report actual Dear ImGui pointer and keyboard input.
+The regenerated 1280×1024 references are stored in
+[`docs/ui-mockups/260727/`](docs/ui-mockups/260727/).
+
 ## Boundaries
 
 - Raw Dear ImGui widget calls belong in `src/components/`, `src/shell/`, and

@@ -18,7 +18,9 @@ struct ButtonSpec {
   std::string_view label;
   std::string_view tooltip;
   ButtonVariant variant = ButtonVariant::Secondary;
+  bool selected = false;
   Availability availability;
+  Validation validation;
   Vec2 size = {0.0f, 32.0f};
 };
 

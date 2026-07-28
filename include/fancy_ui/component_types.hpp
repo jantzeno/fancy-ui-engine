@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string_view>
 
 namespace fancy_ui {
@@ -44,6 +45,24 @@ struct Availability {
 };
 
 /**
+ * Describes a persistent validation cue without moving validation rules into
+ * the drawing layer.
+ *
+ * The caller owns the rule and recovery message. Components keep this cue
+ * independent from selection and keyboard focus.
+ */
+struct Validation {
+  bool invalid = false;
+  std::string_view message;
+};
+
+enum class ToggleState {
+  Off,
+  On,
+  Mixed,
+};
+
+/**
  * Interaction facts common to all immediate-mode components.
  */
 struct InteractionResult {
@@ -58,6 +77,16 @@ enum class SemanticStatus {
   Success,
   Warning,
   Failure,
+  Busy,
+  Preview,
 };
+
+/**
+ * Draws a monochrome icon without exposing a renderer type in public headers.
+ *
+ * Components provide logical bounds and a semantic foreground color. The host
+ * decides how those values map to its icon atlas.
+ */
+using IconPainter = std::function<void(const Rect &, ColorRgba)>;
 
 } // namespace fancy_ui

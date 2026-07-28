@@ -2,9 +2,18 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace fancy_ui::steppenface {
+
+struct AssetLoadReport {
+  bool used_fallback_font = false;
+  std::vector<std::string> messages;
+
+  [[nodiscard]] bool ok() const { return messages.empty(); }
+};
 
 enum class UiIconSize : std::uint8_t {
   Small16 = 16,

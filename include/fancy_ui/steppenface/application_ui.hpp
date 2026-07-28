@@ -3,6 +3,7 @@
 #include "fancy_ui/steppenface/application_view.hpp"
 #include "fancy_ui/steppenface/session_state.hpp"
 #include "fancy_ui/steppenface/surface_host.hpp"
+#include "fancy_ui/steppenface/ui_assets.hpp"
 #include "fancy_ui/steppenface/ui_intent.hpp"
 
 #include <filesystem>
@@ -11,13 +12,6 @@
 #include <vector>
 
 namespace fancy_ui::steppenface {
-
-struct AssetLoadReport {
-  bool used_fallback_font = false;
-  std::vector<std::string> messages;
-
-  [[nodiscard]] bool ok() const { return messages.empty(); }
-};
 
 enum class BackendRequest {
   RebuildFontAtlas,

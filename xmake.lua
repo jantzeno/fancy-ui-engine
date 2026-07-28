@@ -18,3 +18,19 @@ target("fancy_ui_tests")
     add_defines('FANCY_UI_TEST_SOURCE_ROOT="' .. repo_dir .. '"')
     add_deps("fancy_ui")
     add_packages("catch2", "imgui")
+
+target("fancy_ui_component_gallery")
+    set_kind("binary")
+    set_default(false)
+    set_warnings("all")
+    set_rundir(repo_dir)
+    add_files(path.join(repo_dir, "tools", "component_gallery", "*.cpp"))
+    add_includedirs(path.join(repo_dir, "tools", "component_gallery"))
+    add_includedirs(path.join(repo_dir, "src"))
+    add_includedirs(
+        path.join(workspace_root, "engine_vendor", "nanosvg", "example"))
+    add_defines(
+        'FANCY_UI_GALLERY_ASSET_ROOT="' ..
+        path.join(repo_dir, "assets", "ui") .. '"')
+    add_deps("fancy_ui")
+    add_packages("libsdl3", "glad", "imgui")

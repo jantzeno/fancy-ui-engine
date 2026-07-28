@@ -8,10 +8,10 @@
 #include "fancy_ui/steppenface/ui_assets.hpp"
 #include "fancy_ui/theme.hpp"
 
+#include "internal/ui_asset_atlas.hpp"
 #include "ui/im2d_canvas_widget.h"
 
 #include <imgui.h>
-#include <lunasvg.h>
 
 #include <algorithm>
 #include <array>
@@ -23,7 +23,6 @@
 #include <optional>
 #include <string>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -77,11 +76,6 @@ ImVec4 ToImVec4(const ColorRgba color) {
   return ImVec4(color.red, color.green, color.blue, color.alpha);
 }
 
-std::string IconAtlasKey(const std::string_view semantic_id,
-                         const UiIconSize size) {
-  return std::string(semantic_id) + "@" + std::to_string(LogicalPixels(size));
-}
-
 bool MatchesQuery(const TreeRowView &row, const std::string &query) {
   if (query.empty()) {
     return true;
@@ -129,67 +123,12 @@ public:
     bool disabled = false;
   };
 
-  struct PendingIcon {
-    std::string key;
-    lunasvg::Bitmap bitmap;
-  };
-
   SessionState session;
-  ImFont *regular_font = nullptr;
-  ImFont *bold_font = nullptr;
-  ImFont *mono_font = nullptr;
+  detail::UiAssetAtlas assets;
   float application_menu_font_size = kApplicationMenuFontSize;
-  std::unordered_map<std::string, ImFontAtlasRectId> icon_rects;
-  std::vector<PendingIcon> pending_icons;
   std::vector<UiIntent> intents;
   bool navigation_changed = false;
   bool layout_changed = false;
-
-  void InstallPendingIcons() {
-    ImFontAtlas *atlas = ImGui::GetIO().Fonts;
-    if (pending_icons.empty() || !atlas->RendererHasTextures ||
-        atlas->TexData == nullptr || atlas->TexData->Pixels == nullptr) {
-      return;
-    }
-
-    for (const PendingIcon &icon : pending_icons) {
-      ImFontAtlasRect rect;
-      const ImFontAtlasRectId rect_id = atlas->AddCustomRect(
-          icon.bitmap.width(), icon.bitmap.height(), &rect);
-      if (rect_id == ImFontAtlasRectId_Invalid) {
-        continue;
-      }
-
-      ImTextureData *texture = atlas->TexData;
-      if (texture == nullptr || texture->Pixels == nullptr ||
-          static_cast<int>(rect.x) + icon.bitmap.width() > texture->Width ||
-          static_cast<int>(rect.y) + icon.bitmap.height() > texture->Height) {
-        atlas->RemoveCustomRect(rect_id);
-        continue;
-      }
-
-      for (int y = 0; y < icon.bitmap.height(); ++y) {
-        const unsigned char *source =
-            icon.bitmap.data() + y * icon.bitmap.stride();
-        unsigned char *destination =
-            texture->Pixels + ((static_cast<int>(rect.y) + y) * texture->Width +
-                               static_cast<int>(rect.x)) *
-                                  texture->BytesPerPixel;
-        for (int x = 0; x < icon.bitmap.width(); ++x) {
-          if (texture->BytesPerPixel == 4) {
-            destination[x * 4 + 0] = 255;
-            destination[x * 4 + 1] = 255;
-            destination[x * 4 + 2] = 255;
-            destination[x * 4 + 3] = source[x * 4 + 3];
-          } else {
-            destination[x] = source[x * 4 + 3];
-          }
-        }
-      }
-      icon_rects.emplace(icon.key, rect_id);
-    }
-    pending_icons.clear();
-  }
 
   void EmitCommand(const std::uint64_t revision, const CommandView &command) {
     if (command.availability.visible && command.availability.enabled &&
@@ -417,7 +356,7 @@ public:
   }
 
   void DrawApplicationBar(const ApplicationView &view) {
-    ImGui::PushFont(regular_font, application_menu_font_size);
+    ImGui::PushFont(assets.regular_font(), application_menu_font_size);
     const float vertical_padding =
         std::max(0.0f, (kApplicationBarHeight - ImGui::GetFontSize()) * 0.5f);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
@@ -491,17 +430,12 @@ public:
   bool DrawAtlasIcon(const std::string_view icon, const UiIconSize size,
                      const ImVec2 minimum, const ImVec2 maximum,
                      const ImU32 color) {
-    const auto found = icon_rects.find(IconAtlasKey(icon, size));
-    if (found == icon_rects.end()) {
-      return false;
-    }
-    ImFontAtlasRect rect;
-    if (!ImGui::GetIO().Fonts->GetCustomRect(found->second, &rect)) {
-      return false;
-    }
-    ImGui::GetWindowDrawList()->AddImage(ImGui::GetIO().Fonts->TexRef, minimum,
-                                         maximum, rect.uv0, rect.uv1, color);
-    return true;
+    const ImVec4 tint = ImGui::ColorConvertU32ToFloat4(color);
+    return assets.DrawIcon(
+        icon, size,
+        {.minimum = {.x = minimum.x, .y = minimum.y},
+         .maximum = {.x = maximum.x, .y = maximum.y}},
+        {.red = tint.x, .green = tint.y, .blue = tint.z, .alpha = tint.w});
   }
 
   void DrawToolbarIcon(const std::string &icon, const ImVec2 minimum,
@@ -942,11 +876,11 @@ public:
   }
 
   void DrawExplorer(const ApplicationView &view) {
-    if (bold_font != nullptr) {
-      ImGui::PushFont(bold_font);
+    if (assets.bold_font() != nullptr) {
+      ImGui::PushFont(assets.bold_font());
     }
     ImGui::TextUnformatted(view.explorer.title.c_str());
-    if (bold_font != nullptr) {
+    if (assets.bold_font() != nullptr) {
       ImGui::PopFont();
     }
 
@@ -1182,11 +1116,11 @@ public:
   }
 
   void DrawInspector(const ApplicationView &view) {
-    if (bold_font != nullptr) {
-      ImGui::PushFont(bold_font);
+    if (assets.bold_font() != nullptr) {
+      ImGui::PushFont(assets.bold_font());
     }
     ImGui::TextUnformatted(view.inspector.title.c_str());
-    if (bold_font != nullptr) {
+    if (assets.bold_font() != nullptr) {
       ImGui::PopFont();
     }
     if (view.inspector.sections.empty()) {
@@ -1306,72 +1240,9 @@ ApplicationUi &ApplicationUi::operator=(ApplicationUi &&) noexcept = default;
 AssetLoadReport
 ApplicationUi::Initialize(const std::filesystem::path &asset_root,
                           const float dpi_scale) {
-  AssetLoadReport report;
-  if (ImGui::GetCurrentContext() == nullptr) {
-    report.used_fallback_font = true;
-    report.messages.emplace_back(
-        "Fancy UI initialization requires an active ImGui context");
-    return report;
-  }
-
-  ImGuiIO &io = ImGui::GetIO();
-  io.Fonts->Clear();
-  const float scale = std::clamp(dpi_scale, 0.75f, 2.0f);
-  impl_->application_menu_font_size = Impl::kApplicationMenuFontSize * scale;
-  const auto load = [&report, &asset_root](const std::string_view name,
-                                           const float size) -> ImFont * {
-    const std::filesystem::path path = asset_root / "fonts" / std::string(name);
-    if (!std::filesystem::is_regular_file(path)) {
-      report.messages.push_back("Missing UI font: " + path.string());
-      return nullptr;
-    }
-    ImFont *font =
-        ImGui::GetIO().Fonts->AddFontFromFileTTF(path.string().c_str(), size);
-    if (font == nullptr) {
-      report.messages.push_back("Could not load UI font: " + path.string());
-    }
-    return font;
-  };
-
-  const std::span<const std::string_view> fonts = RequiredUiFontFiles();
-  impl_->regular_font = load(fonts[0], 16.0f * scale);
-  impl_->bold_font = load(fonts[1], 18.0f * scale);
-  impl_->mono_font = load(fonts[2], 16.0f * scale);
-  if (impl_->regular_font == nullptr) {
-    impl_->regular_font = io.Fonts->AddFontDefault();
-    report.used_fallback_font = true;
-  }
-  impl_->icon_rects.clear();
-  impl_->pending_icons.clear();
-  for (const UiIconAssetSpec &asset : UiIconAssets()) {
-    const std::filesystem::path path =
-        asset_root / "icons" / std::string(asset.filename);
-    if (!std::filesystem::is_regular_file(path)) {
-      report.messages.push_back("Missing UI icon: " + path.string());
-      continue;
-    }
-    std::unique_ptr<lunasvg::Document> document =
-        lunasvg::Document::loadFromFile(path.string());
-    if (document == nullptr) {
-      report.messages.push_back("Could not load UI icon: " + path.string());
-      continue;
-    }
-    const int logical_pixels = LogicalPixels(asset.size);
-    const int icon_pixels = std::max(
-        logical_pixels, static_cast<int>(std::round(logical_pixels * scale)));
-    lunasvg::Bitmap bitmap = document->renderToBitmap(icon_pixels, icon_pixels);
-    if (bitmap.isNull()) {
-      report.messages.push_back("Could not rasterize UI icon: " +
-                                path.string());
-      continue;
-    }
-    bitmap.convertToRGBA();
-    impl_->pending_icons.push_back(
-        {.key = IconAtlasKey(asset.semantic_id, asset.size),
-         .bitmap = std::move(bitmap)});
-  }
-  io.FontDefault = impl_->regular_font;
-  ApplyTheme(ResolvedTheme::Dark);
+  AssetLoadReport report = impl_->assets.Load(asset_root, dpi_scale);
+  impl_->application_menu_font_size =
+      Impl::kApplicationMenuFontSize * impl_->assets.ui_scale();
   return report;
 }
 
@@ -1387,12 +1258,12 @@ FrameResult ApplicationUi::Draw(const ApplicationView &view,
   impl_->intents.clear();
   impl_->navigation_changed = false;
   impl_->layout_changed = false;
-  impl_->InstallPendingIcons();
+  impl_->assets.InstallPendingIcons();
   if (impl_->session.active_destination != view.active_destination) {
     impl_->session.ActivateDestination(view.active_destination);
   }
 
-  ApplyTheme(ResolveTheme(view.theme_mode));
+  ApplyTheme(ResolveTheme(view.theme_mode), impl_->assets.ui_scale());
   impl_->DrawApplicationBar(view);
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
   ImGui::SetNextWindowPos(viewport->WorkPos);

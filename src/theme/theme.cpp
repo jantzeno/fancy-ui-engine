@@ -2,6 +2,8 @@
 
 #include <imgui.h>
 
+#include <algorithm>
+
 namespace fancy_ui {
 
 namespace {
@@ -18,6 +20,7 @@ ImVec4 ToImVec4(const ColorRgba color) {
 }
 
 SemanticPalette active_palette = PaletteFor(ResolvedTheme::Dark);
+float active_ui_scale = 1.0f;
 
 } // namespace
 
@@ -40,10 +43,13 @@ SemanticPalette PaletteFor(const ResolvedTheme theme) {
         .application_surface = Rgb(0xF6, 0xF8, 0xFA),
         .canvas = Rgb(0xFF, 0xFF, 0xFF),
         .surface = Rgb(0xFF, 0xFF, 0xFF),
+        .surface_muted = Rgb(0xF6, 0xF8, 0xFA),
         .surface_raised = Rgb(0xFF, 0xFF, 0xFF),
         .control = Rgb(0xFF, 0xFF, 0xFF),
         .control_hover = Rgb(0xEF, 0xF2, 0xF5),
         .control_pressed = Rgb(0xE6, 0xEA, 0xEF),
+        .control_disabled_fill = Rgb(0xF6, 0xF8, 0xFA),
+        .control_disabled_border = Rgb(0xD1, 0xD9, 0xE0),
         .border = Rgb(0xD1, 0xD9, 0xE0),
         .border_strong = Rgb(0x81, 0x8B, 0x98),
         .text_primary = Rgb(0x1F, 0x23, 0x28),
@@ -70,10 +76,13 @@ SemanticPalette PaletteFor(const ResolvedTheme theme) {
       .application_surface = Rgb(0x01, 0x04, 0x09),
       .canvas = Rgb(0x0D, 0x11, 0x17),
       .surface = Rgb(0x0D, 0x11, 0x17),
+      .surface_muted = Rgb(0x15, 0x1B, 0x23),
       .surface_raised = Rgb(0x21, 0x28, 0x30),
       .control = Rgb(0x21, 0x28, 0x30),
       .control_hover = Rgb(0x26, 0x2F, 0x3A),
       .control_pressed = Rgb(0x2D, 0x37, 0x43),
+      .control_disabled_fill = Rgb(0x15, 0x1B, 0x23),
+      .control_disabled_border = Rgb(0x3D, 0x44, 0x4D),
       .border = Rgb(0x3D, 0x44, 0x4D),
       .border_strong = Rgb(0x6E, 0x76, 0x81),
       .text_primary = Rgb(0xF0, 0xF6, 0xFC),
@@ -96,17 +105,21 @@ SemanticPalette PaletteFor(const ResolvedTheme theme) {
   };
 }
 
-void ApplyTheme(const ResolvedTheme theme) {
+void ApplyTheme(const ResolvedTheme theme, const float ui_scale) {
   active_palette = PaletteFor(theme);
+  active_ui_scale = std::clamp(ui_scale, 0.75f, 2.0f);
   ImGuiStyle &style = ImGui::GetStyle();
-  style.WindowPadding = ImVec2(16.0f, 16.0f);
-  style.FramePadding = ImVec2(12.0f, 6.0f);
-  style.ItemSpacing = ImVec2(8.0f, 8.0f);
-  style.ItemInnerSpacing = ImVec2(8.0f, 4.0f);
-  style.FrameRounding = 4.0f;
-  style.FrameBorderSize = 1.0f;
-  style.PopupRounding = 4.0f;
-  style.PopupBorderSize = 1.0f;
+  style.WindowPadding = ImVec2(Scale(16.0f), Scale(16.0f));
+  style.FramePadding = ImVec2(Scale(12.0f), Scale(6.0f));
+  style.ItemSpacing = ImVec2(Scale(8.0f), Scale(8.0f));
+  style.ItemInnerSpacing = ImVec2(Scale(8.0f), Scale(4.0f));
+  style.FrameRounding = Scale(4.0f);
+  style.FrameBorderSize = Scale(1.0f);
+  style.PopupRounding = Scale(4.0f);
+  style.PopupBorderSize = Scale(1.0f);
+  // Components supply explicit disabled colors. Keeping alpha at one prevents
+  // Dear ImGui from washing those semantic roles out a second time.
+  style.DisabledAlpha = 1.0f;
 
   ImVec4 *colors = style.Colors;
   colors[ImGuiCol_Text] = ToImVec4(active_palette.text_primary);
@@ -133,5 +146,11 @@ void ApplyTheme(const ResolvedTheme theme) {
 }
 
 const SemanticPalette &CurrentPalette() { return active_palette; }
+
+float CurrentUiScale() { return active_ui_scale; }
+
+float Scale(const float logical_pixels) {
+  return logical_pixels * active_ui_scale;
+}
 
 } // namespace fancy_ui

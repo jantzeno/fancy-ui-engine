@@ -16,6 +16,7 @@ struct SliderSpec {
   float maximum = 1.0f;
   std::string_view format = "%.3f";
   Availability availability;
+  Validation validation;
 };
 
 struct SliderResult : InteractionResult {

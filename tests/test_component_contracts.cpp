@@ -11,6 +11,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <vector>
 
 TEST_CASE("component availability carries the caller-provided reason") {
   const fancy_ui::Availability availability{
@@ -32,6 +33,35 @@ TEST_CASE("light and dark palettes expose distinct semantic surfaces") {
   REQUIRE(light.text_primary.red < dark.text_primary.red);
   REQUIRE(light.action_primary.alpha == 1.0f);
   REQUIRE(dark.action_primary.alpha == 1.0f);
+  REQUIRE(light.control_disabled_fill.alpha == 1.0f);
+  REQUIRE(dark.control_disabled_fill.alpha == 1.0f);
+  REQUIRE(light.control_disabled_fill != light.control);
+  REQUIRE(dark.control_disabled_fill != dark.control);
+}
+
+TEST_CASE("theme scale clamps and scales shared interaction metrics") {
+  ImGui::CreateContext();
+
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, 3.0f);
+  REQUIRE(fancy_ui::CurrentUiScale() == Catch::Approx(2.0f));
+  REQUIRE(ImGui::GetStyle().FramePadding.x == Catch::Approx(24.0f));
+  REQUIRE(ImGui::GetStyle().ItemSpacing.y == Catch::Approx(16.0f));
+  REQUIRE(ImGui::GetStyle().DisabledAlpha == Catch::Approx(1.0f));
+
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Light, 0.5f);
+  REQUIRE(fancy_ui::CurrentUiScale() == Catch::Approx(0.75f));
+  REQUIRE(fancy_ui::Scale(32.0f) == Catch::Approx(24.0f));
+  ImGui::DestroyContext();
+}
+
+TEST_CASE("rotation compass derives evenly spaced canonical angles") {
+  REQUIRE(fancy_ui::ClampRotationCount(-8) == fancy_ui::kRotationCountMinimum);
+  REQUIRE(fancy_ui::ClampRotationCount(42) == fancy_ui::kRotationCountMaximum);
+  REQUIRE(fancy_ui::RotationStepDegrees(4) == Catch::Approx(90.0));
+  REQUIRE(fancy_ui::FormatRotationDegrees(22.5) == "22.5°");
+
+  const std::vector<double> angles = fancy_ui::EvenlySpacedRotationAngles(4);
+  REQUIRE(angles == std::vector<double>{0.0, 90.0, 180.0, 270.0});
 }
 
 TEST_CASE("system theme falls back to dark without a platform preference") {
@@ -102,6 +132,71 @@ TEST_CASE("navigation items provide a 48 pixel target and 24 pixel icon slot") {
   ImGui::DestroyContext();
 }
 
+TEST_CASE("logical control dimensions follow the configured UI scale") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(640.0f, 480.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, 2.0f);
+
+  ImGui::NewFrame();
+  ImGui::Begin("scaled-control");
+  static_cast<void>(fancy_ui::Button({
+      .id = "scaled",
+      .label = "Scaled",
+      .size = {.x = 80.0f, .y = 32.0f},
+  }));
+  const ImVec2 minimum = ImGui::GetItemRectMin();
+  const ImVec2 maximum = ImGui::GetItemRectMax();
+  ImGui::End();
+  ImGui::Render();
+
+  REQUIRE(maximum.x - minimum.x == Catch::Approx(160.0f));
+  REQUIRE(maximum.y - minimum.y == Catch::Approx(64.0f));
+  ImGui::DestroyContext();
+}
+
+TEST_CASE("duration and mixed toggle states remain within their contracts") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(640.0f, 480.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  ImGui::NewFrame();
+  ImGui::Begin("state-contracts");
+  const fancy_ui::DurationResult duration = fancy_ui::Duration({
+      .id = "duration",
+      .label = "Duration",
+      .hours = 99,
+      .minutes = -4,
+  });
+  const fancy_ui::CheckboxResult checkbox = fancy_ui::Checkbox({
+      .id = "mixed",
+      .label = "Mixed",
+      .state = fancy_ui::ToggleState::Mixed,
+  });
+  ImGui::End();
+  ImGui::Render();
+
+  REQUIRE(duration.hours == 23);
+  REQUIRE(duration.minutes == 0);
+  REQUIRE_FALSE(duration.changed);
+  REQUIRE(checkbox.state == fancy_ui::ToggleState::Mixed);
+  REQUIRE_FALSE(checkbox.changed);
+  ImGui::DestroyContext();
+}
+
 TEST_CASE("UI icon manifest has unique size variants backed by SVG masters") {
   using namespace fancy_ui::steppenface;
   const std::filesystem::path icon_root =
@@ -109,6 +204,7 @@ TEST_CASE("UI icon manifest has unique size variants backed by SVG masters") {
       "icons";
   std::set<std::pair<std::string, int>> keys;
   std::set<std::string> rail_icons;
+  std::set<std::string> small_icons;
 
   for (const UiIconAssetSpec &asset : UiIconAssets()) {
     REQUIRE(
@@ -125,12 +221,19 @@ TEST_CASE("UI icon manifest has unique size variants backed by SVG masters") {
             std::string::npos);
     if (asset.size == UiIconSize::Rail24) {
       rail_icons.emplace(asset.semantic_id);
+    } else {
+      small_icons.emplace(asset.semantic_id);
     }
   }
 
   for (const char *semantic_id : {"model", "bed", "objects", "grain", "search",
                                   "compact", "diagnostics"}) {
     REQUIRE(rail_icons.contains(semantic_id));
+  }
+  for (const char *semantic_id :
+       {"information", "success", "alert", "failure", "busy", "visibility",
+        "visibility-off", "more", "orbit-locked", "orbit-unlocked"}) {
+    REQUIRE(small_icons.contains(semantic_id));
   }
 }
 
