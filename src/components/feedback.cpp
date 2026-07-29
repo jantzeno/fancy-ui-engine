@@ -139,7 +139,7 @@ void ProgressBar(const ProgressBarSpec &spec) {
   if ((ImGui::IsItemHovered() ||
        (ImGui::IsItemFocused() && ImGui::GetIO().NavVisible)) &&
       !spec.label.empty()) {
-    ImGui::SetTooltip("%s", detail::Owned(spec.label).c_str());
+    detail::ShowTooltip(spec.label);
   }
   ImGui::PopID();
 }

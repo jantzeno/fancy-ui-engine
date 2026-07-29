@@ -69,12 +69,14 @@ states with live disclosure and 160–240 px tray resizing. The status page
 covers Canvas and 3D facts, long and narrow content, operation independence,
 and the logarithmic 10–1600% Canvas zoom control.
 
-The application-shell page composes all nine canonical regions. Its
-application-bar controls independently collapse and restore the Explorer and
-Inspector, while the operation strip owns tray disclosure. The Explorer
-contains the shared hierarchy sample, the Workspace deliberately shows an
-empty-state surface, and the Inspector includes one live example from every
-component family allowed in that region.
+The application-shell page renders the canonical nine-region shell, including
+the production application menu and workspace-specific context toolbar. Its
+application-bar controls independently collapse and restore Explorer,
+operation details, and Inspector; the operation control and operation-strip
+disclosure share one retained tray state. Explorer contains the shared
+hierarchy sample, Workspace deliberately shows an empty-state surface, and
+Inspector includes one live example from every component family allowed in
+that region.
 
 The Settings page opens one modeless 880 × 560 System Settings window with
 General, Appearance, Machines, License, and Legal navigation. General,

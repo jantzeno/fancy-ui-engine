@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <functional>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -56,7 +57,7 @@ ButtonResult PreviewButton(const char *id, const char *label,
   return Button({
       .id = id,
       .label = label,
-      .size = {.x = 64.0f, .y = 32.0f},
+      .size = {.x = 128.0f, .y = 32.0f},
   });
 }
 
@@ -70,7 +71,6 @@ void DrawButtons(GalleryState &state) {
           .activated) {
     state.button_feedback = "Hovered preview activated.";
   }
-  ImGui::SameLine();
   if (PreviewButton("pressed", "Pressed", detail::InteractionPreview::Pressed)
           .activated) {
     state.button_feedback = "Pressed preview activated.";
@@ -670,6 +670,25 @@ void DrawStatusTypes(detail::UiAssetAtlas &assets) {
   }
 }
 
+void DrawProgress() {
+  ImGui::TextUnformatted("Determinate · 62%");
+  ProgressBar({
+      .id = "determinate",
+      .label = "Search progress: 62%",
+      .value = 0.62f,
+      .status = SemanticStatus::Busy,
+  });
+  ImGui::Spacing();
+  ImGui::TextUnformatted("Indeterminate");
+  ProgressBar({
+      .id = "indeterminate",
+      .label = "Preparing geometry",
+      .value = std::nullopt,
+      .status = SemanticStatus::Busy,
+  });
+  ImGui::TextDisabled("Preparing geometry...");
+}
+
 void DrawMixedValues(detail::UiAssetAtlas &assets, GalleryState &state) {
   static_cast<void>(ValueDisplay({
       .id = "margin",
@@ -895,6 +914,7 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
                       DrawEmptyOverflow);
           GalleryCard("color-pickers", "Color pickers", assets.bold_font(),
                       [&state] { DrawColorPickers(state); });
+          GalleryCard("progress", "Progress", assets.bold_font(), DrawProgress);
           ImGui::EndTable();
         }
       }

@@ -1,5 +1,6 @@
 #include "internal/component_internal.hpp"
 
+#include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/theme.hpp"
 
 #include <algorithm>
@@ -32,6 +33,14 @@ std::string Owned(const std::string_view value) {
   return std::string(value.data(), value.size());
 }
 
+void ShowTooltip(const std::string_view text) {
+  const std::string owned_text = Owned(text);
+  const ImVec2 padding(Scale(8.0f), Scale(8.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
+  ImGui::SetTooltip("%s", owned_text.c_str());
+  ImGui::PopStyleVar();
+}
+
 float ResolveButtonVerticalPadding(const float requested_height,
                                    const float text_height,
                                    const float default_padding) {
@@ -44,8 +53,9 @@ float ResolveButtonVerticalPadding(const float requested_height,
 }
 
 FieldLayout BeginFieldLayout(const std::string_view label) {
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
   const std::string owned_label = Owned(label);
-  if (ImGui::GetContentRegionAvail().x < Scale(288.0f)) {
+  if (ImGui::GetContentRegionAvail().x < metrics.inspector.stack_breakpoint) {
     ImGui::PushStyleColor(ImGuiCol_Text,
                           ToImVec4(CurrentPalette().text_secondary));
     ImGui::TextUnformatted(owned_label.c_str());
@@ -54,12 +64,15 @@ FieldLayout BeginFieldLayout(const std::string_view label) {
     return {};
   }
 
-  const bool table = ImGui::BeginTable("##field-layout", 2,
+  ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(0.0f, 0.0f));
+  const bool table = ImGui::BeginTable("##field-layout", 3,
                                        ImGuiTableFlags_SizingStretchProp |
                                            ImGuiTableFlags_NoSavedSettings);
   if (table) {
     ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed,
-                            Scale(112.0f));
+                            metrics.inspector.label_width);
+    ImGui::TableSetupColumn("gap", ImGuiTableColumnFlags_WidthFixed,
+                            metrics.spacing.space03);
     ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch);
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
@@ -68,15 +81,18 @@ FieldLayout BeginFieldLayout(const std::string_view label) {
                           ToImVec4(CurrentPalette().text_secondary));
     ImGui::TextUnformatted(owned_label.c_str());
     ImGui::PopStyleColor();
-    ImGui::TableSetColumnIndex(1);
+    ImGui::TableSetColumnIndex(2);
     ImGui::SetNextItemWidth(-std::numeric_limits<float>::min());
   }
-  return {.table = table};
+  return {.table = table, .cell_padding_pushed = true};
 }
 
 void EndFieldLayout(const FieldLayout layout, const Validation &validation) {
   if (layout.table) {
     ImGui::EndTable();
+  }
+  if (layout.cell_padding_pushed) {
+    ImGui::PopStyleVar();
   }
   DrawValidationHint(validation);
 }
@@ -122,11 +138,9 @@ void EndAvailability(const Availability &availability,
 
   if ((!availability.enabled || availability.busy) &&
       !availability.reason.empty()) {
-    const std::string reason = Owned(availability.reason);
-    ImGui::SetTooltip("%s", reason.c_str());
+    ShowTooltip(availability.reason);
   } else if (!tooltip.empty()) {
-    const std::string text = Owned(tooltip);
-    ImGui::SetTooltip("%s", text.c_str());
+    ShowTooltip(tooltip);
   }
 }
 

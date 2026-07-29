@@ -75,8 +75,7 @@ TEST_CASE("operation and destructive control colors meet contrast targets") {
     fancy_ui::ApplyTheme(theme);
     const fancy_ui::SemanticPalette palette = fancy_ui::PaletteFor(theme);
 
-    REQUIRE(ContrastRatio(palette.text_primary, palette.surface_muted) >=
-            7.0f);
+    REQUIRE(ContrastRatio(palette.text_primary, palette.surface_muted) >= 7.0f);
     REQUIRE(ContrastRatio(palette.text_secondary, palette.surface_muted) >=
             4.5f);
     for (const fancy_ui::ColorRgba background :
@@ -127,6 +126,75 @@ TEST_CASE("theme scale clamps and scales shared interaction metrics") {
   fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Light, 0.5f);
   REQUIRE(fancy_ui::CurrentUiScale() == Catch::Approx(0.75f));
   REQUIRE(fancy_ui::Scale(32.0f) == Catch::Approx(24.0f));
+  ImGui::DestroyContext();
+}
+
+TEST_CASE("layout metrics expose the normative shell and panel geometry") {
+  const fancy_ui::LayoutMetrics &metrics = fancy_ui::LogicalLayoutMetrics();
+
+  REQUIRE(metrics.shell.application_bar_height == 40.0f);
+  REQUIRE(metrics.shell.context_toolbar_height == 40.0f);
+  REQUIRE(metrics.shell.activity_rail_width == 48.0f);
+  REQUIRE(metrics.shell.explorer_width == 256.0f);
+  REQUIRE(metrics.shell.explorer_minimum_width == 240.0f);
+  REQUIRE(metrics.shell.explorer_maximum_width == 280.0f);
+  REQUIRE(metrics.shell.splitter_width == 8.0f);
+  REQUIRE(metrics.shell.inspector_width == 320.0f);
+  REQUIRE(metrics.shell.inspector_minimum_width == 300.0f);
+  REQUIRE(metrics.shell.inspector_maximum_width == 360.0f);
+  REQUIRE(metrics.shell.operation_tray_minimum_height == 160.0f);
+  REQUIRE(metrics.shell.operation_tray_maximum_height == 240.0f);
+  REQUIRE(metrics.shell.operation_strip_height == 32.0f);
+  REQUIRE(metrics.shell.status_bar_height == 24.0f);
+
+  REQUIRE(metrics.explorer.audit_color_column_width == 38.0f);
+  REQUIRE(metrics.explorer.audit_action_column_width == 28.0f);
+  REQUIRE(metrics.explorer.audit_visibility_column_width == 28.0f);
+  REQUIRE(metrics.inspector.label_width == 112.0f);
+  REQUIRE(metrics.inspector.stack_breakpoint == 288.0f);
+  REQUIRE(metrics.menu.popup_width == 264.0f);
+  REQUIRE(metrics.menu.font_size == 18.0f);
+}
+
+TEST_CASE("resolved layout metrics clamp scale and round once") {
+  const fancy_ui::LayoutMetrics minimum = fancy_ui::ResolveLayoutMetrics(0.5f);
+  const fancy_ui::LayoutMetrics fractional =
+      fancy_ui::ResolveLayoutMetrics(1.25f);
+  const fancy_ui::LayoutMetrics maximum = fancy_ui::ResolveLayoutMetrics(3.0f);
+
+  REQUIRE(minimum.shell.application_bar_height == 30.0f);
+  REQUIRE(fractional.spacing.condensed == 1.0f);
+  REQUIRE(fractional.geometry.focus_ring == 3.0f);
+  REQUIRE(fractional.shell.explorer_width == 320.0f);
+  REQUIRE(fractional.explorer.audit_color_column_width == 48.0f);
+  REQUIRE(maximum.shell.inspector_width == 640.0f);
+}
+
+TEST_CASE("shared tooltips use eight scaled pixels without changing windows") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(320.0f, 240.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, 1.5f);
+  const ImVec2 window_padding = ImGui::GetStyle().WindowPadding;
+
+  ImGui::NewFrame();
+  ImGui::Begin("tooltip-contract");
+  fancy_ui::detail::ShowTooltip("Tooltip content");
+  REQUIRE(ImGui::GetStyle().WindowPadding.x == Catch::Approx(window_padding.x));
+  REQUIRE(ImGui::GetStyle().WindowPadding.y == Catch::Approx(window_padding.y));
+  ImGui::End();
+  ImGui::Render();
+
+  ImGuiWindow *tooltip = ImGui::FindWindowByName("##Tooltip_00");
+  REQUIRE(tooltip != nullptr);
+  REQUIRE(tooltip->WindowPadding.x == Catch::Approx(12.0f));
+  REQUIRE(tooltip->WindowPadding.y == Catch::Approx(12.0f));
   ImGui::DestroyContext();
 }
 
@@ -710,10 +778,26 @@ TEST_CASE("UI icon manifest has unique size variants backed by SVG masters") {
                                   "compact", "diagnostics"}) {
     REQUIRE(rail_icons.contains(semantic_id));
   }
-  for (const char *semantic_id :
-       {"information", "success", "alert", "failure", "busy", "check",
-        "chevron-down", "triangle-down", "visibility", "visibility-off", "more",
-        "focus", "orbit-locked", "orbit-unlocked"}) {
+  for (const char *semantic_id : {"information",
+                                  "success",
+                                  "alert",
+                                  "failure",
+                                  "busy",
+                                  "check",
+                                  "chevron-down",
+                                  "triangle-down",
+                                  "visibility",
+                                  "visibility-off",
+                                  "more",
+                                  "focus",
+                                  "orbit-locked",
+                                  "orbit-unlocked",
+                                  "layout-explorer-open",
+                                  "layout-explorer-closed",
+                                  "layout-operation-open",
+                                  "layout-operation-closed",
+                                  "layout-inspector-open",
+                                  "layout-inspector-closed"}) {
     REQUIRE(small_icons.contains(semantic_id));
   }
 }

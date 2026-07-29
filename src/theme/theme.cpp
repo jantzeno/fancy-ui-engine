@@ -1,5 +1,7 @@
 #include "fancy_ui/theme.hpp"
 
+#include "fancy_ui/layout_metrics.hpp"
+
 #include <imgui.h>
 
 #include <algorithm>
@@ -108,18 +110,21 @@ SemanticPalette PaletteFor(const ResolvedTheme theme) {
 void ApplyTheme(const ResolvedTheme theme, const float ui_scale) {
   active_palette = PaletteFor(theme);
   active_ui_scale = std::clamp(ui_scale, 0.75f, 2.0f);
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
   ImGuiStyle &style = ImGui::GetStyle();
-  style.WindowPadding = ImVec2(Scale(16.0f), Scale(16.0f));
-  style.FramePadding = ImVec2(Scale(12.0f), Scale(6.0f));
-  style.ItemSpacing = ImVec2(Scale(8.0f), Scale(8.0f));
-  style.ItemInnerSpacing = ImVec2(Scale(8.0f), Scale(4.0f));
+  style.WindowPadding =
+      ImVec2(metrics.spacing.space05, metrics.spacing.space05);
+  style.FramePadding = ImVec2(metrics.spacing.space04, Scale(6.0f));
+  style.ItemSpacing = ImVec2(metrics.spacing.space03, metrics.spacing.space03);
+  style.ItemInnerSpacing =
+      ImVec2(metrics.spacing.space03, metrics.spacing.space02);
   style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
-  style.FrameRounding = Scale(4.0f);
-  style.FrameBorderSize = Scale(1.0f);
-  style.PopupRounding = Scale(4.0f);
-  style.PopupBorderSize = Scale(1.0f);
-  style.TreeLinesSize = Scale(1.0f);
-  style.TreeLinesRounding = Scale(4.0f);
+  style.FrameRounding = metrics.geometry.control_radius;
+  style.FrameBorderSize = metrics.geometry.border;
+  style.PopupRounding = metrics.geometry.surface_radius;
+  style.PopupBorderSize = metrics.geometry.border;
+  style.TreeLinesSize = metrics.geometry.border;
+  style.TreeLinesRounding = metrics.geometry.surface_radius;
   // Components supply explicit disabled colors. Keeping alpha at one prevents
   // Dear ImGui from washing those semantic roles out a second time.
   style.DisabledAlpha = 1.0f;

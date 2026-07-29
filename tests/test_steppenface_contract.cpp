@@ -66,7 +66,8 @@ WorkspaceSelectionGeometry(const WorkspaceKind workspace) {
          ++list_index) {
       const ImDrawList *draw_list = draw_data->CmdLists[list_index];
       for (const ImDrawVert &vertex : draw_list->VtxBuffer) {
-        if (vertex.col == color && vertex.pos.y <= 40.0f) {
+        if (vertex.col == color && vertex.pos.x < 400.0f &&
+            vertex.pos.y <= 40.0f) {
           positions.push_back(vertex.pos);
         }
       }
@@ -425,6 +426,56 @@ TEST_CASE("application bar reserves forty logical pixels") {
   }
 
   REQUIRE(ImGui::GetMainViewport()->WorkPos.y == Catch::Approx(40.0f));
+  ImGui::DestroyContext();
+}
+
+TEST_CASE("application bar controls toggle retained shell regions in order") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(1280.0f, 720.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+
+  ApplicationUi ui;
+  ApplicationView view;
+  view.operation = OperationView{
+      .id = {.value = "operation.search"},
+      .title = "Search running",
+      .summary = "Iteration 24",
+  };
+  const auto draw = [&]() {
+    ImGui::NewFrame();
+    const FrameResult result = ui.Draw(view, {});
+    ImGui::Render();
+    return result;
+  };
+  const auto activate = [&](const float x) {
+    io.AddMousePosEvent(x, 20.0f);
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+    static_cast<void>(draw());
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+    return draw();
+  };
+
+  static_cast<void>(draw());
+  static_cast<void>(draw());
+
+  REQUIRE(activate(1188.0f).layout_changed);
+  REQUIRE_FALSE(ui.session().explorer_visible);
+  REQUIRE(activate(1220.0f).layout_changed);
+  REQUIRE(ui.session().operation_tray_visible);
+  REQUIRE(activate(1252.0f).layout_changed);
+  REQUIRE_FALSE(ui.session().inspector_visible);
+
+  view.operation.reset();
+  const FrameResult disabled_operation = activate(1220.0f);
+  REQUIRE_FALSE(disabled_operation.layout_changed);
+  REQUIRE(ui.session().operation_tray_visible);
+
   ImGui::DestroyContext();
 }
 

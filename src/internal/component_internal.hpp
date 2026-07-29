@@ -58,9 +58,11 @@ struct ControlColors {
 
 struct FieldLayout {
   bool table = false;
+  bool cell_padding_pushed = false;
 };
 
 [[nodiscard]] std::string Owned(std::string_view value);
+void ShowTooltip(std::string_view text);
 [[nodiscard]] float ResolveButtonVerticalPadding(float requested_height,
                                                  float text_height,
                                                  float default_padding);

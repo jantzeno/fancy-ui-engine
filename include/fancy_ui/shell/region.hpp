@@ -11,6 +11,8 @@ struct RegionSpec {
   std::string_view id;
   DrawCallback draw;
   bool visible = true;
+  bool menu_bar = false;
+  bool zero_padding = false;
 };
 
 } // namespace fancy_ui::shell

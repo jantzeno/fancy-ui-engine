@@ -1,4 +1,4 @@
-#include "gallery_state_model.hpp"
+#include "component_gallery.hpp"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -84,4 +84,16 @@ TEST_CASE("status zoom uses a logarithmic ten to sixteen hundred scale") {
     REQUIRE(round_trip ==
             Catch::Approx(percent).margin(std::max(2.0f, percent * 0.03f)));
   }
+}
+
+TEST_CASE("application shell gallery starts with both side panels visible") {
+  ShellGalleryState state;
+  REQUIRE(state.layout.explorer_visible);
+  REQUIRE(state.layout.inspector_visible);
+  REQUIRE(state.operation.expanded);
+  REQUIRE(state.layout.operation_tray_visible);
+  REQUIRE(state.active_workspace ==
+          fancy_ui::steppenface::WorkspaceKind::Canvas);
+  REQUIRE(state.layout.explorer_width == 256.0f);
+  REQUIRE(state.layout.inspector_width == 320.0f);
 }

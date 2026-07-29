@@ -1,5 +1,6 @@
 #include "fancy_ui/components/navigation.hpp"
 
+#include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/theme.hpp"
 #include "internal/component_internal.hpp"
 
@@ -21,14 +22,15 @@ ImVec4 ToImVec4(const ColorRgba color) {
 NavigationItemResult NavigationItem(const NavigationItemSpec &spec) {
   const std::string id = detail::Owned(spec.id);
   const bool disabled = !spec.availability.enabled || spec.availability.busy;
-  constexpr float kTargetSize = 48.0f;
-  constexpr float kIconSize = 24.0f;
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  const float target_size = metrics.shell.activity_rail_width;
+  const float icon_size = metrics.geometry.activity_icon;
   const SemanticPalette &palette = CurrentPalette();
 
   ImGui::PushID(id.c_str());
   detail::BeginAvailability(spec.availability);
   const bool activated = ImGui::InvisibleButton(
-      "##navigation-item", ImVec2(kTargetSize, kTargetSize),
+      "##navigation-item", ImVec2(target_size, target_size),
       ImGuiButtonFlags_EnableNav);
   const InteractionResult interaction = detail::CaptureInteraction();
   const bool keyboard_focused =
@@ -59,20 +61,20 @@ NavigationItemResult NavigationItem(const NavigationItemSpec &spec) {
                              ImGui::GetColorU32(ToImVec4(fill)));
   }
   if (spec.selected) {
-    constexpr float kCueHeight = 28.0f;
+    const float cue_height = Scale(28.0f);
     const float center_y = (minimum.y + maximum.y) * 0.5f;
     draw_list->AddRectFilled(
-        ImVec2(minimum.x, center_y - kCueHeight * 0.5f),
-        ImVec2(minimum.x + 3.0f, center_y + kCueHeight * 0.5f),
-        ImGui::GetColorU32(ToImVec4(palette.focus)), 1.5f,
+        ImVec2(minimum.x, center_y - cue_height * 0.5f),
+        ImVec2(minimum.x + Scale(3.0f), center_y + cue_height * 0.5f),
+        ImGui::GetColorU32(ToImVec4(palette.focus)), Scale(1.5f),
         ImDrawFlags_RoundCornersRight);
   }
   if (spec.draw_icon) {
-    const float left = std::floor((minimum.x + maximum.x - kIconSize) * 0.5f);
-    const float top = std::floor((minimum.y + maximum.y - kIconSize) * 0.5f);
+    const float left = std::floor((minimum.x + maximum.x - icon_size) * 0.5f);
+    const float top = std::floor((minimum.y + maximum.y - icon_size) * 0.5f);
     spec.draw_icon(
         Rect{.minimum = {.x = left, .y = top},
-             .maximum = {.x = left + kIconSize, .y = top + kIconSize}},
+             .maximum = {.x = left + icon_size, .y = top + icon_size}},
         foreground);
   }
   if (keyboard_focused) {
@@ -92,7 +94,7 @@ NavigationItemResult NavigationItem(const NavigationItemSpec &spec) {
       tooltip += detail::Owned(spec.availability.reason);
     }
     if (!tooltip.empty()) {
-      ImGui::SetTooltip("%s", tooltip.c_str());
+      detail::ShowTooltip(tooltip);
     }
   }
   ImGui::PopID();

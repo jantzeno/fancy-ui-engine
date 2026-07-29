@@ -5,6 +5,7 @@
 
 #include "fancy_ui/components/fields.hpp"
 #include "fancy_ui/shell/application.hpp"
+#include "fancy_ui/steppenface/application_view.hpp"
 #include "fancy_ui/theme.hpp"
 
 #include <array>
@@ -22,6 +23,8 @@ struct ShellGalleryState {
       .inspector_visible = true,
       .operation_tray_visible = true,
   };
+  steppenface::WorkspaceKind active_workspace =
+      steppenface::WorkspaceKind::Canvas;
   std::string object_name = "Face plate";
   double spacing_mm = 8.0;
   std::size_t material_index = 0;
@@ -133,8 +136,7 @@ void DrawStatusBarStateGallery(detail::UiAssetAtlas &assets,
                                GalleryState &state);
 void DrawHierarchySample(detail::UiAssetAtlas &assets, GalleryState &state);
 void DrawShellOperationTray(detail::UiAssetAtlas &assets, GalleryState &state);
-void DrawShellOperationStrip(detail::UiAssetAtlas &assets,
-                             GalleryState &state);
+void DrawShellOperationStrip(detail::UiAssetAtlas &assets, GalleryState &state);
 void DrawShellStatusBar(detail::UiAssetAtlas &assets, GalleryState &state);
 
 } // namespace fancy_ui::gallery

@@ -167,7 +167,7 @@ InteractionResult ValueDisplay(const ValueDisplaySpec &spec) {
     const std::string tooltip =
         spec.tooltip.empty() ? complete_value : detail::Owned(spec.tooltip);
     if (!tooltip.empty()) {
-      ImGui::SetTooltip("%s", tooltip.c_str());
+      detail::ShowTooltip(tooltip);
     }
   }
   ImGui::PopID();

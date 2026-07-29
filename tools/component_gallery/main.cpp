@@ -16,6 +16,7 @@
 #include <stb_image_write.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -115,6 +116,7 @@ int main(const int argc, char **argv) {
   } else {
     window_flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
   }
+  int window_width = 1280;
   int window_height = 1024;
   if (!options.screenshot.empty()) {
     if (options.gallery.active_tab !=
@@ -123,9 +125,13 @@ int main(const int argc, char **argv) {
     } else {
       window_height = 1200;
     }
+    window_width =
+        static_cast<int>(std::lround(window_width * options.gallery.scale));
+    window_height =
+        static_cast<int>(std::lround(window_height * options.gallery.scale));
   }
-  SDL_Window *window =
-      SDL_CreateWindow("Fancy UI gallery", 1280, window_height, window_flags);
+  SDL_Window *window = SDL_CreateWindow("Fancy UI gallery", window_width,
+                                        window_height, window_flags);
   if (window == nullptr) {
     SDL_Quit();
     return Fail("Window creation failed");

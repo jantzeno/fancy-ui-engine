@@ -3,11 +3,16 @@
 #include "fancy_ui/components/button.hpp"
 #include "fancy_ui/components/checkbox.hpp"
 #include "fancy_ui/components/data_display.hpp"
+#include "fancy_ui/components/feedback.hpp"
 #include "fancy_ui/components/navigation.hpp"
+#include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/shell/application.hpp"
 #include "fancy_ui/steppenface/ui_assets.hpp"
 #include "fancy_ui/theme.hpp"
 
+#include "internal/application_chrome.hpp"
+#include "internal/component_internal.hpp"
+#include "internal/operation_disclosure.hpp"
 #include "internal/ui_asset_atlas.hpp"
 #include "ui/im2d_canvas_widget.h"
 
@@ -96,22 +101,9 @@ bool MatchesQuery(const TreeRowView &row, const std::string &query) {
 
 class ApplicationUi::Impl {
 public:
-  static constexpr float kApplicationBarHeight = 40.0f;
-  static constexpr float kApplicationBarControlHeight = 32.0f;
-  static constexpr float kApplicationMenuFontSize = 18.0f;
-  static constexpr float kWorkspaceButtonWidth = 72.0f;
-  static constexpr float kMenuWidth = 264.0f;
-  static constexpr float kMenuTriggerRounding = 4.0f;
   static constexpr float kToolbarControlHeight = 32.0f;
   static constexpr float kToolbarControlRounding = 4.0f;
   static constexpr float kToolbarLabelOffsetY = -1.0f;
-
-  struct WorkspaceSegmentInteraction {
-    const char *label = "";
-    bool hovered = false;
-    bool pressed = false;
-    bool keyboard_focused = false;
-  };
 
   struct ToolbarSegmentInteraction {
     const ToolbarChoiceView *choice = nullptr;
@@ -125,7 +117,7 @@ public:
 
   SessionState session;
   detail::UiAssetAtlas assets;
-  float application_menu_font_size = kApplicationMenuFontSize;
+  detail::ApplicationChrome chrome{assets};
   std::vector<UiIntent> intents;
   bool navigation_changed = false;
   bool layout_changed = false;
@@ -184,247 +176,51 @@ public:
     navigation_changed = true;
   }
 
-  void DrawMenuSeparator() { ImGui::Separator(); }
-
-  void DrawMenuItems(const ApplicationView &view,
-                     const std::vector<MenuItemView> &items) {
-    for (const MenuItemView &item : items) {
-      switch (item.kind) {
-      case MenuItemKind::Separator:
-        DrawMenuSeparator();
-        break;
-      case MenuItemKind::Submenu:
-        ImGui::SetNextWindowSizeConstraints(
-            ImVec2(kMenuWidth, 0.0f),
-            ImVec2(kMenuWidth, std::numeric_limits<float>::max()));
-        if (ImGui::BeginMenu(item.label.c_str())) {
-          DrawMenuItems(view, item.children);
-          ImGui::EndMenu();
-        }
-        break;
-      case MenuItemKind::Workspace: {
-        if (!item.workspace.has_value()) {
-          break;
-        }
-        const bool selected =
-            *item.workspace == view.application_bar.active_workspace;
-        if (ImGui::MenuItem(item.label.c_str(), nullptr, selected, true)) {
-          ActivateWorkspace(*item.workspace);
-        }
-        break;
-      }
-      case MenuItemKind::Command: {
-        if (!item.command.has_value()) {
-          break;
-        }
-        const CommandView &command = *item.command;
-        if (!command.availability.visible) {
-          break;
-        }
-        const bool enabled =
-            command.availability.enabled && !command.availability.busy;
-        const char *shortcut =
-            command.shortcut.empty() ? nullptr : command.shortcut.c_str();
-        if (ImGui::MenuItem(command.label.c_str(), shortcut, false, enabled)) {
-          EmitCommand(view.revision, command);
-        }
-        if (!enabled &&
-            ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&
-            !command.availability.disabled_reason.empty()) {
-          ImGui::SetTooltip("%s", command.availability.disabled_reason.c_str());
-        }
-        break;
-      }
-      }
+  void ToggleLayout(const detail::LayoutRegion region) {
+    switch (region) {
+    case detail::LayoutRegion::Explorer:
+      session.explorer_visible = !session.explorer_visible;
+      break;
+    case detail::LayoutRegion::OperationTray:
+      session.operation_tray_visible = !session.operation_tray_visible;
+      break;
+    case detail::LayoutRegion::Inspector:
+      session.inspector_visible = !session.inspector_visible;
+      break;
     }
+    layout_changed = true;
   }
 
-  [[nodiscard]] WorkspaceSegmentInteraction
-  CaptureWorkspaceSegment(const WorkspaceKind workspace, const char *label) {
-    ImGui::PushID(workspace == WorkspaceKind::Model3d ? "workspace.3d"
-                                                      : "workspace.canvas");
-    if (ImGui::InvisibleButton(
-            "##segment",
-            ImVec2(kWorkspaceButtonWidth, kApplicationBarControlHeight),
-            ImGuiButtonFlags_EnableNav)) {
-      ActivateWorkspace(workspace);
-    }
-    const WorkspaceSegmentInteraction interaction{
-        .label = label,
-        .hovered = ImGui::IsItemHovered(),
-        .pressed = ImGui::IsItemActive(),
-        .keyboard_focused = ImGui::IsItemFocused() && ImGui::GetIO().NavVisible,
+  [[nodiscard]] detail::ChromeLayoutState
+  ChromeLayout(const bool operation_available) const {
+    return {
+        .explorer_visible = session.explorer_visible,
+        .operation_tray_visible = session.operation_tray_visible,
+        .operation_available = operation_available,
+        .inspector_visible = session.inspector_visible,
     };
-    ImGui::PopID();
-    return interaction;
   }
 
-  void DrawWorkspaceSwitcher(const ApplicationView &view) {
-    const SemanticPalette &palette = CurrentPalette();
-    const ImVec2 minimum = ImGui::GetCursorScreenPos();
-    const WorkspaceSegmentInteraction model =
-        CaptureWorkspaceSegment(WorkspaceKind::Model3d, "3D");
-    ImGui::SameLine(0.0f, 0.0f);
-    ImGui::SetCursorScreenPos(
-        ImVec2(minimum.x + kWorkspaceButtonWidth, minimum.y));
-    const WorkspaceSegmentInteraction canvas =
-        CaptureWorkspaceSegment(WorkspaceKind::Canvas, "Canvas");
-    const ImVec2 maximum(minimum.x + kWorkspaceButtonWidth * 2.0f,
-                         minimum.y + kApplicationBarControlHeight);
-
-    ImDrawList *draw_list = ImGui::GetWindowDrawList();
-    const std::array<WorkspaceSegmentInteraction, 2> interactions = {model,
-                                                                     canvas};
-    for (std::size_t index = 0; index < interactions.size(); ++index) {
-      const WorkspaceSegmentInteraction &interaction = interactions[index];
-      const WorkspaceKind workspace =
-          index == 0 ? WorkspaceKind::Model3d : WorkspaceKind::Canvas;
-      const bool selected = workspace == view.application_bar.active_workspace;
-      const ColorRgba fill = selected              ? palette.selection
-                             : interaction.pressed ? palette.control_pressed
-                             : interaction.hovered ? palette.control_hover
-                                                   : palette.surface;
-      const ImVec2 segment_minimum(minimum.x + kWorkspaceButtonWidth *
-                                                   static_cast<float>(index),
-                                   minimum.y);
-      const ImVec2 segment_maximum(segment_minimum.x + kWorkspaceButtonWidth,
-                                   maximum.y);
-      const ImDrawFlags corners = index == 0 ? ImDrawFlags_RoundCornersLeft
-                                             : ImDrawFlags_RoundCornersRight;
-      draw_list->AddRectFilled(segment_minimum, segment_maximum,
-                               ImGui::GetColorU32(ToImVec4(fill)), 4.0f,
-                               corners);
-      const ImVec2 label_size = ImGui::CalcTextSize(interaction.label);
-      draw_list->AddText(
-          ImVec2(std::floor(
-                     (segment_minimum.x + segment_maximum.x - label_size.x) *
-                     0.5f),
-                 std::floor(
-                     (segment_minimum.y + segment_maximum.y - label_size.y) *
-                     0.5f)),
-          ImGui::GetColorU32(ToImVec4(selected ? palette.text_primary
-                                               : palette.text_secondary)),
-          interaction.label);
-      if (selected) {
-        draw_list->AddRectFilled(
-            ImVec2(segment_minimum.x + 1.0f, maximum.y - 3.0f),
-            ImVec2(segment_maximum.x - 1.0f, maximum.y - 1.0f),
-            ImGui::GetColorU32(ToImVec4(palette.focus)));
-      }
-      if (interaction.keyboard_focused) {
-        draw_list->AddRect(
-            ImVec2(segment_minimum.x + 3.0f, segment_minimum.y + 3.0f),
-            ImVec2(segment_maximum.x - 3.0f, segment_maximum.y - 3.0f),
-            ImGui::GetColorU32(ToImVec4(palette.focus)), 2.0f, corners, 2.0f);
-      }
-    }
-
-    draw_list->AddRect(minimum, maximum,
-                       ImGui::GetColorU32(ToImVec4(palette.border)), 4.0f,
-                       ImDrawFlags_RoundCornersAll, 1.0f);
-    const float separator_x = minimum.x + kWorkspaceButtonWidth;
-    draw_list->AddLine(ImVec2(separator_x, minimum.y),
-                       ImVec2(separator_x, maximum.y),
-                       ImGui::GetColorU32(ToImVec4(palette.border)));
-  }
-
-  [[nodiscard]] bool BeginApplicationMenu(const char *label) {
-    const SemanticPalette &palette = CurrentPalette();
-    ImDrawList *draw_list = ImGui::GetWindowDrawList();
-    draw_list->ChannelsSplit(2);
-    draw_list->ChannelsSetCurrent(1);
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
-                          ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive,
-                          ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    const bool open = ImGui::BeginMenu(label);
-    ImGui::PopStyleColor(3);
-    const bool hovered = ImGui::IsItemHovered();
-    const ImVec2 minimum = ImGui::GetItemRectMin();
-    const ImVec2 maximum = ImGui::GetItemRectMax();
-    draw_list->ChannelsSetCurrent(0);
-    if (open || hovered) {
-      draw_list->AddRectFilled(
-          minimum, maximum,
-          ImGui::GetColorU32(
-              ToImVec4(open ? palette.control_pressed : palette.control_hover)),
-          kMenuTriggerRounding);
-    }
-    draw_list->ChannelsMerge();
-    return open;
-  }
-
-  void DrawApplicationBar(const ApplicationView &view) {
-    ImGui::PushFont(assets.regular_font(), application_menu_font_size);
-    const float vertical_padding =
-        std::max(0.0f, (kApplicationBarHeight - ImGui::GetFontSize()) * 0.5f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                        ImVec2(12.0f, vertical_padding));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 0.0f));
-    const bool open = ImGui::BeginMainMenuBar();
-    ImGui::PopStyleVar(2);
-    if (!open) {
-      ImGui::PopFont();
-      return;
-    }
-
-    const SemanticPalette &palette = CurrentPalette();
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 7.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
-    ImGui::PushStyleVar(
-        ImGuiStyleVar_ItemSpacing,
-        ImVec2(8.0f, std::max(0.0f, kApplicationBarControlHeight -
-                                        ImGui::GetFontSize())));
-    ImGui::PushStyleColor(ImGuiCol_Border, ToImVec4(palette.border_strong));
-    ImGui::PushStyleColor(ImGuiCol_PopupBg,
-                          ToImVec4(palette.application_surface));
-    for (const ApplicationMenuView &menu : view.application_bar.menus) {
-      ImGui::SetNextWindowSizeConstraints(
-          ImVec2(kMenuWidth, 0.0f),
-          ImVec2(kMenuWidth, std::numeric_limits<float>::max()));
-      if (BeginApplicationMenu(menu.label.c_str())) {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 8.0f));
-        DrawMenuItems(view, menu.items);
-        ImGui::PopStyleVar();
-        ImGui::EndMenu();
-      }
-    }
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(3);
-    ImGui::PopFont();
-
-    const float switcher_x = ImGui::GetCursorPosX();
-    ImGui::SetCursorPos(ImVec2(switcher_x, 4.0f));
-    DrawWorkspaceSwitcher(view);
-
-    if (view.application_bar.document_dirty &&
-        !view.application_bar.dirty_label.empty()) {
-      const ImVec2 switcher_minimum = ImGui::GetItemRectMin();
-      const ImVec2 switcher_maximum = ImGui::GetItemRectMax();
-      const float center_y = (switcher_minimum.y + switcher_maximum.y) * 0.5f;
-      const float marker_x = switcher_maximum.x + 16.0f;
-      const ImVec2 text_size =
-          ImGui::CalcTextSize(view.application_bar.dirty_label.c_str());
-      ImGui::GetWindowDrawList()->AddCircleFilled(
-          ImVec2(marker_x, center_y), 4.0f,
-          ImGui::GetColorU32(ToImVec4(palette.warning)));
-      ImGui::GetWindowDrawList()->AddText(
-          ImVec2(marker_x + 12.0f, center_y - text_size.y * 0.5f),
-          ImGui::GetColorU32(ToImVec4(palette.warning)),
-          view.application_bar.dirty_label.c_str());
-    }
-
-    const ImVec2 window_position = ImGui::GetWindowPos();
-    const ImVec2 window_size = ImGui::GetWindowSize();
-    ImGui::GetWindowDrawList()->AddLine(
-        ImVec2(window_position.x,
-               window_position.y + kApplicationBarHeight - 1.0f),
-        ImVec2(window_position.x + window_size.x,
-               window_position.y + kApplicationBarHeight - 1.0f),
-        ImGui::GetColorU32(ToImVec4(palette.border)));
-
-    ImGui::EndMainMenuBar();
+  [[nodiscard]] detail::ApplicationChromeCallbacks
+  ChromeCallbacks(const ApplicationView &view) {
+    return {
+        .invoke_command =
+            [this, revision = view.revision](const CommandView &command) {
+              EmitCommand(revision, command);
+            },
+        .commit_action =
+            [this, revision = view.revision](const ControlActionView &action) {
+              EmitEdit(revision, action);
+            },
+        .draw_field =
+            [this, &view](const FieldView &field) { DrawField(view, field); },
+        .activate_workspace =
+            [this](const WorkspaceKind workspace) {
+              ActivateWorkspace(workspace);
+            },
+        .toggle_layout =
+            [this](const detail::LayoutRegion region) { ToggleLayout(region); },
+    };
   }
 
   bool DrawAtlasIcon(const std::string_view icon, const UiIconSize size,
@@ -534,7 +330,7 @@ public:
       const std::string &message =
           availability.enabled ? tooltip : availability.disabled_reason;
       if (!message.empty()) {
-        ImGui::SetTooltip("%s", message.c_str());
+        detail::ShowTooltip(message);
       }
     }
     ImGui::PopID();
@@ -588,7 +384,7 @@ public:
                                          ? choice.tooltip
                                          : availability.disabled_reason;
         if (!message.empty()) {
-          ImGui::SetTooltip("%s", message.c_str());
+          detail::ShowTooltip(message);
         }
       }
       if (activated && availability.enabled && !availability.busy) {
@@ -695,8 +491,7 @@ public:
         if (!enabled &&
             ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&
             !item.action.availability.disabled_reason.empty()) {
-          ImGui::SetTooltip("%s",
-                            item.action.availability.disabled_reason.c_str());
+          detail::ShowTooltip(item.action.availability.disabled_reason);
         }
       }
       for (const FieldView &field : popover.fields) {
@@ -753,92 +548,6 @@ public:
       }
       DrawToolbarItem(view, items[index], icon_only);
     }
-  }
-
-  float ToolbarItemWidth(const ToolbarItemView &item,
-                         const bool icon_only) const {
-    return std::visit(
-        [icon_only](const auto &value) {
-          using Item = std::decay_t<decltype(value)>;
-          if constexpr (std::is_same_v<Item, CommandView>) {
-            if (!value.availability.visible) {
-              return 0.0f;
-            }
-            return icon_only
-                       ? kToolbarControlHeight
-                       : std::max(56.0f,
-                                  ImGui::CalcTextSize(value.label.c_str()).x +
-                                      24.0f);
-          } else if constexpr (std::is_same_v<Item, ToolbarSegmentedView>) {
-            float width = 0.0f;
-            for (const ToolbarChoiceView &choice : value.choices) {
-              if (choice.action.availability.visible) {
-                width += std::max(
-                    56.0f, ImGui::CalcTextSize(choice.label.c_str()).x + 24.0f);
-              }
-            }
-            return width;
-          } else if constexpr (std::is_same_v<Item, ToolbarActionView>) {
-            if (!value.action.availability.visible) {
-              return 0.0f;
-            }
-            return icon_only
-                       ? kToolbarControlHeight
-                       : std::max(56.0f,
-                                  ImGui::CalcTextSize(value.label.c_str()).x +
-                                      24.0f);
-          } else if constexpr (std::is_same_v<Item, ToolbarSeparatorView>) {
-            return 1.0f;
-          } else if constexpr (std::is_same_v<Item, ToolbarSpacerView>) {
-            return 0.0f;
-          } else if constexpr (std::is_same_v<Item, ToolbarPopoverView>) {
-            if (!value.availability.visible) {
-              return 0.0f;
-            }
-            return icon_only
-                       ? kToolbarControlHeight
-                       : std::max(56.0f,
-                                  ImGui::CalcTextSize(value.label.c_str()).x +
-                                      24.0f);
-          }
-          return 0.0f;
-        },
-        item);
-  }
-
-  void DrawContextToolbar(const ApplicationView &view) {
-    const std::vector<ToolbarItemView> &items = view.context_toolbar.items;
-    if (items.empty()) {
-      return;
-    }
-    const auto spacer = std::find_if(
-        items.begin(), items.end(), [](const ToolbarItemView &item) {
-          return std::holds_alternative<ToolbarSpacerView>(item);
-        });
-    const std::size_t split =
-        static_cast<std::size_t>(std::distance(items.begin(), spacer));
-    ImGui::SetCursorPos(ImVec2(12.0f, 4.0f));
-    if (spacer == items.end()) {
-      DrawToolbarSequence(view, items, 0, items.size(), false, true);
-      return;
-    }
-    DrawToolbarSequence(view, items, 0, split, false, true);
-    float right_width = 0.0f;
-    std::size_t right_count = 0;
-    for (std::size_t index = split + 1; index < items.size(); ++index) {
-      const float item_width = ToolbarItemWidth(items[index], false);
-      if (item_width > 0.0f) {
-        right_width += item_width;
-        ++right_count;
-      }
-    }
-    if (right_count > 1) {
-      right_width += static_cast<float>(right_count - 1) * 8.0f;
-    }
-    ImGui::SameLine();
-    ImGui::SetCursorPosX(std::max(
-        ImGui::GetCursorPosX(), ImGui::GetWindowWidth() - right_width - 12.0f));
-    DrawToolbarSequence(view, items, split + 1, items.size(), false, true);
   }
 
   void DrawActivityRail(const ApplicationView &view) {
@@ -1110,7 +819,7 @@ public:
     if (!field.availability.enabled &&
         ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&
         !field.availability.disabled_reason.empty()) {
-      ImGui::SetTooltip("%s", field.availability.disabled_reason.c_str());
+      detail::ShowTooltip(field.availability.disabled_reason);
     }
     ImGui::PopID();
   }
@@ -1155,20 +864,60 @@ public:
     if (!view.operation.has_value()) {
       return;
     }
+    const LayoutMetrics metrics = CurrentLayoutMetrics();
     const OperationView &operation = *view.operation;
+    ImGui::SetCursorPos(
+        ImVec2(metrics.spacing.space04, metrics.spacing.space02));
+    const float row_y = ImGui::GetCursorScreenPos().y;
+    const auto align_to_row = [row_y, &metrics](const float height) {
+      const ImVec2 cursor = ImGui::GetCursorScreenPos();
+      ImGui::SetCursorScreenPos(ImVec2(
+          cursor.x,
+          row_y +
+              std::floor((metrics.geometry.compact_target - height) * 0.5f)));
+    };
+    if (detail::DrawOperationDisclosure(assets,
+                                        session.operation_tray_visible)) {
+      ToggleLayout(detail::LayoutRegion::OperationTray);
+    }
+    ImGui::SameLine(0.0f, metrics.spacing.space03);
+    align_to_row(ImGui::GetTextLineHeight());
     StatusText({.label = operation.title, .status = ToStatus(operation.tone)});
     if (!operation.indeterminate) {
-      ImGui::SameLine();
-      ImGui::ProgressBar(std::clamp(operation.progress, 0.0f, 1.0f),
-                         ImVec2(180.0f, 0.0f));
+      ImGui::SameLine(0.0f, metrics.spacing.space03);
+      align_to_row(Scale(6.0f));
+      ProgressBar({
+          .id = "operation-progress",
+          .label = operation.title,
+          .value = std::clamp(operation.progress, 0.0f, 1.0f),
+          .status = ToStatus(operation.tone),
+          .size = {.x = 180.0f, .y = 6.0f},
+      });
     }
     for (const CommandView &command : operation.commands) {
-      ImGui::SameLine();
-      DrawCommandButton(view.revision, command, true);
+      ImGui::SameLine(0.0f, metrics.spacing.space03);
+      align_to_row(metrics.geometry.compact_target);
+      const ButtonResult result = Button({
+          .id = command.id.value,
+          .label = command.label,
+          .tooltip = command.tooltip,
+          .variant = ToButtonVariant(command.variant),
+          .availability = ToAvailability(command.availability),
+          .size = {.x = 0.0f, .y = 24.0f},
+      });
+      if (result.activated) {
+        EmitCommand(view.revision, command);
+      }
     }
   }
 
   void DrawStatusBar(const ApplicationView &view) {
+    if (view.status_items.empty()) {
+      return;
+    }
+    const LayoutMetrics metrics = CurrentLayoutMetrics();
+    ImGui::SetCursorPos(
+        ImVec2(metrics.spacing.space04, metrics.spacing.space02));
     bool first = true;
     for (const StatusItemView &item : view.status_items) {
       if (!first) {
@@ -1240,10 +989,7 @@ ApplicationUi &ApplicationUi::operator=(ApplicationUi &&) noexcept = default;
 AssetLoadReport
 ApplicationUi::Initialize(const std::filesystem::path &asset_root,
                           const float dpi_scale) {
-  AssetLoadReport report = impl_->assets.Load(asset_root, dpi_scale);
-  impl_->application_menu_font_size =
-      Impl::kApplicationMenuFontSize * impl_->assets.ui_scale();
-  return report;
+  return impl_->assets.Load(asset_root, dpi_scale);
 }
 
 const SessionState &ApplicationUi::session() const { return impl_->session; }
@@ -1264,7 +1010,12 @@ FrameResult ApplicationUi::Draw(const ApplicationView &view,
   }
 
   ApplyTheme(ResolveTheme(view.theme_mode), impl_->assets.ui_scale());
-  impl_->DrawApplicationBar(view);
+  const bool operation_available = view.operation.has_value();
+  const detail::ApplicationChromeCallbacks chrome_callbacks =
+      impl_->ChromeCallbacks(view);
+  impl_->chrome.DrawApplicationBar(view.application_bar,
+                                   impl_->ChromeLayout(operation_available),
+                                   chrome_callbacks);
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
   ImGui::SetNextWindowPos(viewport->WorkPos);
   ImGui::SetNextWindowSize(viewport->WorkSize);
@@ -1288,12 +1039,15 @@ FrameResult ApplicationUi::Draw(const ApplicationView &view,
                           .visible = false},
       .context_toolbar = {.id = "context-toolbar",
                           .draw =
-                              [this, &view]() {
-                                impl_->DrawContextToolbar(view);
-                              }},
+                              [this, &view, &chrome_callbacks]() {
+                                impl_->chrome.DrawContextToolbar(
+                                    view.context_toolbar, chrome_callbacks);
+                              },
+                          .zero_padding = true},
       .activity_rail = {.id = "activity-rail",
                         .draw = [this,
-                                 &view]() { impl_->DrawActivityRail(view); }},
+                                 &view]() { impl_->DrawActivityRail(view); },
+                        .zero_padding = true},
       .explorer = {.id = "explorer",
                    .draw = [this, &view]() { impl_->DrawExplorer(view); }},
       .workspace = {.id = "workspace",
@@ -1312,9 +1066,11 @@ FrameResult ApplicationUi::Draw(const ApplicationView &view,
                               [this, &view]() {
                                 impl_->DrawOperationStrip(view);
                               },
-                          .visible = view.operation.has_value()},
+                          .visible = view.operation.has_value(),
+                          .zero_padding = true},
       .status_bar = {.id = "status-bar",
-                     .draw = [this, &view]() { impl_->DrawStatusBar(view); }},
+                     .draw = [this, &view]() { impl_->DrawStatusBar(view); },
+                     .zero_padding = true},
   };
   const shell::ApplicationShellResult shell_result =
       shell::Application(shell_spec, shell_state);
@@ -1322,7 +1078,7 @@ FrameResult ApplicationUi::Draw(const ApplicationView &view,
   impl_->session.inspector_width = shell_result.state.inspector_width;
   impl_->session.operation_tray_height =
       shell_result.state.operation_tray_height;
-  impl_->layout_changed = shell_result.layout_changed;
+  impl_->layout_changed = impl_->layout_changed || shell_result.layout_changed;
   impl_->HandleShortcuts(view);
 
   ImGui::End();

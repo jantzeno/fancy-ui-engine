@@ -2,6 +2,7 @@
 
 #include "fancy_ui/components/button.hpp"
 #include "fancy_ui/components/checkbox.hpp"
+#include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/theme.hpp"
 #include "internal/component_internal.hpp"
 
@@ -186,8 +187,11 @@ DurationResult Duration(const DurationSpec &spec) {
   detail::PushFieldControlState(spec.availability, spec.validation);
   detail::BeginAvailability(spec.availability);
   const float available = ImGui::GetContentRegionAvail().x;
-  const float gap = Scale(6.0f);
-  ImGui::SetNextItemWidth(std::max(Scale(72.0f), (available - gap) * 0.5f));
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  const float gap = metrics.spacing.space03;
+  const float field_width =
+      std::max(Scale(88.0f), std::floor((available - gap) * 0.5f));
+  ImGui::SetNextItemWidth(field_width);
   changed |= ImGui::InputScalar("##hours", ImGuiDataType_S32, &hours, nullptr,
                                 nullptr, "%d Hours");
   InteractionResult hours_interaction = detail::CaptureInteraction();
@@ -195,7 +199,7 @@ DurationResult Duration(const DurationSpec &spec) {
   committed |= ImGui::IsItemDeactivatedAfterEdit();
   detail::DrawFocusRing(hours_interaction);
   ImGui::SameLine(0.0f, gap);
-  ImGui::SetNextItemWidth(std::max(Scale(88.0f), (available - gap) * 0.5f));
+  ImGui::SetNextItemWidth(field_width);
   changed |= ImGui::InputScalar("##minutes", ImGuiDataType_S32, &minutes,
                                 nullptr, nullptr, "%d Minutes");
   InteractionResult minutes_interaction = detail::CaptureInteraction();
@@ -209,7 +213,7 @@ DurationResult Duration(const DurationSpec &spec) {
   };
   if ((hours_interaction.hovered || hours_interaction.focused) &&
       !spec.tooltip.empty()) {
-    ImGui::SetTooltip("%s", detail::Owned(spec.tooltip).c_str());
+    detail::ShowTooltip(spec.tooltip);
   }
   detail::EndAvailability(spec.availability, spec.tooltip);
   detail::PopFieldControlState(spec.availability, spec.validation);

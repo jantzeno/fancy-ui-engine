@@ -1,5 +1,6 @@
 #include "fancy_ui/components/hierarchy.hpp"
 
+#include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/theme.hpp"
 #include "internal/component_internal.hpp"
 
@@ -111,16 +112,19 @@ ToggleState NextVisibilityState(const ToggleState current) {
 }
 
 HierarchyTree::HierarchyTree() {
-  const float vertical_padding =
-      std::max((Scale(32.0f) - ImGui::GetFontSize()) * 0.5f, 0.0f);
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  const float vertical_padding = std::max(
+      (metrics.geometry.row_height - ImGui::GetFontSize()) * 0.5f, 0.0f);
   const ImGuiStyle &style = ImGui::GetStyle();
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                      ImVec2(style.ItemSpacing.x, Scale(1.0f)));
+                      ImVec2(style.ItemSpacing.x, metrics.spacing.condensed));
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                      ImVec2(Scale(4.0f), vertical_padding));
-  ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, Scale(24.0f));
-  ImGui::PushStyleVar(ImGuiStyleVar_TreeLinesSize, Scale(1.0f));
-  ImGui::PushStyleVar(ImGuiStyleVar_TreeLinesRounding, Scale(4.0f));
+                      ImVec2(metrics.spacing.space03, vertical_padding));
+  ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing,
+                      metrics.explorer.tree_indent);
+  ImGui::PushStyleVar(ImGuiStyleVar_TreeLinesSize, metrics.geometry.border);
+  ImGui::PushStyleVar(ImGuiStyleVar_TreeLinesRounding,
+                      metrics.geometry.surface_radius);
 }
 
 HierarchyTree::~HierarchyTree() {
@@ -147,11 +151,16 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
                                 const HierarchyRowSpec &spec) {
   const std::string id = detail::Owned(spec.id);
   const bool disabled = !spec.availability.enabled || spec.availability.busy;
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
   const SemanticPalette &palette = CurrentPalette();
-  const float color_width = spec.color.has_value() ? Scale(32.0f) : 0.0f;
-  const float action_width = spec.action_icon ? Scale(28.0f) : 0.0f;
+  const float color_width =
+      spec.color.has_value() ? metrics.explorer.audit_color_column_width : 0.0f;
+  const float action_width =
+      spec.action_icon ? metrics.explorer.audit_action_column_width : 0.0f;
   const float visibility_width =
-      spec.visibility.has_value() ? Scale(28.0f) : 0.0f;
+      spec.visibility.has_value()
+          ? metrics.explorer.audit_visibility_column_width
+          : 0.0f;
   const float trailing_width = color_width + action_width + visibility_width;
 
   const ImVec2 node_cursor = ImGui::GetCursorScreenPos();
@@ -233,7 +242,7 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
                         .y = center_y + icon_size * 0.5f},
         },
         disabled ? palette.text_disabled : StatusForeground(spec.status));
-    text_x += Scale(20.0f);
+    text_x += metrics.geometry.icon + metrics.spacing.space03;
   }
 
   const ColorRgba label_color = disabled ? palette.text_disabled

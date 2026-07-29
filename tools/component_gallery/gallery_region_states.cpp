@@ -2,6 +2,7 @@
 
 #include "fancy_ui/fancy_ui.hpp"
 #include "internal/component_internal.hpp"
+#include "internal/operation_disclosure.hpp"
 #include "internal/ui_asset_atlas.hpp"
 
 #include <imgui.h>
@@ -12,7 +13,6 @@
 #include <cmath>
 #include <cstddef>
 #include <format>
-#include <numbers>
 #include <optional>
 #include <span>
 #include <string>
@@ -79,12 +79,6 @@ struct PhasePresentation {
   SemanticStatus status = SemanticStatus::Information;
   std::string_view icon;
   std::string_view label;
-};
-
-struct IconButtonResult : InteractionResult {
-  bool activated = false;
-  ImVec2 minimum;
-  ImVec2 maximum;
 };
 
 struct StatusBarResult {
@@ -246,8 +240,7 @@ const std::array<OperationSample, kOperationSampleCount> &OperationSamples() {
               {
                   {"Generated files",
                    {},
-                   {{"", "Bed-1.svg · 48 KB"},
-                    {"", "Bed-2.svg · 31 KB"}}},
+                   {{"", "Bed-1.svg · 48 KB"}, {"", "Bed-2.svg · 31 KB"}}},
                   {"Counts",
                    {{"Beds", "2"}, {"Objects", "4"}, {"Paths", "205"}},
                    {}},
@@ -274,8 +267,7 @@ const std::array<OperationSample, kOperationSampleCount> &OperationSamples() {
                    {}},
                   {"Conflicting objects",
                    {},
-                   {{"", "Lettering artwork"},
-                    {"", "Bracket plate"}}},
+                   {{"", "Lettering artwork"}, {"", "Bracket plate"}}},
                   {"Recovery",
                    {},
                    {{"", "Review locked grain directions and retry."}}},
@@ -368,42 +360,6 @@ void DrawStateCardHeading(const std::string_view title, ImFont *font) {
   ImGui::SetCursorPosY(start.y + Scale(37.0f));
 }
 
-IconButtonResult DrawDisclosureButton(detail::UiAssetAtlas &assets,
-                                      const bool expanded) {
-  const float target = Scale(24.0f);
-  const float icon_size = Scale(16.0f);
-  ImGui::InvisibleButton("##operation-disclosure", ImVec2(target, target),
-                         ImGuiButtonFlags_EnableNav);
-  IconButtonResult result;
-  static_cast<InteractionResult &>(result) = detail::CaptureInteraction();
-  result.activated = ImGui::IsItemActivated();
-  result.minimum = ImGui::GetItemRectMin();
-  result.maximum = ImGui::GetItemRectMax();
-  const SemanticPalette &palette = CurrentPalette();
-  ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  if (result.active || result.hovered) {
-    const ColorRgba fill =
-        result.active ? palette.control_pressed : palette.control_hover;
-    draw_list->AddRectFilled(result.minimum, result.maximum,
-                             ImGui::GetColorU32(ToImVec4(fill)), Scale(3.0f));
-  }
-  const float icon_x =
-      std::floor((result.minimum.x + result.maximum.x - icon_size) * 0.5f);
-  const float icon_y =
-      std::floor((result.minimum.y + result.maximum.y - icon_size) * 0.5f);
-  static_cast<void>(assets.DrawIcon(
-      "chevron-down", steppenface::UiIconSize::Small16,
-      {.minimum = {.x = icon_x, .y = icon_y},
-       .maximum = {.x = icon_x + icon_size, .y = icon_y + icon_size}},
-      palette.text_primary,
-      expanded ? 0.0f : -std::numbers::pi_v<float> * 0.5f));
-  detail::DrawFocusRing(result);
-  if (result.hovered || (result.focused && ImGui::GetIO().NavVisible)) {
-    ImGui::SetTooltip("%s operation details", expanded ? "Hide" : "Show");
-  }
-  return result;
-}
-
 void DrawPhaseIcon(detail::UiAssetAtlas &assets,
                    const PhasePresentation &presentation) {
   const float target = Scale(16.0f);
@@ -415,8 +371,7 @@ void DrawPhaseIcon(detail::UiAssetAtlas &assets,
        .maximum = {.x = minimum.x + target, .y = minimum.y + target}},
       FromImVec4(detail::StatusColor(presentation.status))));
   if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("%.*s", static_cast<int>(presentation.label.size()),
-                      presentation.label.data());
+    detail::ShowTooltip(presentation.label);
   }
 }
 
@@ -466,10 +421,7 @@ void DrawOperationCopy(const OperationSample &sample, const float width,
                                   sample.detail.data() + sample.detail.size())
                   .x >
           width) {
-    ImGui::SetTooltip("%.*s · %.*s", static_cast<int>(sample.label.size()),
-                      sample.label.data(),
-                      static_cast<int>(sample.detail.size()),
-                      sample.detail.data());
+    detail::ShowTooltip(std::format("{} · {}", sample.label, sample.detail));
   }
 }
 
@@ -550,9 +502,7 @@ void DrawOperationStrip(detail::UiAssetAtlas &assets,
               std::floor((Scale(kOperationStripItemHeight) - height) * 0.5f)));
     };
     if (has_details) {
-      const IconButtonResult disclosure =
-          DrawDisclosureButton(assets, state.expanded);
-      if (disclosure.activated) {
+      if (detail::DrawOperationDisclosure(assets, state.expanded)) {
         state.expanded = !state.expanded;
         state.user_toggled = true;
       }
@@ -653,7 +603,7 @@ void DrawTrayResizeHandle(OperationPresentationState &state) {
   detail::DrawFocusRing(interaction);
   if (interaction.hovered ||
       (interaction.focused && ImGui::GetIO().NavVisible)) {
-    ImGui::SetTooltip(
+    detail::ShowTooltip(
         "Drag or use Up and Down arrows to resize; double-click to reset");
   }
 }
@@ -675,8 +625,7 @@ void DrawDetailEntry(const OperationDetailEntry &entry, const bool row_layout) {
   ImGui::TextUnformatted(entry.value.data(),
                          entry.value.data() + entry.value.size());
   if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("%.*s", static_cast<int>(entry.value.size()),
-                      entry.value.data());
+    detail::ShowTooltip(entry.value);
   }
 }
 
@@ -686,8 +635,7 @@ void DrawOperationTray(const OperationSample &sample,
                         ToImVec4(CurrentPalette().surface_muted));
   ImGui::PushStyleColor(ImGuiCol_Border,
                         ToImVec4(CurrentPalette().border_strong));
-  ImGui::PushStyleColor(ImGuiCol_Text,
-                        ToImVec4(CurrentPalette().text_primary));
+  ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(CurrentPalette().text_primary));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(Scale(8.0f), 0.0f));
   const float tray_height = Scale(state.tray_height);
   if (ImGui::BeginChild("##operation-tray", ImVec2(0.0f, tray_height),
@@ -821,9 +769,7 @@ void DrawFact(const std::string_view label, const std::string_view value,
     ImGui::PopStyleColor();
   }
   if (ImGui::IsItemHovered() && label_size.x + gap + value_size.x > width) {
-    ImGui::SetTooltip("%.*s: %.*s", static_cast<int>(label.size()),
-                      label.data(), static_cast<int>(value.size()),
-                      value.data());
+    detail::ShowTooltip(std::format("{}: {}", label, value));
   }
 }
 
@@ -948,7 +894,7 @@ StatusBarResult DrawStatusBar(detail::UiAssetAtlas &assets,
                                result.zoom_maximum, force_focus);
         if (interaction.hovered ||
             (interaction.focused && ImGui::GetIO().NavVisible)) {
-          ImGui::SetTooltip("Canvas zoom controls");
+          detail::ShowTooltip("Canvas zoom controls");
         }
         ImGui::PopID();
       } else {
@@ -1218,8 +1164,7 @@ void DrawStatusBarStateGallery(detail::UiAssetAtlas &assets,
   ImGui::EndChild();
 }
 
-void DrawShellOperationTray(detail::UiAssetAtlas &,
-                            GalleryState &state) {
+void DrawShellOperationTray(detail::UiAssetAtlas &, GalleryState &state) {
   ImGui::PushID("shell-operation-tray");
   ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
   DrawOperationTray(OperationSamples()[1], state.shell.operation, nullptr);
