@@ -429,7 +429,8 @@ TEST_CASE("application bar reserves forty logical pixels") {
   ImGui::DestroyContext();
 }
 
-TEST_CASE("application bar controls toggle retained shell regions in order") {
+TEST_CASE(
+    "application bar controls share one inset and toggle retained regions") {
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
   io.DisplaySize = ImVec2(1280.0f, 720.0f);
@@ -453,8 +454,8 @@ TEST_CASE("application bar controls toggle retained shell regions in order") {
     ImGui::Render();
     return result;
   };
-  const auto activate = [&](const float x) {
-    io.AddMousePosEvent(x, 20.0f);
+  const auto activate = [&](const float x, const float y) {
+    io.AddMousePosEvent(x, y);
     io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
     static_cast<void>(draw());
     io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
@@ -464,15 +465,19 @@ TEST_CASE("application bar controls toggle retained shell regions in order") {
   static_cast<void>(draw());
   static_cast<void>(draw());
 
-  REQUIRE(activate(1188.0f).layout_changed);
+  for (const float x : {1188.0f, 1220.0f, 1252.0f}) {
+    REQUIRE_FALSE(activate(x, 2.0f).layout_changed);
+  }
+
+  REQUIRE(activate(1188.0f, 34.0f).layout_changed);
   REQUIRE_FALSE(ui.session().explorer_visible);
-  REQUIRE(activate(1220.0f).layout_changed);
+  REQUIRE(activate(1220.0f, 34.0f).layout_changed);
   REQUIRE(ui.session().operation_tray_visible);
-  REQUIRE(activate(1252.0f).layout_changed);
+  REQUIRE(activate(1252.0f, 34.0f).layout_changed);
   REQUIRE_FALSE(ui.session().inspector_visible);
 
   view.operation.reset();
-  const FrameResult disabled_operation = activate(1220.0f);
+  const FrameResult disabled_operation = activate(1220.0f, 34.0f);
   REQUIRE_FALSE(disabled_operation.layout_changed);
   REQUIRE(ui.session().operation_tray_visible);
 

@@ -285,6 +285,10 @@ public:
     for (std::size_t index = 0; index < controls.size(); ++index) {
       if (index > 0) {
         ImGui::SameLine(0.0f, 0.0f);
+        ImGui::SetCursorScreenPos(
+            ImVec2(group_minimum.x + metrics.geometry.control_height *
+                                         static_cast<float>(index),
+                   group_minimum.y));
       }
       const Control &control = controls[index];
       ImGui::PushID(static_cast<int>(control.region));
