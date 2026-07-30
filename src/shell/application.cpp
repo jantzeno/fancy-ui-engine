@@ -112,8 +112,13 @@ ApplicationShellResult Application(const ApplicationShellSpec &spec,
 
   DrawRegion(spec.application_bar,
              ImVec2(0.0f, metrics.shell.application_bar_height));
+  const ColorRgba toolbar_surface = CurrentPalette().surface_muted;
+  ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                        ImVec4(toolbar_surface.red, toolbar_surface.green,
+                               toolbar_surface.blue, toolbar_surface.alpha));
   DrawRegion(spec.context_toolbar,
              ImVec2(0.0f, metrics.shell.context_toolbar_height));
+  ImGui::PopStyleColor();
 
   float reserved_height = metrics.shell.status_bar_height;
   if (IsDrawable(spec.operation_strip)) {

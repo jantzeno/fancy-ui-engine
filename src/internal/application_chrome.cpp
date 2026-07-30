@@ -529,8 +529,8 @@ public:
     ColorRgba border = icon_only ? palette.border : palette.border_strong;
     ColorRgba foreground = palette.text_primary;
     if (disabled) {
-      fill = palette.surface;
-      border = palette.border;
+      fill = palette.control_disabled_fill;
+      border = palette.control_disabled_border;
       foreground = palette.text_disabled;
     } else if (selected) {
       fill = palette.selection;
@@ -659,7 +659,8 @@ public:
                                   : last        ? ImDrawFlags_RoundCornersRight
                                                 : ImDrawFlags_RoundCornersNone;
       const bool selected = interaction.choice->selected;
-      const ColorRgba fill = interaction.disabled  ? palette.surface
+      const ColorRgba fill = interaction.disabled
+                                 ? palette.control_disabled_fill
                              : selected            ? palette.selection
                              : interaction.pressed ? palette.control_pressed
                              : interaction.hovered ? palette.control_hover

@@ -8,7 +8,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
+#include <format>
 #include <span>
 #include <string>
 #include <string_view>
@@ -114,13 +116,12 @@ ApplicationBarView BuildGalleryApplicationBar(const ShellGalleryState &state) {
           ? Enabled()
           : Disabled("Available in the 3D Model activity with a loaded model.");
   const UiAvailability clear_assignment =
-      canvas
-          ? (state.has_assigned_selection
-                 ? Enabled()
-                 : Disabled("Select assigned Canvas artwork first."))
-          : (state.has_selection
-                 ? Enabled()
-                 : Disabled("Select an assigned model part first."));
+      canvas ? (state.has_assigned_selection
+                    ? Enabled()
+                    : Disabled("Select assigned Canvas artwork first."))
+             : (state.has_selection
+                    ? Enabled()
+                    : Disabled("Select an assigned model part first."));
   const UiAvailability convert =
       !canvas ? Disabled("Available in the Canvas workspace.")
               : (state.can_convert_to_partbed
@@ -247,84 +248,84 @@ ApplicationBarView BuildGalleryApplicationBar(const ShellGalleryState &state) {
                    CommandId::DeleteObjects, "object.delete", "Delete",
                    "Delete", canvas_selection, CommandVariant::Destructive)),
            }),
-      Menu("menu.tools", "Tools",
-           {
-               MenuCommand(GalleryCommand(CommandId::AnalyzeContours,
-                                          "tools.analyze", "Analyze contours",
-                                          {}, canvas_selection)),
-               MenuSubmenu(
-                   "tools.select-issues", "Select issues",
-                   {
-                       MenuCommand(GalleryCommand(
-                           CommandId::SelectDegenerateObjects,
-                           "tools.select-degenerate", "Degenerate objects", {},
-                           canvas_only)),
-                       MenuCommand(
-                           GalleryCommand(CommandId::SelectInvalidObjects,
-                                          "tools.select-invalid",
-                                          "Invalid objects", {}, canvas_only)),
-                       MenuCommand(GalleryCommand(
-                           CommandId::SelectOpenObjects, "tools.select-open",
-                           "Open objects", {}, canvas_only)),
-                       MenuCommand(GalleryCommand(
-                           CommandId::SelectSelfIntersectingObjects,
-                           "tools.select-self-intersecting",
-                           "Self-intersections", {}, canvas_only)),
-                   }),
-               MenuCommand(GalleryCommand(
-                   CommandId::ConvertObjectToPartBed, "tools.convert-to-bed",
-                   "Convert object to part bed", {}, convert)),
-               MenuSubmenu(
-                   "tools.deconstruction", "Deconstruction",
-                   {
-                       MenuCommand(GalleryCommand(
-                           CommandId::ClearPreview, "tools.clear-preview",
-                           "Clear preview", {}, canvas_only)),
-                       MenuCommand(GalleryCommand(
-                           CommandId::PreviewGuideSplit, "tools.preview-guide",
-                           "Preview guide split", {}, canvas_selection)),
-                       MenuCommand(GalleryCommand(
-                           CommandId::ApplyGuideSplit, "tools.apply-guide",
-                           "Apply guide split", {}, canvas_selection)),
-                       MenuCommand(
-                           GalleryCommand(CommandId::PreviewAutoSplitHorizontal,
-                                          "tools.preview-auto-horizontal",
-                                          "Preview horizontal auto-split", {},
-                                          canvas_selection)),
-                       MenuCommand(GalleryCommand(
-                           CommandId::PreviewAutoSplitVertical,
-                           "tools.preview-auto-vertical",
-                           "Preview vertical auto-split", {},
-                           canvas_selection)),
-                       MenuCommand(GalleryCommand(
-                           CommandId::PreviewAutoSplitBoth,
-                           "tools.preview-auto-both", "Preview both directions",
-                           {}, canvas_selection)),
-                       MenuCommand(GalleryCommand(
-                           CommandId::ApplyAutoSplit, "tools.apply-auto",
-                           "Apply auto-split", {}, canvas_selection)),
-                   }),
-               MenuSubmenu(
-                   "tools.repair", "Repair",
-                   {
-                       MenuCommand(GalleryCommand(
-                           CommandId::JoinOpenSegments, "tools.join-open",
-                           "Join open segments", {}, canvas_selection)),
-                       MenuCommand(GalleryCommand(
-                           CommandId::RepairOrphanHoles, "tools.repair-orphan",
-                           "Repair orphan holes", {}, canvas_selection)),
-                       MenuCommand(GalleryCommand(
-                           CommandId::ReindexObjects, "tools.reindex",
-                           "Reindex objects", {}, canvas_only)),
-                   }),
-               MenuSeparator("tools.separator.settings"),
-               MenuCommand(GalleryCommand(
-                   CommandId::OpenSettings, "tools.settings", "Settings…",
-                   "Ctrl+,",
-                   Disabled("Settings persistence is not implemented.",
-                            GalleryMissingBackendCapability(
-                                CommandId::OpenSettings)))),
-           }),
+      Menu(
+          "menu.tools", "Tools",
+          {
+              MenuCommand(GalleryCommand(CommandId::AnalyzeContours,
+                                         "tools.analyze", "Analyze contours",
+                                         {}, canvas_selection)),
+              MenuSubmenu(
+                  "tools.select-issues", "Select issues",
+                  {
+                      MenuCommand(GalleryCommand(
+                          CommandId::SelectDegenerateObjects,
+                          "tools.select-degenerate", "Degenerate objects", {},
+                          canvas_only)),
+                      MenuCommand(
+                          GalleryCommand(CommandId::SelectInvalidObjects,
+                                         "tools.select-invalid",
+                                         "Invalid objects", {}, canvas_only)),
+                      MenuCommand(GalleryCommand(
+                          CommandId::SelectOpenObjects, "tools.select-open",
+                          "Open objects", {}, canvas_only)),
+                      MenuCommand(GalleryCommand(
+                          CommandId::SelectSelfIntersectingObjects,
+                          "tools.select-self-intersecting",
+                          "Self-intersections", {}, canvas_only)),
+                  }),
+              MenuCommand(GalleryCommand(
+                  CommandId::ConvertObjectToPartBed, "tools.convert-to-bed",
+                  "Convert object to part bed", {}, convert)),
+              MenuSubmenu(
+                  "tools.deconstruction", "Deconstruction",
+                  {
+                      MenuCommand(GalleryCommand(
+                          CommandId::ClearPreview, "tools.clear-preview",
+                          "Clear preview", {}, canvas_only)),
+                      MenuCommand(GalleryCommand(
+                          CommandId::PreviewGuideSplit, "tools.preview-guide",
+                          "Preview guide split", {}, canvas_selection)),
+                      MenuCommand(GalleryCommand(
+                          CommandId::ApplyGuideSplit, "tools.apply-guide",
+                          "Apply guide split", {}, canvas_selection)),
+                      MenuCommand(
+                          GalleryCommand(CommandId::PreviewAutoSplitHorizontal,
+                                         "tools.preview-auto-horizontal",
+                                         "Preview horizontal auto-split", {},
+                                         canvas_selection)),
+                      MenuCommand(GalleryCommand(
+                          CommandId::PreviewAutoSplitVertical,
+                          "tools.preview-auto-vertical",
+                          "Preview vertical auto-split", {}, canvas_selection)),
+                      MenuCommand(GalleryCommand(
+                          CommandId::PreviewAutoSplitBoth,
+                          "tools.preview-auto-both", "Preview both directions",
+                          {}, canvas_selection)),
+                      MenuCommand(GalleryCommand(
+                          CommandId::ApplyAutoSplit, "tools.apply-auto",
+                          "Apply auto-split", {}, canvas_selection)),
+                  }),
+              MenuSubmenu(
+                  "tools.repair", "Repair",
+                  {
+                      MenuCommand(GalleryCommand(
+                          CommandId::JoinOpenSegments, "tools.join-open",
+                          "Join open segments", {}, canvas_selection)),
+                      MenuCommand(GalleryCommand(
+                          CommandId::RepairOrphanHoles, "tools.repair-orphan",
+                          "Repair orphan holes", {}, canvas_selection)),
+                      MenuCommand(GalleryCommand(
+                          CommandId::ReindexObjects, "tools.reindex",
+                          "Reindex objects", {}, canvas_only)),
+                  }),
+              MenuSeparator("tools.separator.settings"),
+              MenuCommand(GalleryCommand(
+                  CommandId::OpenSettings, "tools.settings", "Settings…",
+                  "Ctrl+,",
+                  Disabled("Settings persistence is not implemented.",
+                           GalleryMissingBackendCapability(
+                               CommandId::OpenSettings)))),
+          }),
       Menu("menu.help", "Help",
            {
                MenuCommand(GalleryCommand(
@@ -351,6 +352,184 @@ ControlActionView GalleryAction(std::string field, FieldValue value,
   };
 }
 
+std::string GalleryModelGridLabel(const GalleryModelToolbarState &state) {
+  const int spacing = state.beds.front().grid_spacing_mm;
+  const bool uniform =
+      std::all_of(state.beds.begin(), state.beds.end(),
+                  [spacing](const GalleryModelBedToolbarState &bed) {
+                    return bed.grid_spacing_mm == spacing;
+                  });
+  return uniform ? std::format("{} mm", spacing) : "Mixed";
+}
+
+std::string GalleryModelSnapLabel(const GalleryModelToolbarState &state) {
+  const bool first = state.beds.front().snap_to_grid;
+  const bool uniform =
+      std::all_of(state.beds.begin(), state.beds.end(),
+                  [first](const GalleryModelBedToolbarState &bed) {
+                    return bed.snap_to_grid == first;
+                  });
+  return uniform ? (first ? "On" : "Off") : "Mixed";
+}
+
+int GalleryModelGridSpacing(const GalleryModelToolbarState &state) {
+  if (state.grid_target == "all") {
+    return state.beds.front().grid_spacing_mm;
+  }
+  const GalleryModelBedToolbarState *bed =
+      FindGalleryModelBed(state, state.grid_target);
+  return bed == nullptr ? state.beds.front().grid_spacing_mm
+                        : bed->grid_spacing_mm;
+}
+
+ToolbarPopoverView
+BuildGalleryModelGridPopover(const GalleryModelToolbarState &state) {
+  const std::string target =
+      state.grid_target == "all" ||
+              FindGalleryModelBed(state, state.grid_target) != nullptr
+          ? state.grid_target
+          : "all";
+  ToolbarPopoverView popover{
+      .id = {.value = "model.grid"},
+      .label = "Grid: " + GalleryModelGridLabel(state),
+      .tooltip = "Set exact grid spacing for all beds or a specific bed",
+      .availability = Enabled(),
+  };
+  popover.items.push_back({
+      .id = {.value = "model.grid-target.all"},
+      .label = "All beds",
+      .secondary_label = GalleryModelGridLabel(state),
+      .selected = target == "all",
+      .action = GalleryAction("session.model-grid-target", std::string{"all"}),
+  });
+  for (const GalleryModelBedToolbarState &bed : state.beds) {
+    const std::string bed_target = GalleryModelBedTarget(bed);
+    popover.items.push_back({
+        .id = {.value = "model.grid-target." + std::to_string(bed.id)},
+        .label = bed.name,
+        .secondary_label = std::format("{} mm", bed.grid_spacing_mm),
+        .selected = target == bed_target,
+        .action = GalleryAction("session.model-grid-target", bed_target),
+    });
+  }
+  const int current_spacing = GalleryModelGridSpacing(state);
+  for (const int spacing : {5, 10, 25, 50}) {
+    popover.items.push_back({
+        .id = {.value = "model.grid-spacing." + std::to_string(spacing)},
+        .label = std::format("{} mm", spacing),
+        .selected = current_spacing == spacing,
+        .separator_before = spacing == 5,
+        .action = GalleryAction("model.grid-spacing",
+                                static_cast<std::int64_t>(spacing), target),
+    });
+  }
+  popover.fields.push_back({
+      .id = {.value = "model.grid-spacing"},
+      .label = "Custom spacing",
+      .value = static_cast<std::int64_t>(current_spacing),
+      .target = UiId{.value = target},
+      .unit = "mm",
+      .help = "Enter a positive whole-millimeter spacing.",
+  });
+  return popover;
+}
+
+ToolbarPopoverView
+BuildGalleryModelSnapPopover(const GalleryModelToolbarState &state) {
+  ToolbarPopoverView popover{
+      .id = {.value = "model.snap"},
+      .label = "Snap: " + GalleryModelSnapLabel(state),
+      .tooltip = "Set grid snap for all beds or a specific bed",
+      .availability = Enabled(),
+  };
+  const bool all_enabled = std::all_of(
+      state.beds.begin(), state.beds.end(),
+      [](const GalleryModelBedToolbarState &bed) { return bed.snap_to_grid; });
+  popover.items.push_back({
+      .id = {.value = "model.snap.all"},
+      .label = "All beds",
+      .secondary_label = all_enabled ? "On" : "Off",
+      .selected = all_enabled,
+      .action = GalleryAction("model.snap", !all_enabled, "all"),
+  });
+  for (const GalleryModelBedToolbarState &bed : state.beds) {
+    popover.items.push_back({
+        .id = {.value = "model.snap." + std::to_string(bed.id)},
+        .label = bed.name,
+        .secondary_label = bed.snap_to_grid ? "On" : "Off",
+        .selected = bed.snap_to_grid,
+        .separator_before = &bed == &state.beds.front(),
+        .action = GalleryAction("model.snap", !bed.snap_to_grid,
+                                GalleryModelBedTarget(bed)),
+    });
+  }
+  return popover;
+}
+
+ToolbarPopoverView
+BuildGalleryCanvasGridPopover(const GalleryCanvasToolbarState &state) {
+  ToolbarPopoverView popover{
+      .id = {.value = "canvas.grid"},
+      .label = std::format("Grid: {:.0f} mm", state.grid_spacing_mm),
+      .tooltip = "Configure the Canvas grid",
+      .availability = Enabled(),
+  };
+  popover.items.push_back({
+      .id = {.value = "canvas.grid.visible"},
+      .label = "Show grid",
+      .secondary_label = state.grid_visible ? "On" : "Off",
+      .selected = state.grid_visible,
+      .action = GalleryAction("canvas.grid-visible", !state.grid_visible),
+  });
+  for (const int spacing : {5, 10, 25, 50}) {
+    popover.items.push_back({
+        .id = {.value = "canvas.grid.spacing." + std::to_string(spacing)},
+        .label = std::format("{} mm", spacing),
+        .selected = std::abs(state.grid_spacing_mm -
+                             static_cast<double>(spacing)) < 0.01,
+        .separator_before = spacing == 5,
+        .action = GalleryAction("canvas.grid-spacing",
+                                static_cast<std::int64_t>(spacing)),
+    });
+  }
+  popover.fields.push_back({
+      .id = {.value = "canvas.grid-spacing"},
+      .label = "Custom spacing",
+      .value = state.grid_spacing_mm,
+      .unit = "mm",
+      .help = "Enter a positive grid spacing.",
+  });
+  return popover;
+}
+
+ToolbarPopoverView
+BuildGalleryCanvasSnapPopover(const GalleryCanvasToolbarState &state) {
+  const bool snap_on = state.snap_guides || state.snap_major_grid ||
+                       state.snap_minor_grid || state.snap_margins;
+  ToolbarPopoverView popover{
+      .id = {.value = "canvas.snap"},
+      .label = std::string{"Snap: "} + (snap_on ? "On" : "Off"),
+      .tooltip = "Configure Canvas snapping",
+      .availability = Enabled(),
+  };
+  const auto add_item = [&popover](const std::string_view id,
+                                   const std::string_view label,
+                                   const bool selected) {
+    popover.items.push_back({
+        .id = {.value = "canvas.snap." + std::string{id}},
+        .label = std::string{label},
+        .secondary_label = selected ? "On" : "Off",
+        .selected = selected,
+        .action = GalleryAction("canvas.snap." + std::string{id}, !selected),
+    });
+  };
+  add_item("guides", "Guides", state.snap_guides);
+  add_item("major-grid", "Major grid", state.snap_major_grid);
+  add_item("minor-grid", "Minor grid", state.snap_minor_grid);
+  add_item("margins", "Margins", state.snap_margins);
+  return popover;
+}
+
 ContextToolbarView BuildGalleryContextToolbar(const ShellGalleryState &state) {
   const WorkspaceKind workspace = state.active_workspace;
   ContextToolbarView toolbar;
@@ -367,61 +546,39 @@ ContextToolbarView BuildGalleryContextToolbar(const ShellGalleryState &state) {
         .id = {.value = "model.selection-tool"},
         .choices =
             {
-                {.id = {.value = "model.pointer"},
+                {.id = {.value = "model.selection.pointer"},
                  .label = "Pointer",
                  .tooltip = "Select model faces with the pointer",
-                 .selected = true,
-                 .action = GalleryAction("session.model-selection-tool",
-                                         std::string{"pointer"})},
-                {.id = {.value = "model.rectangle"},
+                 .selected = state.model_toolbar.selection_tool ==
+                             SelectionTool::Pointer,
+                 .action = GalleryAction("model.selection-tool",
+                                         SelectionTool::Pointer)},
+                {.id = {.value = "model.selection.rectangle"},
                  .label = "Rectangle",
-                 .tooltip = "Select enclosed visible parts",
-                 .action = GalleryAction("session.model-selection-tool",
-                                         std::string{"rectangle"})},
+                 .tooltip = "Select one face for each enclosed visible part",
+                 .selected = state.model_toolbar.selection_tool ==
+                             SelectionTool::Rectangle,
+                 .action = GalleryAction("model.selection-tool",
+                                         SelectionTool::Rectangle)},
             },
     });
     toolbar.items.emplace_back(
         ToolbarSeparatorView{.id = {.value = "model.selection-separator"}});
-    toolbar.items.emplace_back(GalleryCommand(
-        CommandId::SelectExternalFaces, "model.select-external",
-        "Select external faces", {}, assisted_selection));
-    toolbar.items.emplace_back(GalleryCommand(
-        CommandId::SelectInternalFaces, "model.select-internal",
-        "Select internal faces", {}, assisted_selection));
+    toolbar.items.emplace_back(
+        GalleryCommand(CommandId::SelectExternalFaces, "model.select-external",
+                       "Select external faces", {}, assisted_selection));
+    toolbar.items.emplace_back(
+        GalleryCommand(CommandId::SelectInternalFaces, "model.select-internal",
+                       "Select internal faces", {}, assisted_selection));
     toolbar.items.emplace_back(GalleryCommand(
         CommandId::ClearSelection, "model.clear-selection", "Clear selection",
         {}, clear_selection, CommandVariant::Tertiary));
     toolbar.items.emplace_back(
         ToolbarSpacerView{.id = {.value = "model.toolbar-spacer"}});
-    toolbar.items.emplace_back(ToolbarPopoverView{
-        .id = {.value = "model.grid"},
-        .label = "Grid: 10 mm",
-        .tooltip = "Set exact grid spacing",
-        .availability = Enabled(),
-        .items =
-            {
-                {.id = {.value = "grid.10"},
-                 .label = "All beds",
-                 .secondary_label = "10 mm",
-                 .selected = true,
-                 .action =
-                     GalleryAction("model.grid-spacing", std::int64_t{10})},
-            },
-    });
-    toolbar.items.emplace_back(ToolbarPopoverView{
-        .id = {.value = "model.snap"},
-        .label = "Snap: On",
-        .tooltip = "Set grid snapping",
-        .availability = Enabled(),
-        .items =
-            {
-                {.id = {.value = "snap.on"},
-                 .label = "All beds",
-                 .secondary_label = "On",
-                 .selected = true,
-                 .action = GalleryAction("model.grid-snap", true)},
-            },
-    });
+    toolbar.items.emplace_back(
+        BuildGalleryModelGridPopover(state.model_toolbar));
+    toolbar.items.emplace_back(
+        BuildGalleryModelSnapPopover(state.model_toolbar));
     return toolbar;
   }
 
@@ -432,14 +589,17 @@ ContextToolbarView BuildGalleryContextToolbar(const ShellGalleryState &state) {
               {.id = {.value = "canvas.scope.canvas"},
                .label = "Canvas",
                .tooltip = "Select Canvas-level content",
-               .selected = true,
-               .action = GalleryAction("session.canvas-selection-scope",
-                                       std::string{"canvas"})},
+               .selected = state.canvas_toolbar.selection_scope ==
+                           SelectionScope::Canvas,
+               .action = GalleryAction("canvas.selection-scope",
+                                       SelectionScope::Canvas)},
               {.id = {.value = "canvas.scope.object"},
                .label = "Object",
                .tooltip = "Select object content",
-               .action = GalleryAction("session.canvas-selection-scope",
-                                       std::string{"object"})},
+               .selected = state.canvas_toolbar.selection_scope ==
+                           SelectionScope::Object,
+               .action = GalleryAction("canvas.selection-scope",
+                                       SelectionScope::Object)},
           },
   });
   toolbar.items.emplace_back(
@@ -448,22 +608,27 @@ ContextToolbarView BuildGalleryContextToolbar(const ShellGalleryState &state) {
       .id = {.value = "canvas.selection-tool"},
       .choices =
           {
-              {.id = {.value = "canvas.pointer"},
+              {.id = {.value = "canvas.tool.pointer"},
                .label = "Pointer",
                .tooltip = "Select with the pointer",
-               .selected = true,
-               .action = GalleryAction("session.canvas-selection-tool",
-                                       std::string{"pointer"})},
-              {.id = {.value = "canvas.rectangle"},
+               .selected = state.canvas_toolbar.selection_tool ==
+                           SelectionTool::Pointer,
+               .action = GalleryAction("canvas.selection-tool",
+                                       SelectionTool::Pointer)},
+              {.id = {.value = "canvas.tool.rectangle"},
                .label = "Rectangle",
                .tooltip = "Select within a rectangle",
-               .action = GalleryAction("session.canvas-selection-tool",
-                                       std::string{"rectangle"})},
-              {.id = {.value = "canvas.oval"},
+               .selected = state.canvas_toolbar.selection_tool ==
+                           SelectionTool::Rectangle,
+               .action = GalleryAction("canvas.selection-tool",
+                                       SelectionTool::Rectangle)},
+              {.id = {.value = "canvas.tool.oval"},
                .label = "Oval",
                .tooltip = "Select within an oval",
-               .action = GalleryAction("session.canvas-selection-tool",
-                                       std::string{"oval"})},
+               .selected =
+                   state.canvas_toolbar.selection_tool == SelectionTool::Oval,
+               .action =
+                   GalleryAction("canvas.selection-tool", SelectionTool::Oval)},
           },
   });
   toolbar.items.emplace_back(
@@ -476,36 +641,40 @@ ContextToolbarView BuildGalleryContextToolbar(const ShellGalleryState &state) {
       CommandVariant::Tertiary));
   toolbar.items.emplace_back(
       ToolbarSpacerView{.id = {.value = "canvas.toolbar-spacer"}});
-  toolbar.items.emplace_back(ToolbarPopoverView{
-      .id = {.value = "canvas.grid"},
-      .label = "Grid: 10 mm",
-      .tooltip = "Set Canvas grid spacing",
-      .availability = Enabled(),
-      .items =
-          {
-              {.id = {.value = "canvas.grid.10"},
-               .label = "Grid spacing",
-               .secondary_label = "10 mm",
-               .selected = true,
-               .action =
-                   GalleryAction("canvas.grid-spacing", std::int64_t{10})},
-          },
-  });
-  toolbar.items.emplace_back(ToolbarPopoverView{
-      .id = {.value = "canvas.snap"},
-      .label = "Snap: On",
-      .tooltip = "Set Canvas grid snapping",
-      .availability = Enabled(),
-      .items =
-          {
-              {.id = {.value = "canvas.snap.on"},
-               .label = "Snap to grid",
-               .secondary_label = "On",
-               .selected = true,
-               .action = GalleryAction("canvas.grid-snap", true)},
-          },
-  });
+  toolbar.items.emplace_back(
+      BuildGalleryCanvasGridPopover(state.canvas_toolbar));
+  toolbar.items.emplace_back(
+      BuildGalleryCanvasSnapPopover(state.canvas_toolbar));
   return toolbar;
+}
+
+void DrawGalleryToolbarField(ShellGalleryState &state, const FieldView &field) {
+  if (!field.availability.visible) {
+    return;
+  }
+  ImGui::PushID(field.id.value.c_str());
+  ImGui::BeginDisabled(!field.availability.enabled || field.availability.busy);
+  bool changed = false;
+  FieldValue edited = field.value;
+  if (std::int64_t *value = std::get_if<std::int64_t>(&edited)) {
+    changed = ImGui::InputScalar(field.label.c_str(), ImGuiDataType_S64, value);
+  } else if (double *value = std::get_if<double>(&edited)) {
+    changed = ImGui::InputDouble(field.label.c_str(), value, 0.0, 0.0, "%.3f");
+  }
+  ImGui::EndDisabled();
+  if (changed) {
+    static_cast<void>(
+        ApplyGalleryToolbarAction(state, {
+                                             .field = field.id,
+                                             .value = std::move(edited),
+                                             .target = field.target,
+                                             .availability = field.availability,
+                                         }));
+  }
+  if (!field.help.empty()) {
+    ImGui::TextDisabled("%s", field.help.c_str());
+  }
+  ImGui::PopID();
 }
 
 void DrawPanelHeading(detail::UiAssetAtlas &assets,
@@ -602,8 +771,7 @@ void DrawExplorer(detail::UiAssetAtlas &assets, GalleryState &state) {
   ImGui::TextDisabled("Esc");
   if (!feedback.empty()) {
     const float feedback_width =
-        ImGui::CalcTextSize(feedback.data(),
-                            feedback.data() + feedback.size())
+        ImGui::CalcTextSize(feedback.data(), feedback.data() + feedback.size())
             .x;
     ImGui::SetCursorPosX(
         ImGui::GetCursorPosX() +
@@ -779,34 +947,39 @@ bool DrawApplicationShellGallery(detail::UiAssetAtlas &assets,
                                  GalleryState &state) {
   bool return_requested = false;
   detail::ApplicationChrome chrome(assets);
-  ApplicationBarView application_bar =
-      BuildGalleryApplicationBar(state.shell);
-  ContextToolbarView context_toolbar =
-      BuildGalleryContextToolbar(state.shell);
+  ApplicationBarView application_bar = BuildGalleryApplicationBar(state.shell);
+  ContextToolbarView context_toolbar = BuildGalleryContextToolbar(state.shell);
+  bool explorer_visible = state.shell.layout.explorer_visible;
+  bool inspector_visible = state.shell.layout.inspector_visible;
   const detail::ApplicationChromeCallbacks chrome_callbacks{
       .invoke_command =
           [&state](const CommandView &command) {
             RecordShellCommandInvocation(state.shell, command);
+          },
+      .commit_action =
+          [&state](const ControlActionView &action) {
+            static_cast<void>(ApplyGalleryToolbarAction(state.shell, action));
+          },
+      .draw_field =
+          [&state](const FieldView &field) {
+            DrawGalleryToolbarField(state.shell, field);
           },
       .activate_workspace =
           [&state](const WorkspaceKind workspace) {
             state.shell.active_workspace = workspace;
           },
       .toggle_layout =
-          [&state](const detail::LayoutRegion region) {
+          [&state, &explorer_visible,
+           &inspector_visible](const detail::LayoutRegion region) {
             switch (region) {
             case detail::LayoutRegion::Explorer:
-              state.shell.layout.explorer_visible =
-                  !state.shell.layout.explorer_visible;
+              explorer_visible = !explorer_visible;
               break;
             case detail::LayoutRegion::OperationTray:
               state.shell.operation.expanded = !state.shell.operation.expanded;
-              state.shell.layout.operation_tray_visible =
-                  state.shell.operation.expanded;
               break;
             case detail::LayoutRegion::Inspector:
-              state.shell.layout.inspector_visible =
-                  !state.shell.layout.inspector_visible;
+              inspector_visible = !inspector_visible;
               break;
             }
           },
@@ -818,17 +991,16 @@ bool DrawApplicationShellGallery(detail::UiAssetAtlas &assets,
           {
               .id = "gallery-application-bar",
               .draw =
-                  [&chrome, &application_bar, &state, &chrome_callbacks]() {
+                  [&chrome, &application_bar, &state, &chrome_callbacks,
+                   &explorer_visible, &inspector_visible]() {
                     chrome.DrawApplicationBar(
                         application_bar,
                         {
-                            .explorer_visible =
-                                state.shell.layout.explorer_visible,
+                            .explorer_visible = explorer_visible,
                             .operation_tray_visible =
                                 state.shell.operation.expanded,
                             .operation_available = true,
-                            .inspector_visible =
-                                state.shell.layout.inspector_visible,
+                            .inspector_visible = inspector_visible,
                         },
                         chrome_callbacks,
                         detail::ApplicationBarHost::InlineRegion);
@@ -902,9 +1074,8 @@ bool DrawApplicationShellGallery(detail::UiAssetAtlas &assets,
                       ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
   const shell::ApplicationShellResult result = shell::Application(spec, input);
   ImGui::PopStyleVar();
-  state.shell.layout = result.state;
-  state.shell.layout.operation_tray_height = state.shell.operation.tray_height;
-  state.shell.layout.operation_tray_visible = state.shell.operation.expanded;
+  MergeGalleryShellResult(state.shell, result.state, explorer_visible,
+                          inspector_visible);
   return return_requested;
 }
 

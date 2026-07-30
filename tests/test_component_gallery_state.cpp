@@ -5,6 +5,10 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <utility>
 
 using namespace fancy_ui::gallery;
 
@@ -149,6 +153,111 @@ TEST_CASE("application shell gallery starts with both side panels visible") {
           fancy_ui::steppenface::WorkspaceKind::Canvas);
   REQUIRE(state.layout.explorer_width == 256.0f);
   REQUIRE(state.layout.inspector_width == 320.0f);
+  REQUIRE(state.canvas_toolbar.selection_scope ==
+          fancy_ui::steppenface::SelectionScope::Canvas);
+  REQUIRE(state.canvas_toolbar.selection_tool ==
+          fancy_ui::steppenface::SelectionTool::Pointer);
+  REQUIRE(state.canvas_toolbar.grid_visible);
+  REQUIRE(state.canvas_toolbar.grid_spacing_mm == 10.0);
+  REQUIRE(state.model_toolbar.grid_target == "all");
+  REQUIRE(state.model_toolbar.beds[0].grid_spacing_mm == 25);
+  REQUIRE(state.model_toolbar.beds[1].snap_to_grid);
+}
+
+TEST_CASE("gallery shell merge preserves application bar visibility changes") {
+  ShellGalleryState state;
+  state.operation.expanded = false;
+  state.operation.tray_height = 216.0f;
+  fancy_ui::shell::ApplicationShellState stale_result = state.layout;
+  stale_result.explorer_visible = true;
+  stale_result.inspector_visible = true;
+  stale_result.operation_tray_visible = true;
+  stale_result.explorer_width = 272.0f;
+  stale_result.inspector_width = 344.0f;
+  stale_result.operation_tray_height = 184.0f;
+
+  MergeGalleryShellResult(state, stale_result, false, false);
+
+  REQUIRE_FALSE(state.layout.explorer_visible);
+  REQUIRE_FALSE(state.layout.inspector_visible);
+  REQUIRE_FALSE(state.layout.operation_tray_visible);
+  REQUIRE(state.layout.explorer_width == 272.0f);
+  REQUIRE(state.layout.inspector_width == 344.0f);
+  REQUIRE(state.layout.operation_tray_height == 216.0f);
+}
+
+TEST_CASE("gallery Canvas toolbar actions retain exact view settings") {
+  using fancy_ui::steppenface::ControlActionView;
+  using fancy_ui::steppenface::SelectionScope;
+  using fancy_ui::steppenface::SelectionTool;
+
+  ShellGalleryState state;
+  const auto action = [](std::string field,
+                         fancy_ui::steppenface::FieldValue value) {
+    return ControlActionView{
+        .field = {.value = std::move(field)},
+        .value = std::move(value),
+    };
+  };
+
+  REQUIRE(ApplyGalleryToolbarAction(
+      state, action("canvas.selection-scope", SelectionScope::Object)));
+  REQUIRE(ApplyGalleryToolbarAction(
+      state, action("canvas.selection-tool", SelectionTool::Oval)));
+  REQUIRE(
+      ApplyGalleryToolbarAction(state, action("canvas.grid-visible", false)));
+  REQUIRE(ApplyGalleryToolbarAction(
+      state, action("canvas.grid-spacing", std::int64_t{25})));
+  REQUIRE(
+      ApplyGalleryToolbarAction(state, action("canvas.snap.minor-grid", true)));
+
+  REQUIRE(state.canvas_toolbar.selection_scope == SelectionScope::Object);
+  REQUIRE(state.canvas_toolbar.selection_tool == SelectionTool::Oval);
+  REQUIRE_FALSE(state.canvas_toolbar.grid_visible);
+  REQUIRE(state.canvas_toolbar.grid_spacing_mm == 25.0);
+  REQUIRE(state.canvas_toolbar.snap_minor_grid);
+
+  REQUIRE_FALSE(
+      ApplyGalleryToolbarAction(state, action("canvas.grid-spacing", -1.0)));
+  REQUIRE(state.canvas_toolbar.grid_spacing_mm == 25.0);
+  REQUIRE(state.feedback == "Grid spacing must be greater than zero.");
+}
+
+TEST_CASE("gallery model grid actions honor all-bed and named targets") {
+  using fancy_ui::steppenface::ControlActionView;
+  using fancy_ui::steppenface::FieldValue;
+
+  ShellGalleryState state;
+  const auto action = [](std::string field, FieldValue value,
+                         std::string target = {}) {
+    return ControlActionView{
+        .field = {.value = std::move(field)},
+        .value = std::move(value),
+        .target =
+            target.empty()
+                ? std::optional<fancy_ui::steppenface::UiId>{}
+                : std::optional<
+                      fancy_ui::steppenface::UiId>{fancy_ui::steppenface::UiId{
+                      .value = std::move(target)}},
+    };
+  };
+
+  REQUIRE(ApplyGalleryToolbarAction(
+      state, action("session.model-grid-target", std::string{"bed.2"})));
+  REQUIRE(ApplyGalleryToolbarAction(
+      state, action("model.grid-spacing", std::int64_t{50}, "bed.2")));
+  REQUIRE(ApplyGalleryToolbarAction(state, action("model.snap", false, "all")));
+
+  REQUIRE(state.model_toolbar.grid_target == "bed.2");
+  REQUIRE(state.model_toolbar.beds[0].grid_spacing_mm == 25);
+  REQUIRE(state.model_toolbar.beds[1].grid_spacing_mm == 50);
+  REQUIRE_FALSE(state.model_toolbar.beds[0].snap_to_grid);
+  REQUIRE_FALSE(state.model_toolbar.beds[1].snap_to_grid);
+
+  REQUIRE_FALSE(ApplyGalleryToolbarAction(
+      state, action("model.grid-spacing", std::int64_t{0}, "all")));
+  REQUIRE(state.model_toolbar.beds[0].grid_spacing_mm == 25);
+  REQUIRE(state.model_toolbar.beds[1].grid_spacing_mm == 50);
 }
 
 TEST_CASE("gallery application commands report typed interaction feedback") {
