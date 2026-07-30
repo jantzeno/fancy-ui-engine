@@ -800,10 +800,30 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
   ImGui::SetNextWindowPos(viewport->WorkPos);
   ImGui::SetNextWindowSize(viewport->WorkSize);
+  const bool shell_preview = state.active_tab == GalleryTab::Shell;
+  if (shell_preview) {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+  }
   ImGui::Begin("Fancy UI component gallery", nullptr,
                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                    ImGuiWindowFlags_NoSavedSettings |
                    ImGuiWindowFlags_NoBringToFrontOnFocus);
+  if (shell_preview) {
+    ImGui::PopStyleVar(2);
+    const bool escape_owned_at_frame_start =
+        ImGui::IsAnyItemActive() ||
+        ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId |
+                                   ImGuiPopupFlags_AnyPopupLevel);
+    const bool return_requested = DrawApplicationShellGallery(assets, state);
+    const bool escape_requested = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+    ImGui::End();
+    if (return_requested ||
+        (escape_requested && !escape_owned_at_frame_start)) {
+      LeaveShellPreview(state);
+    }
+    return;
+  }
 
   if (assets.bold_font() != nullptr) {
     ImGui::PushFont(assets.bold_font());
@@ -842,9 +862,9 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
 
   const auto move_tab = [&state](const int delta) {
     const int current = static_cast<int>(state.active_tab);
-    state.active_tab =
-        static_cast<GalleryTab>((current + delta + kGalleryTabCount) %
-                                kGalleryTabCount);
+    ActivateGalleryTab(
+        state, static_cast<GalleryTab>((current + delta + kGalleryTabCount) %
+                                       kGalleryTabCount));
   };
   if (ImGui::BeginTabBar("##gallery-tabs",
                          ImGuiTabBarFlags_FittingPolicyResizeDown)) {
@@ -853,10 +873,18 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
       const ImGuiTabItemFlags flags = state.active_tab == gallery_tab
                                           ? ImGuiTabItemFlags_SetSelected
                                           : ImGuiTabItemFlags_None;
+      const bool restore_focus =
+          state.focus_active_tab && state.active_tab == gallery_tab;
+      if (restore_focus) {
+        ImGui::SetKeyboardFocusHere();
+      }
       const bool visible = ImGui::BeginTabItem(label, nullptr, flags);
+      if (restore_focus) {
+        state.focus_active_tab = false;
+      }
       const bool focused = ImGui::IsItemFocused();
       if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-        state.active_tab = gallery_tab;
+        ActivateGalleryTab(state, gallery_tab);
       }
       if (focused && ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
         move_tab(-1);
@@ -920,8 +948,7 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
       }
       ImGui::EndChild();
     });
-    tab("Application shell", GalleryTab::Shell,
-        [&assets, &state] { DrawApplicationShellGallery(assets, state); });
+    tab("Application shell", GalleryTab::Shell, [] {});
     tab("Settings", GalleryTab::Settings,
         [&assets, &state] { DrawSettingsGallery(assets, state); });
     tab("Operation strip & tray", GalleryTab::Operations,

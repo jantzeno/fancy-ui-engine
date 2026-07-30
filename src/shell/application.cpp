@@ -18,9 +18,20 @@ void DrawRegion(const RegionSpec &region, const ImVec2 size) {
   if (!region.visible || !region.draw) {
     return;
   }
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
   const std::string id = detail::Owned(region.id);
   if (region.zero_padding) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  }
+  if (region.menu_bar) {
+    ImGui::PushFont(ImGui::GetFont(), metrics.menu.font_size);
+    const float vertical_padding = std::max(
+        0.0f,
+        (metrics.shell.application_bar_height - ImGui::GetFontSize()) * 0.5f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(metrics.spacing.space04, vertical_padding));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(metrics.spacing.space04, 0.0f));
   }
   const ImGuiWindowFlags flags =
       region.menu_bar ? ImGuiWindowFlags_MenuBar : ImGuiWindowFlags_None;
@@ -28,6 +39,10 @@ void DrawRegion(const RegionSpec &region, const ImVec2 size) {
     region.draw();
   }
   ImGui::EndChild();
+  if (region.menu_bar) {
+    ImGui::PopStyleVar(2);
+    ImGui::PopFont();
+  }
   if (region.zero_padding) {
     ImGui::PopStyleVar();
   }

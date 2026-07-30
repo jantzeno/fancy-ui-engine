@@ -42,8 +42,10 @@ xmake run fancy_ui_component_gallery --theme dark --scale 1
 `--theme` accepts `light` or `dark`. `--scale` accepts values from `0.75` to
 `2`, with `1`, `1.25`, `1.5`, and `2` as the standard review modes. Larger
 layouts scroll instead of omitting component groups. `--tab` accepts
-`components`, `shell`, `settings`, `operations`, or `status`; the interactive
-gallery exposes the same pages as keyboard-navigable tabs.
+`components`, `shell`, `settings`, `operations`, or `status`. The interactive
+gallery exposes the state sheets as keyboard-navigable tabs. Activating
+Application shell replaces the gallery chrome with a full-canvas preview in
+the same native window.
 
 For deterministic review artifacts, pass a PNG destination. The gallery
 renders a few frames so the font and SVG atlas is installed before capture:
@@ -76,7 +78,13 @@ operation details, and Inspector; the operation control and operation-strip
 disclosure share one retained tray state. Explorer contains the shared
 hierarchy sample, Workspace deliberately shows an empty-state surface, and
 Inspector includes one live example from every component family allowed in
-that region.
+that region. Use the Workspace's `Back to component gallery` action to return
+to the tab that opened the preview. An unclaimed Escape does the same; an open
+menu, popup, text edit, or active control consumes the first Escape instead.
+
+Shell screenshots use the canonical 1280 × 720 logical canvas, scaled by
+`--scale`. Components screenshots remain 1280 × 1200, while Settings,
+Operations, and Status use 1280 × 1440.
 
 The Settings page opens one modeless 880 × 560 System Settings window with
 General, Appearance, Machines, License, and Legal navigation. General,

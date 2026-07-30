@@ -24,10 +24,13 @@ using UiAvailability = steppenface::Availability;
 
 UiAvailability Enabled() { return {}; }
 
-UiAvailability Disabled(std::string reason) {
+UiAvailability
+Disabled(std::string reason,
+         const BackendCapability capability = BackendCapability::None) {
   return {
       .enabled = false,
       .disabled_reason = std::move(reason),
+      .missing_capability = capability,
   };
 }
 
@@ -93,13 +96,36 @@ ApplicationMenuView Menu(std::string id, std::string label,
   };
 }
 
-ApplicationBarView BuildGalleryApplicationBar(const WorkspaceKind workspace) {
+ApplicationBarView BuildGalleryApplicationBar(const ShellGalleryState &state) {
+  const WorkspaceKind workspace = state.active_workspace;
+  const bool canvas = workspace == WorkspaceKind::Canvas;
   const UiAvailability needs_selection =
-      Disabled("Select an object or model item first.");
+      state.has_selection ? Enabled()
+                          : Disabled("Select an object or model item first.");
+  const UiAvailability canvas_selection =
+      !canvas ? Disabled("Available in the Canvas workspace.")
+              : (!state.has_selection
+                     ? Disabled("Select one or more Canvas objects first.")
+                     : Enabled());
   const UiAvailability canvas_only =
-      workspace == WorkspaceKind::Canvas
+      canvas ? Enabled() : Disabled("Available in the Canvas workspace.");
+  const UiAvailability assisted_selection =
+      !canvas && state.has_model
           ? Enabled()
-          : Disabled("Available in the Canvas workspace.");
+          : Disabled("Available in the 3D Model activity with a loaded model.");
+  const UiAvailability clear_assignment =
+      canvas
+          ? (state.has_assigned_selection
+                 ? Enabled()
+                 : Disabled("Select assigned Canvas artwork first."))
+          : (state.has_selection
+                 ? Enabled()
+                 : Disabled("Select an assigned model part first."));
+  const UiAvailability convert =
+      !canvas ? Disabled("Available in the Canvas workspace.")
+              : (state.can_convert_to_partbed
+                     ? Enabled()
+                     : Disabled("Select one convertible Canvas object first."));
   ApplicationBarView bar{
       .active_workspace = workspace,
       .document_dirty = true,
@@ -112,7 +138,9 @@ ApplicationBarView BuildGalleryApplicationBar(const WorkspaceKind workspace) {
                                           "Open File…", "Ctrl+O")),
                MenuCommand(GalleryCommand(
                    CommandId::ExportFile, "file.export", "Export…", {},
-                   Disabled("Export jobs are not implemented."))),
+                   Disabled("Export jobs are not implemented.",
+                            GalleryMissingBackendCapability(
+                                CommandId::ExportFile)))),
                MenuSeparator("file.separator.quit"),
                MenuCommand(GalleryCommand(CommandId::Quit, "file.quit", "Quit",
                                           "Ctrl+Q")),
@@ -139,14 +167,10 @@ ApplicationBarView BuildGalleryApplicationBar(const WorkspaceKind workspace) {
                    "Clear selection", "Esc", needs_selection)),
                MenuCommand(GalleryCommand(
                    CommandId::SelectExternalFaces, "edit.select-external",
-                   "Select external faces", {},
-                   Disabled("Available in the 3D Model activity with a "
-                            "loaded model."))),
+                   "Select external faces", {}, assisted_selection)),
                MenuCommand(GalleryCommand(
                    CommandId::SelectInternalFaces, "edit.select-internal",
-                   "Select internal faces", {},
-                   Disabled("Available in the 3D Model activity with a "
-                            "loaded model."))),
+                   "Select internal faces", {}, assisted_selection)),
            }),
       Menu("menu.view", "View",
            {
@@ -182,52 +206,52 @@ ApplicationBarView BuildGalleryApplicationBar(const WorkspaceKind workspace) {
            {
                MenuCommand(GalleryCommand(CommandId::GroupSelection,
                                           "object.group", "Group", "Ctrl+G",
-                                          needs_selection)),
+                                          canvas_selection)),
                MenuCommand(GalleryCommand(CommandId::UngroupSelection,
                                           "object.ungroup", "Ungroup",
-                                          "Ctrl+Shift+G", needs_selection)),
+                                          "Ctrl+Shift+G", canvas_selection)),
                MenuCommand(GalleryCommand(CommandId::ExtractSelection,
                                           "object.extract", "Extract", {},
-                                          needs_selection)),
+                                          canvas_selection)),
                MenuSeparator("object.separator.transform"),
                MenuSubmenu(
                    "object.transform", "Transform",
                    {
                        MenuCommand(GalleryCommand(
                            CommandId::FlipHorizontal, "object.flip-horizontal",
-                           "Flip horizontal", {}, needs_selection)),
+                           "Flip horizontal", {}, canvas_selection)),
                        MenuCommand(GalleryCommand(
                            CommandId::FlipVertical, "object.flip-vertical",
-                           "Flip vertical", {}, needs_selection)),
+                           "Flip vertical", {}, canvas_selection)),
                        MenuCommand(GalleryCommand(
                            CommandId::RotateCW, "object.rotate-clockwise",
-                           "Rotate clockwise", {}, needs_selection)),
+                           "Rotate clockwise", {}, canvas_selection)),
                        MenuCommand(GalleryCommand(
                            CommandId::RotateCCW,
                            "object.rotate-counterclockwise",
-                           "Rotate counterclockwise", {}, needs_selection)),
+                           "Rotate counterclockwise", {}, canvas_selection)),
                    }),
                MenuSubmenu("object.assignment", "Assignment",
                            {
                                MenuCommand(GalleryCommand(
                                    CommandId::ConvertObjectToPartBed,
                                    "object.convert-to-bed",
-                                   "Convert to part bed", {}, needs_selection)),
+                                   "Convert to part bed", {}, convert)),
                                MenuCommand(GalleryCommand(
                                    CommandId::ClearAssignment,
                                    "object.clear-assignment",
-                                   "Clear assignment", {}, needs_selection)),
+                                   "Clear assignment", {}, clear_assignment)),
                            }),
                MenuSeparator("object.separator.delete"),
                MenuCommand(GalleryCommand(
                    CommandId::DeleteObjects, "object.delete", "Delete",
-                   "Delete", needs_selection, CommandVariant::Destructive)),
+                   "Delete", canvas_selection, CommandVariant::Destructive)),
            }),
       Menu("menu.tools", "Tools",
            {
                MenuCommand(GalleryCommand(CommandId::AnalyzeContours,
                                           "tools.analyze", "Analyze contours",
-                                          {}, needs_selection)),
+                                          {}, canvas_selection)),
                MenuSubmenu(
                    "tools.select-issues", "Select issues",
                    {
@@ -249,7 +273,7 @@ ApplicationBarView BuildGalleryApplicationBar(const WorkspaceKind workspace) {
                    }),
                MenuCommand(GalleryCommand(
                    CommandId::ConvertObjectToPartBed, "tools.convert-to-bed",
-                   "Convert object to part bed", {}, needs_selection)),
+                   "Convert object to part bed", {}, convert)),
                MenuSubmenu(
                    "tools.deconstruction", "Deconstruction",
                    {
@@ -258,36 +282,37 @@ ApplicationBarView BuildGalleryApplicationBar(const WorkspaceKind workspace) {
                            "Clear preview", {}, canvas_only)),
                        MenuCommand(GalleryCommand(
                            CommandId::PreviewGuideSplit, "tools.preview-guide",
-                           "Preview guide split", {}, needs_selection)),
+                           "Preview guide split", {}, canvas_selection)),
                        MenuCommand(GalleryCommand(
                            CommandId::ApplyGuideSplit, "tools.apply-guide",
-                           "Apply guide split", {}, needs_selection)),
+                           "Apply guide split", {}, canvas_selection)),
                        MenuCommand(
                            GalleryCommand(CommandId::PreviewAutoSplitHorizontal,
                                           "tools.preview-auto-horizontal",
                                           "Preview horizontal auto-split", {},
-                                          needs_selection)),
+                                          canvas_selection)),
                        MenuCommand(GalleryCommand(
                            CommandId::PreviewAutoSplitVertical,
                            "tools.preview-auto-vertical",
-                           "Preview vertical auto-split", {}, needs_selection)),
+                           "Preview vertical auto-split", {},
+                           canvas_selection)),
                        MenuCommand(GalleryCommand(
                            CommandId::PreviewAutoSplitBoth,
                            "tools.preview-auto-both", "Preview both directions",
-                           {}, needs_selection)),
+                           {}, canvas_selection)),
                        MenuCommand(GalleryCommand(
                            CommandId::ApplyAutoSplit, "tools.apply-auto",
-                           "Apply auto-split", {}, needs_selection)),
+                           "Apply auto-split", {}, canvas_selection)),
                    }),
                MenuSubmenu(
                    "tools.repair", "Repair",
                    {
                        MenuCommand(GalleryCommand(
                            CommandId::JoinOpenSegments, "tools.join-open",
-                           "Join open segments", {}, needs_selection)),
+                           "Join open segments", {}, canvas_selection)),
                        MenuCommand(GalleryCommand(
                            CommandId::RepairOrphanHoles, "tools.repair-orphan",
-                           "Repair orphan holes", {}, needs_selection)),
+                           "Repair orphan holes", {}, canvas_selection)),
                        MenuCommand(GalleryCommand(
                            CommandId::ReindexObjects, "tools.reindex",
                            "Reindex objects", {}, canvas_only)),
@@ -296,13 +321,17 @@ ApplicationBarView BuildGalleryApplicationBar(const WorkspaceKind workspace) {
                MenuCommand(GalleryCommand(
                    CommandId::OpenSettings, "tools.settings", "Settings…",
                    "Ctrl+,",
-                   Disabled("Settings persistence is not implemented."))),
+                   Disabled("Settings persistence is not implemented.",
+                            GalleryMissingBackendCapability(
+                                CommandId::OpenSettings)))),
            }),
       Menu("menu.help", "Help",
            {
                MenuCommand(GalleryCommand(
                    CommandId::OpenLicense, "help.license", "License…", {},
-                   Disabled("License management is not implemented."))),
+                   Disabled("License management is not implemented.",
+                            GalleryMissingBackendCapability(
+                                CommandId::OpenLicense)))),
                MenuCommand(GalleryCommand(CommandId::OpenLegalNotices,
                                           "help.legal", "Legal notices…")),
            }),
@@ -322,9 +351,18 @@ ControlActionView GalleryAction(std::string field, FieldValue value,
   };
 }
 
-ContextToolbarView BuildGalleryContextToolbar(const WorkspaceKind workspace) {
+ContextToolbarView BuildGalleryContextToolbar(const ShellGalleryState &state) {
+  const WorkspaceKind workspace = state.active_workspace;
   ContextToolbarView toolbar;
   if (workspace == WorkspaceKind::Model3d) {
+    const UiAvailability assisted_selection =
+        state.has_model
+            ? Enabled()
+            : Disabled("Available in the Model activity when a model is "
+                       "loaded.");
+    const UiAvailability clear_selection =
+        state.has_selection ? Enabled()
+                            : Disabled("No model selection to clear.");
     toolbar.items.emplace_back(ToolbarSegmentedView{
         .id = {.value = "model.selection-tool"},
         .choices =
@@ -346,16 +384,13 @@ ContextToolbarView BuildGalleryContextToolbar(const WorkspaceKind workspace) {
         ToolbarSeparatorView{.id = {.value = "model.selection-separator"}});
     toolbar.items.emplace_back(GalleryCommand(
         CommandId::SelectExternalFaces, "model.select-external",
-        "Select external faces", {},
-        Disabled("Available in the Model activity when a model is loaded.")));
+        "Select external faces", {}, assisted_selection));
     toolbar.items.emplace_back(GalleryCommand(
         CommandId::SelectInternalFaces, "model.select-internal",
-        "Select internal faces", {},
-        Disabled("Available in the Model activity when a model is loaded.")));
+        "Select internal faces", {}, assisted_selection));
     toolbar.items.emplace_back(GalleryCommand(
         CommandId::ClearSelection, "model.clear-selection", "Clear selection",
-        {}, Disabled("No model selection to clear."),
-        CommandVariant::Tertiary));
+        {}, clear_selection, CommandVariant::Tertiary));
     toolbar.items.emplace_back(
         ToolbarSpacerView{.id = {.value = "model.toolbar-spacer"}});
     toolbar.items.emplace_back(ToolbarPopoverView{
@@ -435,7 +470,10 @@ ContextToolbarView BuildGalleryContextToolbar(const WorkspaceKind workspace) {
       ToolbarSeparatorView{.id = {.value = "canvas.tool-separator"}});
   toolbar.items.emplace_back(GalleryCommand(
       CommandId::ClearSelection, "canvas.clear-selection", "Clear selection",
-      {}, Disabled("No Canvas selection to clear."), CommandVariant::Tertiary));
+      {},
+      state.has_selection ? Enabled()
+                          : Disabled("No Canvas selection to clear."),
+      CommandVariant::Tertiary));
   toolbar.items.emplace_back(
       ToolbarSpacerView{.id = {.value = "canvas.toolbar-spacer"}});
   toolbar.items.emplace_back(ToolbarPopoverView{
@@ -532,7 +570,8 @@ void DrawExplorer(detail::UiAssetAtlas &assets, GalleryState &state) {
   ImGui::EndChild();
 }
 
-void DrawWorkspace(detail::UiAssetAtlas &assets) {
+[[nodiscard]] bool DrawWorkspace(detail::UiAssetAtlas &assets,
+                                 const std::string_view feedback) {
   const float available_height = ImGui::GetContentRegionAvail().y;
   ImGui::SetCursorPosY(ImGui::GetCursorPosY() +
                        std::max(Scale(24.0f), available_height * 0.38f));
@@ -543,6 +582,37 @@ void DrawWorkspace(detail::UiAssetAtlas &assets) {
       .icon = assets.Painter("objects"),
       .minimum_height = 96.0f,
   });
+  ImGui::Spacing();
+  const float button_width = Scale(220.0f);
+  const float hint_width = ImGui::CalcTextSize("Esc").x;
+  const float row_width =
+      button_width + ImGui::GetStyle().ItemSpacing.x + hint_width;
+  ImGui::SetCursorPosX(
+      ImGui::GetCursorPosX() +
+      std::max(0.0f, (ImGui::GetContentRegionAvail().x - row_width) * 0.5f));
+  const bool return_requested =
+      Button({
+                 .id = "back-to-component-gallery",
+                 .label = "Back to component gallery",
+                 .variant = ButtonVariant::Tertiary,
+                 .size = {.x = button_width, .y = Scale(32.0f)},
+             })
+          .activated;
+  ImGui::SameLine();
+  ImGui::TextDisabled("Esc");
+  if (!feedback.empty()) {
+    const float feedback_width =
+        ImGui::CalcTextSize(feedback.data(),
+                            feedback.data() + feedback.size())
+            .x;
+    ImGui::SetCursorPosX(
+        ImGui::GetCursorPosX() +
+        std::max(0.0f,
+                 (ImGui::GetContentRegionAvail().x - feedback_width) * 0.5f));
+    ImGui::TextDisabled("%.*s", static_cast<int>(feedback.size()),
+                        feedback.data());
+  }
+  return return_requested;
 }
 
 void DrawInspector(detail::UiAssetAtlas &assets, GalleryState &state) {
@@ -705,138 +775,137 @@ void DrawInspector(detail::UiAssetAtlas &assets, GalleryState &state) {
 
 } // namespace
 
-void DrawApplicationShellGallery(detail::UiAssetAtlas &assets,
+bool DrawApplicationShellGallery(detail::UiAssetAtlas &assets,
                                  GalleryState &state) {
-  ImGui::TextDisabled(
-      "Canonical nine-region shell using the production application menu and "
-      "context toolbar; both tray controls share one state.");
-  ImGui::Spacing();
-  if (ImGui::BeginChild("##application-shell-gallery", ImVec2(0.0f, 0.0f),
-                        ImGuiChildFlags_Borders,
-                        ImGuiWindowFlags_NoSavedSettings)) {
-    detail::ApplicationChrome chrome(assets);
-    ApplicationBarView application_bar =
-        BuildGalleryApplicationBar(state.shell.active_workspace);
-    ContextToolbarView context_toolbar =
-        BuildGalleryContextToolbar(state.shell.active_workspace);
-    const detail::ApplicationChromeCallbacks chrome_callbacks{
-        .activate_workspace =
-            [&state](const WorkspaceKind workspace) {
-              state.shell.active_workspace = workspace;
-            },
-        .toggle_layout =
-            [&state](const detail::LayoutRegion region) {
-              switch (region) {
-              case detail::LayoutRegion::Explorer:
-                state.shell.layout.explorer_visible =
-                    !state.shell.layout.explorer_visible;
-                break;
-              case detail::LayoutRegion::OperationTray:
-                state.shell.operation.expanded =
-                    !state.shell.operation.expanded;
-                state.shell.layout.operation_tray_visible =
-                    state.shell.operation.expanded;
-                break;
-              case detail::LayoutRegion::Inspector:
-                state.shell.layout.inspector_visible =
-                    !state.shell.layout.inspector_visible;
-                break;
-              }
-            },
-    };
-    shell::ApplicationShellState input = state.shell.layout;
-    input.operation_tray_visible = state.shell.operation.expanded;
-    const shell::ApplicationShellSpec spec{
-        .application_bar =
-            {
-                .id = "gallery-application-bar",
-                .draw =
-                    [&chrome, &application_bar, &state, &chrome_callbacks]() {
-                      chrome.DrawApplicationBar(
-                          application_bar,
-                          {
-                              .explorer_visible =
-                                  state.shell.layout.explorer_visible,
-                              .operation_tray_visible =
-                                  state.shell.operation.expanded,
-                              .operation_available = true,
-                              .inspector_visible =
-                                  state.shell.layout.inspector_visible,
-                          },
-                          chrome_callbacks,
-                          detail::ApplicationBarHost::InlineRegion);
-                    },
-                .menu_bar = true,
-                .zero_padding = true,
-            },
-        .context_toolbar =
-            {
-                .id = "gallery-context-toolbar",
-                .draw =
-                    [&chrome, &context_toolbar, &chrome_callbacks]() {
-                      chrome.DrawContextToolbar(context_toolbar,
-                                                chrome_callbacks);
-                    },
-                .zero_padding = true,
-            },
-        .activity_rail =
-            {
-                .id = "gallery-activity-rail",
-                .draw =
-                    [&assets, &state]() {
-                      DrawActivityRail(
-                          assets,
-                          state.settings.applied.general.diagnostics_enabled);
-                    },
-                .zero_padding = true,
-            },
-        .explorer =
-            {
-                .id = "gallery-explorer",
-                .draw = [&assets, &state]() { DrawExplorer(assets, state); },
-            },
-        .workspace =
-            {
-                .id = "gallery-workspace",
-                .draw = [&assets]() { DrawWorkspace(assets); },
-            },
-        .inspector =
-            {
-                .id = "gallery-inspector",
-                .draw = [&assets, &state]() { DrawInspector(assets, state); },
-            },
-        .operation_tray =
-            {
-                .id = "gallery-operation-tray",
-                .draw = [&assets,
-                         &state]() { DrawShellOperationTray(assets, state); },
-            },
-        .operation_strip =
-            {
-                .id = "gallery-operation-strip",
-                .draw = [&assets,
-                         &state]() { DrawShellOperationStrip(assets, state); },
-                .zero_padding = true,
-            },
-        .status_bar =
-            {
-                .id = "gallery-status-bar",
-                .draw = [&assets,
-                         &state]() { DrawShellStatusBar(assets, state); },
-                .zero_padding = true,
-            },
-    };
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                        ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
-    const shell::ApplicationShellResult result =
-        shell::Application(spec, input);
-    ImGui::PopStyleVar();
-    state.shell.layout = result.state;
-    state.shell.layout.operation_tray_height =
-        state.shell.operation.tray_height;
-    state.shell.layout.operation_tray_visible = state.shell.operation.expanded;
-  }
-  ImGui::EndChild();
+  bool return_requested = false;
+  detail::ApplicationChrome chrome(assets);
+  ApplicationBarView application_bar =
+      BuildGalleryApplicationBar(state.shell);
+  ContextToolbarView context_toolbar =
+      BuildGalleryContextToolbar(state.shell);
+  const detail::ApplicationChromeCallbacks chrome_callbacks{
+      .invoke_command =
+          [&state](const CommandView &command) {
+            RecordShellCommandInvocation(state.shell, command);
+          },
+      .activate_workspace =
+          [&state](const WorkspaceKind workspace) {
+            state.shell.active_workspace = workspace;
+          },
+      .toggle_layout =
+          [&state](const detail::LayoutRegion region) {
+            switch (region) {
+            case detail::LayoutRegion::Explorer:
+              state.shell.layout.explorer_visible =
+                  !state.shell.layout.explorer_visible;
+              break;
+            case detail::LayoutRegion::OperationTray:
+              state.shell.operation.expanded = !state.shell.operation.expanded;
+              state.shell.layout.operation_tray_visible =
+                  state.shell.operation.expanded;
+              break;
+            case detail::LayoutRegion::Inspector:
+              state.shell.layout.inspector_visible =
+                  !state.shell.layout.inspector_visible;
+              break;
+            }
+          },
+  };
+  shell::ApplicationShellState input = state.shell.layout;
+  input.operation_tray_visible = state.shell.operation.expanded;
+  const shell::ApplicationShellSpec spec{
+      .application_bar =
+          {
+              .id = "gallery-application-bar",
+              .draw =
+                  [&chrome, &application_bar, &state, &chrome_callbacks]() {
+                    chrome.DrawApplicationBar(
+                        application_bar,
+                        {
+                            .explorer_visible =
+                                state.shell.layout.explorer_visible,
+                            .operation_tray_visible =
+                                state.shell.operation.expanded,
+                            .operation_available = true,
+                            .inspector_visible =
+                                state.shell.layout.inspector_visible,
+                        },
+                        chrome_callbacks,
+                        detail::ApplicationBarHost::InlineRegion);
+                  },
+              .menu_bar = true,
+              .zero_padding = true,
+          },
+      .context_toolbar =
+          {
+              .id = "gallery-context-toolbar",
+              .draw =
+                  [&chrome, &context_toolbar, &chrome_callbacks]() {
+                    chrome.DrawContextToolbar(context_toolbar,
+                                              chrome_callbacks);
+                  },
+              .zero_padding = true,
+          },
+      .activity_rail =
+          {
+              .id = "gallery-activity-rail",
+              .draw =
+                  [&assets, &state]() {
+                    DrawActivityRail(
+                        assets,
+                        state.settings.applied.general.diagnostics_enabled);
+                  },
+              .zero_padding = true,
+          },
+      .explorer =
+          {
+              .id = "gallery-explorer",
+              .draw = [&assets, &state]() { DrawExplorer(assets, state); },
+          },
+      .workspace =
+          {
+              .id = "gallery-workspace",
+              .draw =
+                  [&assets, &state, &return_requested]() {
+                    return_requested =
+                        DrawWorkspace(assets, state.shell.feedback) ||
+                        return_requested;
+                  },
+          },
+      .inspector =
+          {
+              .id = "gallery-inspector",
+              .draw = [&assets, &state]() { DrawInspector(assets, state); },
+          },
+      .operation_tray =
+          {
+              .id = "gallery-operation-tray",
+              .draw = [&assets,
+                       &state]() { DrawShellOperationTray(assets, state); },
+          },
+      .operation_strip =
+          {
+              .id = "gallery-operation-strip",
+              .draw = [&assets,
+                       &state]() { DrawShellOperationStrip(assets, state); },
+              .zero_padding = true,
+          },
+      .status_bar =
+          {
+              .id = "gallery-status-bar",
+              .draw = [&assets,
+                       &state]() { DrawShellStatusBar(assets, state); },
+              .zero_padding = true,
+          },
+  };
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                      ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
+  const shell::ApplicationShellResult result = shell::Application(spec, input);
+  ImGui::PopStyleVar();
+  state.shell.layout = result.state;
+  state.shell.layout.operation_tray_height = state.shell.operation.tray_height;
+  state.shell.layout.operation_tray_visible = state.shell.operation.expanded;
+  return return_requested;
 }
 
 } // namespace fancy_ui::gallery

@@ -17,6 +17,55 @@ TEST_CASE("gallery tab names select deterministic state sheets") {
   REQUIRE_FALSE(ParseGalleryTab("operation"));
 }
 
+TEST_CASE("shell preview returns to the tab that opened it") {
+  GalleryState state;
+  ActivateGalleryTab(state, GalleryTab::Settings);
+  ActivateGalleryTab(state, GalleryTab::Shell);
+
+  REQUIRE(state.active_tab == GalleryTab::Shell);
+  REQUIRE(state.shell_return_tab == GalleryTab::Settings);
+
+  ActivateGalleryTab(state, GalleryTab::Shell);
+  REQUIRE(state.shell_return_tab == GalleryTab::Settings);
+
+  LeaveShellPreview(state);
+  REQUIRE(state.active_tab == GalleryTab::Settings);
+  REQUIRE(state.focus_active_tab);
+}
+
+TEST_CASE("command-line shell startup returns to Components") {
+  GalleryState state;
+  ActivateGalleryTab(state, GalleryTab::Shell);
+  LeaveShellPreview(state);
+
+  REQUIRE(state.active_tab == GalleryTab::Components);
+  REQUIRE(state.focus_active_tab);
+}
+
+TEST_CASE("gallery screenshots use state-sheet-specific logical extents") {
+  const GalleryCaptureExtent components =
+      GalleryScreenshotLogicalExtent(GalleryTab::Components);
+  const GalleryCaptureExtent shell =
+      GalleryScreenshotLogicalExtent(GalleryTab::Shell);
+  const GalleryCaptureExtent settings =
+      GalleryScreenshotLogicalExtent(GalleryTab::Settings);
+  const GalleryCaptureExtent operations =
+      GalleryScreenshotLogicalExtent(GalleryTab::Operations);
+  const GalleryCaptureExtent status =
+      GalleryScreenshotLogicalExtent(GalleryTab::Status);
+
+  REQUIRE(components.width == 1280);
+  REQUIRE(components.height == 1200);
+  REQUIRE(shell.width == 1280);
+  REQUIRE(shell.height == 720);
+  REQUIRE(settings.width == 1280);
+  REQUIRE(settings.height == 1440);
+  REQUIRE(operations.width == 1280);
+  REQUIRE(operations.height == 1440);
+  REQUIRE(status.width == 1280);
+  REQUIRE(status.height == 1440);
+}
+
 TEST_CASE("operation phases choose canonical default tray disclosure") {
   for (const OperationPhase phase :
        std::array{OperationPhase::Preview, OperationPhase::Running,
@@ -92,8 +141,39 @@ TEST_CASE("application shell gallery starts with both side panels visible") {
   REQUIRE(state.layout.inspector_visible);
   REQUIRE(state.operation.expanded);
   REQUIRE(state.layout.operation_tray_visible);
+  REQUIRE(state.has_selection);
+  REQUIRE(state.has_model);
+  REQUIRE(state.has_assigned_selection);
+  REQUIRE(state.can_convert_to_partbed);
   REQUIRE(state.active_workspace ==
           fancy_ui::steppenface::WorkspaceKind::Canvas);
   REQUIRE(state.layout.explorer_width == 256.0f);
   REQUIRE(state.layout.inspector_width == 320.0f);
+}
+
+TEST_CASE("gallery application commands report typed interaction feedback") {
+  ShellGalleryState state;
+  const fancy_ui::steppenface::CommandView command{
+      .id = {.value = "view.zoom-fit"},
+      .command = fancy_ui::steppenface::CommandId::ZoomToFit,
+      .label = "Zoom to fit",
+  };
+
+  RecordShellCommandInvocation(state, command);
+
+  REQUIRE(state.feedback == "Application command invoked: Zoom to fit.");
+}
+
+TEST_CASE("gallery unavailable commands preserve backend capability identity") {
+  using fancy_ui::steppenface::BackendCapability;
+  using fancy_ui::steppenface::CommandId;
+
+  REQUIRE(GalleryMissingBackendCapability(CommandId::ExportFile) ==
+          BackendCapability::ExportJob);
+  REQUIRE(GalleryMissingBackendCapability(CommandId::OpenSettings) ==
+          BackendCapability::SettingsPersistence);
+  REQUIRE(GalleryMissingBackendCapability(CommandId::OpenLicense) ==
+          BackendCapability::LicenseManagement);
+  REQUIRE(GalleryMissingBackendCapability(CommandId::OpenLegalNotices) ==
+          BackendCapability::None);
 }

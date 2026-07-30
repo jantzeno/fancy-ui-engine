@@ -279,6 +279,54 @@ TEST_CASE("shell state starts with independently visible side panels") {
   REQUIRE(state.inspector_width == 320.0f);
 }
 
+TEST_CASE("inline application menu bar occupies the full shell region") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(1280.0f, 720.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  float region_height = 0.0f;
+  float menu_bar_height = 0.0f;
+  ImGui::NewFrame();
+  ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+  ImGui::SetNextWindowSize(io.DisplaySize);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::Begin("inline-application-menu-bar", nullptr,
+               ImGuiWindowFlags_NoDecoration);
+  ImGui::PopStyleVar();
+
+  const fancy_ui::shell::ApplicationShellSpec spec{
+      .application_bar =
+          {
+              .id = "application-bar",
+              .draw =
+                  [&region_height, &menu_bar_height]() {
+                    ImGuiWindow *window = ImGui::GetCurrentWindow();
+                    region_height = window->Size.y;
+                    if (ImGui::BeginMenuBar()) {
+                      menu_bar_height = window->MenuBarRect().GetHeight();
+                      ImGui::EndMenuBar();
+                    }
+                  },
+              .menu_bar = true,
+              .zero_padding = true,
+          },
+  };
+  static_cast<void>(fancy_ui::shell::Application(spec, {}));
+  ImGui::End();
+  ImGui::Render();
+
+  REQUIRE(region_height == Catch::Approx(40.0f));
+  REQUIRE(menu_bar_height == Catch::Approx(region_height));
+  ImGui::DestroyContext();
+}
+
 TEST_CASE("navigation items provide a 48 pixel target and 24 pixel icon slot") {
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();

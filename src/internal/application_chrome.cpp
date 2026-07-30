@@ -6,6 +6,7 @@
 #include "internal/ui_asset_atlas.hpp"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include <algorithm>
 #include <array>
@@ -69,6 +70,29 @@ public:
     }
   }
 
+  void DrawUnavailableMenuCommand(const CommandView &command) const {
+    const char *shortcut =
+        command.shortcut.empty() ? nullptr : command.shortcut.c_str();
+    const ImVec4 transparent(0.0f, 0.0f, 0.0f, 0.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    ImGui::PushStyleColor(ImGuiCol_Header, transparent);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, transparent);
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, transparent);
+    ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);
+    static_cast<void>(
+        ImGui::MenuItem(command.label.c_str(), shortcut, false, true));
+    ImGui::PopItemFlag();
+    ImGui::PopStyleColor(4);
+
+    const bool keyboard_focused =
+        ImGui::IsItemFocused() && ImGui::GetIO().NavVisible;
+    if ((ImGui::IsItemHovered() || keyboard_focused) &&
+        !command.availability.disabled_reason.empty()) {
+      ShowTooltip(command.availability.disabled_reason);
+    }
+  }
+
   void DrawMenuItems(const ApplicationBarView &bar,
                      const std::vector<MenuItemView> &items,
                      const ApplicationChromeCallbacks &callbacks,
@@ -105,14 +129,11 @@ public:
           const bool enabled = Available(command.availability);
           const char *shortcut =
               command.shortcut.empty() ? nullptr : command.shortcut.c_str();
-          if (ImGui::MenuItem(command.label.c_str(), shortcut, false,
-                              enabled)) {
+          if (!enabled) {
+            DrawUnavailableMenuCommand(command);
+          } else if (ImGui::MenuItem(command.label.c_str(), shortcut, false,
+                                     true)) {
             Invoke(command, callbacks);
-          }
-          if (!enabled &&
-              ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&
-              !command.availability.disabled_reason.empty()) {
-            ShowTooltip(command.availability.disabled_reason);
           }
         }
         break;

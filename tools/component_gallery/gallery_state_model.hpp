@@ -21,6 +21,26 @@ enum class GalleryTab : std::uint8_t {
 
 inline constexpr int kGalleryTabCount = 5;
 
+struct GalleryCaptureExtent {
+  int width = 1280;
+  int height = 1440;
+};
+
+[[nodiscard]] constexpr GalleryCaptureExtent
+GalleryScreenshotLogicalExtent(const GalleryTab tab) {
+  switch (tab) {
+  case GalleryTab::Components:
+    return {.width = 1280, .height = 1200};
+  case GalleryTab::Shell:
+    return {.width = 1280, .height = 720};
+  case GalleryTab::Settings:
+  case GalleryTab::Operations:
+  case GalleryTab::Status:
+    return {.width = 1280, .height = 1440};
+  }
+  return {};
+}
+
 enum class OperationPhase : std::uint8_t {
   Preview,
   Running,

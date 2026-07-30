@@ -61,7 +61,7 @@ HostOptions ParseOptions(const int argc, char **argv) {
                      "status)\n";
         options.valid = false;
       } else {
-        options.gallery.active_tab = *tab;
+        fancy_ui::gallery::ActivateGalleryTab(options.gallery, *tab);
       }
     }
   }
@@ -119,16 +119,13 @@ int main(const int argc, char **argv) {
   int window_width = 1280;
   int window_height = 1024;
   if (!options.screenshot.empty()) {
-    if (options.gallery.active_tab !=
-        fancy_ui::gallery::GalleryTab::Components) {
-      window_height = 1440;
-    } else {
-      window_height = 1200;
-    }
+    const fancy_ui::gallery::GalleryCaptureExtent extent =
+        fancy_ui::gallery::GalleryScreenshotLogicalExtent(
+            options.gallery.active_tab);
     window_width =
-        static_cast<int>(std::lround(window_width * options.gallery.scale));
+        static_cast<int>(std::lround(extent.width * options.gallery.scale));
     window_height =
-        static_cast<int>(std::lround(window_height * options.gallery.scale));
+        static_cast<int>(std::lround(extent.height * options.gallery.scale));
   }
   SDL_Window *window = SDL_CreateWindow("Fancy UI gallery", window_width,
                                         window_height, window_flags);

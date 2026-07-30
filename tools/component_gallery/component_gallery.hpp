@@ -25,6 +25,10 @@ struct ShellGalleryState {
   };
   steppenface::WorkspaceKind active_workspace =
       steppenface::WorkspaceKind::Canvas;
+  bool has_selection = true;
+  bool has_model = true;
+  bool has_assigned_selection = true;
+  bool can_convert_to_partbed = true;
   std::string object_name = "Face plate";
   double spacing_mm = 8.0;
   std::size_t material_index = 0;
@@ -46,8 +50,32 @@ struct ShellGalleryState {
   };
 };
 
+inline void RecordShellCommandInvocation(
+    ShellGalleryState &state,
+    const steppenface::CommandView &command) {
+  state.feedback = "Application command invoked: " + command.label + ".";
+}
+
+[[nodiscard]] constexpr steppenface::BackendCapability
+GalleryMissingBackendCapability(const steppenface::CommandId command) {
+  using steppenface::BackendCapability;
+  using steppenface::CommandId;
+  switch (command) {
+  case CommandId::ExportFile:
+    return BackendCapability::ExportJob;
+  case CommandId::OpenSettings:
+    return BackendCapability::SettingsPersistence;
+  case CommandId::OpenLicense:
+    return BackendCapability::LicenseManagement;
+  default:
+    return BackendCapability::None;
+  }
+}
+
 struct GalleryState {
   GalleryTab active_tab = GalleryTab::Components;
+  GalleryTab shell_return_tab = GalleryTab::Components;
+  bool focus_active_tab = false;
   ResolvedTheme theme = ResolvedTheme::Dark;
   float scale = 1.0f;
   double spacing = 8.0;
@@ -124,9 +152,24 @@ struct GalleryState {
   SettingsGalleryState settings = DefaultSettingsGalleryState();
 };
 
+inline void ActivateGalleryTab(GalleryState &state, const GalleryTab tab) {
+  if (tab == GalleryTab::Shell && state.active_tab != GalleryTab::Shell) {
+    state.shell_return_tab = state.active_tab;
+  }
+  state.active_tab = tab;
+  state.focus_active_tab = false;
+}
+
+inline void LeaveShellPreview(GalleryState &state) {
+  state.active_tab = state.shell_return_tab == GalleryTab::Shell
+                         ? GalleryTab::Components
+                         : state.shell_return_tab;
+  state.focus_active_tab = true;
+}
+
 void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state);
-void DrawApplicationShellGallery(detail::UiAssetAtlas &assets,
-                                 GalleryState &state);
+[[nodiscard]] bool DrawApplicationShellGallery(detail::UiAssetAtlas &assets,
+                                               GalleryState &state);
 void DrawSettingsGallery(detail::UiAssetAtlas &assets, GalleryState &state);
 void DrawSettingsGalleryWindow(detail::UiAssetAtlas &assets,
                                GalleryState &state);
