@@ -92,8 +92,9 @@ Appearance, and Machines edit one staged transaction; theme selection previews
 immediately and rolls back on discard. License actions are immediate, and
 Legal remains read-only.
 
-The regenerated light and dark references are stored in
-[`docs/ui-mockups/260728/`](docs/ui-mockups/260728/).
+The workspace-level [SteppenFace UI reference](../docs/reference/fancy-ui/README.md)
+defines design authority, mockup review, and native handoff. Generated HTML
+captures are disposable workspace artifacts rather than library documentation.
 
 ## Boundaries
 
