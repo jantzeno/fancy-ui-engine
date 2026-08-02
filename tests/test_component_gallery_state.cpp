@@ -277,6 +277,12 @@ TEST_CASE("gallery unavailable commands preserve backend capability identity") {
   using fancy_ui::steppenface::BackendCapability;
   using fancy_ui::steppenface::CommandId;
 
+  REQUIRE(GalleryMissingBackendCapability(CommandId::OpenProject) ==
+          BackendCapability::ProjectPersistence);
+  REQUIRE(GalleryMissingBackendCapability(CommandId::SaveProject) ==
+          BackendCapability::ProjectPersistence);
+  REQUIRE(GalleryMissingBackendCapability(CommandId::SaveProjectAs) ==
+          BackendCapability::ProjectPersistence);
   REQUIRE(GalleryMissingBackendCapability(CommandId::ExportFile) ==
           BackendCapability::ExportJob);
   REQUIRE(GalleryMissingBackendCapability(CommandId::OpenSettings) ==

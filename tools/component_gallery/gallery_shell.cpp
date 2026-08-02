@@ -135,8 +135,28 @@ ApplicationBarView BuildGalleryApplicationBar(const ShellGalleryState &state) {
   bar.menus = {
       Menu("menu.file", "File",
            {
-               MenuCommand(GalleryCommand(CommandId::OpenFile, "file.open",
-                                          "Open File…", "Ctrl+O")),
+               MenuCommand(GalleryCommand(
+                   CommandId::OpenProject, "file.open-project", "Open Project…",
+                   "Ctrl+O",
+                   Disabled("Project persistence is not implemented.",
+                            GalleryMissingBackendCapability(
+                                CommandId::OpenProject)))),
+               MenuCommand(GalleryCommand(
+                   CommandId::SaveProject, "file.save-project", "Save Project",
+                   "Ctrl+S",
+                   Disabled("Project persistence is not implemented.",
+                            GalleryMissingBackendCapability(
+                                CommandId::SaveProject)))),
+               MenuCommand(GalleryCommand(
+                   CommandId::SaveProjectAs, "file.save-project-as",
+                   "Save Project As…", "Ctrl+Shift+S",
+                   Disabled("Project persistence is not implemented.",
+                            GalleryMissingBackendCapability(
+                                CommandId::SaveProjectAs)))),
+               MenuSeparator("file.separator.transfer"),
+               MenuCommand(GalleryCommand(CommandId::ImportFiles,
+                                          "file.import-files", "Import Files…",
+                                          "Ctrl+I")),
                MenuCommand(GalleryCommand(
                    CommandId::ExportFile, "file.export", "Export…", {},
                    Disabled("Export jobs are not implemented.",

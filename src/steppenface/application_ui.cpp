@@ -964,7 +964,13 @@ public:
       }
     };
     if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O, false)) {
-      invoke(CommandId::OpenFile);
+      invoke(CommandId::OpenProject);
+    }
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+      invoke(io.KeyShift ? CommandId::SaveProjectAs : CommandId::SaveProject);
+    }
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_I, false)) {
+      invoke(CommandId::ImportFiles);
     }
     if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Q, false)) {
       invoke(CommandId::Quit);

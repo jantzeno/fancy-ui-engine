@@ -6,7 +6,10 @@ namespace fancy_ui::steppenface {
 
 enum class CommandId : std::uint16_t {
   Quit,
-  OpenFile,
+  OpenProject,
+  SaveProject,
+  SaveProjectAs,
+  ImportFiles,
   ExportFile,
   OpenSettings,
   OpenLicense,
@@ -64,6 +67,7 @@ enum class CommandId : std::uint16_t {
 
 enum class BackendCapability : std::uint8_t {
   None,
+  ProjectPersistence,
   ExportJob,
   SettingsPersistence,
   LicenseManagement,

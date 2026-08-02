@@ -96,6 +96,10 @@ GalleryMissingBackendCapability(const steppenface::CommandId command) {
   using steppenface::BackendCapability;
   using steppenface::CommandId;
   switch (command) {
+  case CommandId::OpenProject:
+  case CommandId::SaveProject:
+  case CommandId::SaveProjectAs:
+    return BackendCapability::ProjectPersistence;
   case CommandId::ExportFile:
     return BackendCapability::ExportJob;
   case CommandId::OpenSettings:

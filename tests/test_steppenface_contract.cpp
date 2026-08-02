@@ -497,10 +497,10 @@ TEST_CASE("application menus use compact dark popups and rounded triggers") {
   int height = 0;
   io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
 
-  const CommandView open{
-      .id = {.value = "file.open"},
-      .command = CommandId::OpenFile,
-      .label = "Open File...",
+  const CommandView import_files{
+      .id = {.value = "file.import-files"},
+      .command = CommandId::ImportFiles,
+      .label = "Import Files...",
   };
   const CommandView quit{
       .id = {.value = "file.quit"},
@@ -514,10 +514,10 @@ TEST_CASE("application menus use compact dark popups and rounded triggers") {
       .items =
           {
               {
-                  .id = open.id,
+                  .id = import_files.id,
                   .kind = MenuItemKind::Command,
-                  .label = open.label,
-                  .command = open,
+                  .label = import_files.label,
+                  .command = import_files,
               },
               {
                   .id = quit.id,
