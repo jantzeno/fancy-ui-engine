@@ -246,19 +246,20 @@ public:
   bool ToolbarButton(const std::string &id, const std::string &label,
                      const std::string &icon, const std::string &tooltip,
                      const Availability &availability, const bool selected,
-                     const bool icon_only,
+                     const bool icon_only, const bool has_popup,
                      const CommandVariant variant = CommandVariant::Normal) {
     if (!availability.visible) {
       return false;
     }
     const SemanticPalette &palette = CurrentPalette();
     const bool disabled = !availability.enabled || availability.busy;
+    const float disclosure_width = !icon_only && has_popup ? 16.0f : 0.0f;
     const ImVec2 size =
         icon_only
             ? ImVec2(kToolbarControlHeight, kToolbarControlHeight)
-            : ImVec2(
-                  std::max(56.0f, ImGui::CalcTextSize(label.c_str()).x + 24.0f),
-                  kToolbarControlHeight);
+            : ImVec2(std::max(56.0f, ImGui::CalcTextSize(label.c_str()).x +
+                                         24.0f + disclosure_width),
+                     kToolbarControlHeight);
 
     ImGui::PushID(id.c_str());
     ImGui::BeginDisabled(disabled);
@@ -314,11 +315,21 @@ public:
                       ImGui::GetColorU32(ToImVec4(foreground)));
     } else {
       const ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
+      const float label_maximum_x = maximum.x - disclosure_width;
       draw_list->AddText(
-          ImVec2(std::floor((minimum.x + maximum.x - label_size.x) * 0.5f),
-                 std::floor((minimum.y + maximum.y - label_size.y) * 0.5f +
-                            kToolbarLabelOffsetY)),
+          ImVec2(
+              std::floor((minimum.x + label_maximum_x - label_size.x) * 0.5f),
+              std::floor((minimum.y + maximum.y - label_size.y) * 0.5f +
+                         kToolbarLabelOffsetY)),
           ImGui::GetColorU32(ToImVec4(foreground)), label.c_str());
+      if (has_popup) {
+        const float center_x = maximum.x - 10.0f;
+        const float center_y = (minimum.y + maximum.y) * 0.5f;
+        draw_list->AddTriangleFilled(ImVec2(center_x - 3.0f, center_y - 1.5f),
+                                     ImVec2(center_x + 3.0f, center_y - 1.5f),
+                                     ImVec2(center_x, center_y + 2.0f),
+                                     ImGui::GetColorU32(ToImVec4(foreground)));
+      }
     }
     if (keyboard_focused) {
       draw_list->AddRect(ImVec2(minimum.x + 3.0f, minimum.y + 3.0f),
@@ -463,8 +474,8 @@ public:
       return;
     }
     if (ToolbarButton(popover.id.value, popover.label, popover.icon,
-                      popover.tooltip, popover.availability, false,
-                      icon_only)) {
+                      popover.tooltip, popover.availability, false, icon_only,
+                      true)) {
       ImGui::OpenPopup(("##popup." + popover.id.value).c_str());
     }
     ImGui::SetNextWindowSizeConstraints(
@@ -475,24 +486,59 @@ public:
     ImGui::PushStyleColor(ImGuiCol_PopupBg,
                           ToImVec4(CurrentPalette().application_surface));
     if (ImGui::BeginPopup(("##popup." + popover.id.value).c_str())) {
-      for (const ToolbarMenuItemView &item : popover.items) {
-        if (item.separator_before) {
-          ImGui::Separator();
-        }
-        const bool enabled =
-            item.action.availability.enabled && !item.action.availability.busy;
-        const char *secondary = item.secondary_label.empty()
-                                    ? nullptr
-                                    : item.secondary_label.c_str();
-        if (ImGui::MenuItem(item.label.c_str(), secondary, item.selected,
-                            enabled)) {
-          EmitEdit(view.revision, item.action);
-        }
-        if (!enabled &&
-            ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&
-            !item.action.availability.disabled_reason.empty()) {
-          detail::ShowTooltip(item.action.availability.disabled_reason);
-        }
+      for (const ToolbarPopoverItemView &item : popover.items) {
+        std::visit(
+            [this, &view](const auto &value) {
+              using Item = std::decay_t<decltype(value)>;
+              if constexpr (std::is_same_v<Item, CommandView>) {
+                if (!value.availability.visible) {
+                  return;
+                }
+                ImGui::PushID(value.id.value.c_str());
+                const bool enabled =
+                    value.availability.enabled && !value.availability.busy;
+                const char *shortcut =
+                    value.shortcut.empty() ? nullptr : value.shortcut.c_str();
+                if (ImGui::MenuItem(value.label.c_str(), shortcut, false,
+                                    enabled)) {
+                  EmitCommand(view.revision, value);
+                }
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                  const std::string &message =
+                      enabled ? value.tooltip
+                              : value.availability.disabled_reason;
+                  if (!message.empty()) {
+                    detail::ShowTooltip(message);
+                  }
+                }
+                ImGui::PopID();
+              } else {
+                if (!value.action.availability.visible) {
+                  return;
+                }
+                if (value.separator_before) {
+                  ImGui::Separator();
+                }
+                ImGui::PushID(value.id.value.c_str());
+                const bool enabled = value.action.availability.enabled &&
+                                     !value.action.availability.busy;
+                const char *secondary = value.secondary_label.empty()
+                                            ? nullptr
+                                            : value.secondary_label.c_str();
+                if (ImGui::MenuItem(value.label.c_str(), secondary,
+                                    value.selected, enabled)) {
+                  EmitEdit(view.revision, value.action);
+                }
+                if (!enabled &&
+                    ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&
+                    !value.action.availability.disabled_reason.empty()) {
+                  detail::ShowTooltip(
+                      value.action.availability.disabled_reason);
+                }
+                ImGui::PopID();
+              }
+            },
+            item);
       }
       for (const FieldView &field : popover.fields) {
         ImGui::Separator();
@@ -512,7 +558,7 @@ public:
           if constexpr (std::is_same_v<Item, CommandView>) {
             if (ToolbarButton(value.id.value, value.label, value.icon,
                               value.tooltip, value.availability, false,
-                              icon_only, value.variant)) {
+                              icon_only, false, value.variant)) {
               EmitCommand(view.revision, value);
             }
           } else if constexpr (std::is_same_v<Item, ToolbarSegmentedView>) {
@@ -520,7 +566,7 @@ public:
           } else if constexpr (std::is_same_v<Item, ToolbarActionView>) {
             if (ToolbarButton(value.id.value, value.label, value.icon,
                               value.tooltip, value.action.availability,
-                              value.selected, icon_only)) {
+                              value.selected, icon_only, false)) {
               EmitEdit(view.revision, value.action);
             }
           } else if constexpr (std::is_same_v<Item, ToolbarSeparatorView>) {
@@ -928,28 +974,6 @@ public:
       StatusText({.label = item.label, .status = ToStatus(item.tone)});
       first = false;
     }
-  }
-
-  const CommandView *FindCommand(const ApplicationView &view,
-                                 const CommandId id) const {
-    if (const CommandView *menu_command =
-            FindMenuCommand(view.application_bar, id);
-        menu_command != nullptr) {
-      return menu_command;
-    }
-    const std::array<const std::vector<ToolbarItemView> *, 2> groups = {
-        &view.context_toolbar.items,
-        &view.workspace.viewport_toolbar,
-    };
-    for (const std::vector<ToolbarItemView> *group : groups) {
-      for (const ToolbarItemView &item : *group) {
-        if (const CommandView *command = std::get_if<CommandView>(&item);
-            command != nullptr && command->command == id) {
-          return command;
-        }
-      }
-    }
-    return nullptr;
   }
 
   void HandleShortcuts(const ApplicationView &view) {

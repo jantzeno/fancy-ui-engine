@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -349,7 +350,7 @@ TEST_CASE("toolbar contracts preserve typed order and edit targets") {
       .label = "Grid: Mixed",
       .items =
           {
-              {
+              ToolbarMenuItemView{
                   .id = {.value = "model.grid.25"},
                   .label = "25 mm",
                   .action =
@@ -367,8 +368,212 @@ TEST_CASE("toolbar contracts preserve typed order and edit targets") {
   REQUIRE(std::holds_alternative<ToolbarSeparatorView>(toolbar.items[1]));
   const ToolbarPopoverView &grid =
       std::get<ToolbarPopoverView>(toolbar.items[2]);
-  REQUIRE(grid.items.front().action.target->value == "bed.2");
-  REQUIRE(std::get<std::int64_t>(grid.items.front().action.value) == 25);
+  const ToolbarMenuItemView &spacing =
+      std::get<ToolbarMenuItemView>(grid.items.front());
+  REQUIRE(spacing.action.target->value == "bed.2");
+  REQUIRE(std::get<std::int64_t>(spacing.action.value) == 25);
+}
+
+TEST_CASE("command lookup traverses toolbar popovers after application menus") {
+  ApplicationView view;
+  const CommandView menu_internal{
+      .id = {.value = "edit.select-internal"},
+      .command = CommandId::SelectInternalFaces,
+      .label = "Select internal faces",
+  };
+  view.application_bar.menus.push_back({
+      .id = {.value = "menu.edit"},
+      .label = "Edit",
+      .items =
+          {
+              {
+                  .id = menu_internal.id,
+                  .kind = MenuItemKind::Command,
+                  .label = menu_internal.label,
+                  .command = menu_internal,
+              },
+          },
+  });
+  view.context_toolbar.items.emplace_back(ToolbarPopoverView{
+      .id = {.value = "model.select-faces"},
+      .label = "Select faces",
+      .items =
+          {
+              CommandView{
+                  .id = {.value = "model.select-faces.external"},
+                  .command = CommandId::SelectExternalFaces,
+                  .label = "External Faces",
+              },
+              CommandView{
+                  .id = {.value = "model.select-faces.internal"},
+                  .command = CommandId::SelectInternalFaces,
+                  .label = "Internal Faces",
+                  .availability =
+                      {
+                          .enabled = false,
+                          .disabled_reason = "No model is loaded.",
+                      },
+              },
+          },
+  });
+
+  const CommandView *external =
+      FindCommand(view, CommandId::SelectExternalFaces);
+  const CommandView *menu_match =
+      FindCommand(view, CommandId::SelectInternalFaces);
+  REQUIRE(external != nullptr);
+  REQUIRE(external->id.value == "model.select-faces.external");
+  REQUIRE(external->availability.enabled);
+  REQUIRE(menu_match != nullptr);
+  REQUIRE(menu_match->id.value == "edit.select-internal");
+  REQUIRE(menu_match->availability.enabled);
+
+  view.application_bar.menus.clear();
+  const CommandView *popover_match =
+      FindCommand(view, CommandId::SelectInternalFaces);
+  REQUIRE(popover_match != nullptr);
+  REQUIRE_FALSE(popover_match->availability.enabled);
+  REQUIRE(popover_match->id.value == "model.select-faces.internal");
+  REQUIRE(popover_match->availability.disabled_reason == "No model is loaded.");
+}
+
+TEST_CASE(
+    "toolbar popover command activation emits a revision-bearing intent") {
+  const auto activate_command = [](const CommandId expected) {
+    ImGui::CreateContext();
+    ImGuiIO &io = ImGui::GetIO();
+    io.DisplaySize = ImVec2(1280.0f, 720.0f);
+    io.DeltaTime = 1.0f / 60.0f;
+    ImFontConfig font_config;
+    font_config.SizePixels = 16.0f;
+    io.Fonts->AddFontDefault(&font_config);
+    unsigned char *pixels = nullptr;
+    int width = 0;
+    int height = 0;
+    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+
+    ApplicationUi ui;
+    ApplicationView view;
+    view.revision = 47;
+    view.application_bar.document_dirty = false;
+    view.context_toolbar.items.emplace_back(ToolbarPopoverView{
+        .id = {.value = "model.select-faces"},
+        .label = "Select faces",
+        .items =
+            {
+                CommandView{
+                    .id = {.value = "model.select-faces.choice"},
+                    .command = expected,
+                    .label = "Face choice",
+                },
+            },
+    });
+    const auto draw = [&]() {
+      ImGui::NewFrame();
+      FrameResult result = ui.Draw(view, {});
+      ImGui::Render();
+      return result;
+    };
+    const auto click = [&](const ImVec2 position) {
+      io.AddMousePosEvent(position.x, position.y);
+      io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+      static_cast<void>(draw());
+      io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+      return draw();
+    };
+
+    static_cast<void>(draw());
+    static_cast<void>(draw());
+    const FrameResult opened = click(ImVec2(72.0f, 64.0f));
+    REQUIRE(opened.product_intents.empty());
+    REQUIRE(draw().product_intents.empty());
+    ImGuiWindow *popup = nullptr;
+    for (ImGuiWindow *window : ImGui::GetCurrentContext()->Windows) {
+      if (std::string_view{window->Name}.starts_with("##Popup_")) {
+        popup = window;
+      }
+    }
+    REQUIRE(popup != nullptr);
+    const FrameResult activated =
+        click(ImVec2(popup->Pos.x + popup->Size.x * 0.5f,
+                     popup->Pos.y + popup->Size.y * 0.5f));
+    REQUIRE(activated.product_intents.size() == 1);
+    REQUIRE(std::holds_alternative<InvokeCommand>(
+        activated.product_intents.front()));
+    const InvokeCommand invoked =
+        std::get<InvokeCommand>(activated.product_intents.front());
+    ImGui::DestroyContext();
+    return invoked;
+  };
+
+  const InvokeCommand external =
+      activate_command(CommandId::SelectExternalFaces);
+  REQUIRE(external.revision == 47);
+  REQUIRE(external.command == CommandId::SelectExternalFaces);
+  const InvokeCommand internal =
+      activate_command(CommandId::SelectInternalFaces);
+  REQUIRE(internal.revision == 47);
+  REQUIRE(internal.command == CommandId::SelectInternalFaces);
+}
+
+TEST_CASE("disabled toolbar popovers stay closed and emit no intent") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(1280.0f, 720.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  ImFontConfig font_config;
+  font_config.SizePixels = 16.0f;
+  io.Fonts->AddFontDefault(&font_config);
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+
+  ApplicationUi ui;
+  ApplicationView view;
+  view.revision = 48;
+  view.application_bar.document_dirty = false;
+  view.context_toolbar.items.emplace_back(ToolbarPopoverView{
+      .id = {.value = "model.select-faces"},
+      .label = "Select faces",
+      .availability =
+          {
+              .enabled = false,
+              .disabled_reason = "No model is loaded.",
+          },
+      .items =
+          {
+              CommandView{
+                  .id = {.value = "model.select-faces.external"},
+                  .command = CommandId::SelectExternalFaces,
+                  .label = "External Faces",
+              },
+          },
+  });
+  const auto draw = [&]() {
+    ImGui::NewFrame();
+    FrameResult result = ui.Draw(view, {});
+    ImGui::Render();
+    return result;
+  };
+  const auto click = [&](const ImVec2 position) {
+    io.AddMousePosEvent(position.x, position.y);
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+    static_cast<void>(draw());
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+    return draw();
+  };
+
+  static_cast<void>(draw());
+  static_cast<void>(draw());
+  const FrameResult clicked = click(ImVec2(72.0f, 64.0f));
+  const FrameResult settled = draw();
+  const bool popup_open = !GImGui->OpenPopupStack.empty();
+  ImGui::DestroyContext();
+
+  REQUIRE(clicked.product_intents.empty());
+  REQUIRE(settled.product_intents.empty());
+  REQUIRE_FALSE(popup_open);
 }
 
 TEST_CASE("field edits retain product target and typed mode values") {

@@ -89,13 +89,15 @@ struct ToolbarMenuItemView {
   ControlActionView action;
 };
 
+using ToolbarPopoverItemView = std::variant<ToolbarMenuItemView, CommandView>;
+
 struct ToolbarPopoverView {
   UiId id;
   std::string label;
   std::string icon;
   std::string tooltip;
   Availability availability;
-  std::vector<ToolbarMenuItemView> items;
+  std::vector<ToolbarPopoverItemView> items;
   std::vector<FieldView> fields;
 };
 
@@ -149,5 +151,8 @@ struct ApplicationView {
   std::optional<OperationView> operation;
   std::vector<StatusItemView> status_items;
 };
+
+[[nodiscard]] const CommandView *FindCommand(const ApplicationView &view,
+                                             CommandId command);
 
 } // namespace fancy_ui::steppenface

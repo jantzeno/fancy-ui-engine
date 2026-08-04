@@ -415,7 +415,7 @@ BuildGalleryModelGridPopover(const GalleryModelToolbarState &state) {
       .tooltip = "Set exact grid spacing for all beds or a specific bed",
       .availability = Enabled(),
   };
-  popover.items.push_back({
+  popover.items.push_back(ToolbarMenuItemView{
       .id = {.value = "model.grid-target.all"},
       .label = "All beds",
       .secondary_label = GalleryModelGridLabel(state),
@@ -424,7 +424,7 @@ BuildGalleryModelGridPopover(const GalleryModelToolbarState &state) {
   });
   for (const GalleryModelBedToolbarState &bed : state.beds) {
     const std::string bed_target = GalleryModelBedTarget(bed);
-    popover.items.push_back({
+    popover.items.push_back(ToolbarMenuItemView{
         .id = {.value = "model.grid-target." + std::to_string(bed.id)},
         .label = bed.name,
         .secondary_label = std::format("{} mm", bed.grid_spacing_mm),
@@ -434,7 +434,7 @@ BuildGalleryModelGridPopover(const GalleryModelToolbarState &state) {
   }
   const int current_spacing = GalleryModelGridSpacing(state);
   for (const int spacing : {5, 10, 25, 50}) {
-    popover.items.push_back({
+    popover.items.push_back(ToolbarMenuItemView{
         .id = {.value = "model.grid-spacing." + std::to_string(spacing)},
         .label = std::format("{} mm", spacing),
         .selected = current_spacing == spacing,
@@ -465,7 +465,7 @@ BuildGalleryModelSnapPopover(const GalleryModelToolbarState &state) {
   const bool all_enabled = std::all_of(
       state.beds.begin(), state.beds.end(),
       [](const GalleryModelBedToolbarState &bed) { return bed.snap_to_grid; });
-  popover.items.push_back({
+  popover.items.push_back(ToolbarMenuItemView{
       .id = {.value = "model.snap.all"},
       .label = "All beds",
       .secondary_label = all_enabled ? "On" : "Off",
@@ -473,7 +473,7 @@ BuildGalleryModelSnapPopover(const GalleryModelToolbarState &state) {
       .action = GalleryAction("model.snap", !all_enabled, "all"),
   });
   for (const GalleryModelBedToolbarState &bed : state.beds) {
-    popover.items.push_back({
+    popover.items.push_back(ToolbarMenuItemView{
         .id = {.value = "model.snap." + std::to_string(bed.id)},
         .label = bed.name,
         .secondary_label = bed.snap_to_grid ? "On" : "Off",
@@ -494,7 +494,7 @@ BuildGalleryCanvasGridPopover(const GalleryCanvasToolbarState &state) {
       .tooltip = "Configure the Canvas grid",
       .availability = Enabled(),
   };
-  popover.items.push_back({
+  popover.items.push_back(ToolbarMenuItemView{
       .id = {.value = "canvas.grid.visible"},
       .label = "Show grid",
       .secondary_label = state.grid_visible ? "On" : "Off",
@@ -502,7 +502,7 @@ BuildGalleryCanvasGridPopover(const GalleryCanvasToolbarState &state) {
       .action = GalleryAction("canvas.grid-visible", !state.grid_visible),
   });
   for (const int spacing : {5, 10, 25, 50}) {
-    popover.items.push_back({
+    popover.items.push_back(ToolbarMenuItemView{
         .id = {.value = "canvas.grid.spacing." + std::to_string(spacing)},
         .label = std::format("{} mm", spacing),
         .selected = std::abs(state.grid_spacing_mm -
@@ -535,7 +535,7 @@ BuildGalleryCanvasSnapPopover(const GalleryCanvasToolbarState &state) {
   const auto add_item = [&popover](const std::string_view id,
                                    const std::string_view label,
                                    const bool selected) {
-    popover.items.push_back({
+    popover.items.push_back(ToolbarMenuItemView{
         .id = {.value = "canvas.snap." + std::string{id}},
         .label = std::string{label},
         .secondary_label = selected ? "On" : "Off",
@@ -584,12 +584,24 @@ ContextToolbarView BuildGalleryContextToolbar(const ShellGalleryState &state) {
     });
     toolbar.items.emplace_back(
         ToolbarSeparatorView{.id = {.value = "model.selection-separator"}});
-    toolbar.items.emplace_back(
-        GalleryCommand(CommandId::SelectExternalFaces, "model.select-external",
-                       "Select external faces", {}, assisted_selection));
-    toolbar.items.emplace_back(
-        GalleryCommand(CommandId::SelectInternalFaces, "model.select-internal",
-                       "Select internal faces", {}, assisted_selection));
+    ToolbarPopoverView select_faces{
+        .id = {.value = "model.select-faces"},
+        .label = "Select faces",
+        .tooltip = "Choose external or internal faces for the active model",
+        .availability = assisted_selection,
+    };
+    CommandView external_faces = GalleryCommand(
+        CommandId::SelectExternalFaces, "model.select-faces.external",
+        "External Faces", {}, assisted_selection);
+    external_faces.tooltip = "Select outward-facing faces for the active model";
+    select_faces.items.emplace_back(std::move(external_faces));
+    CommandView internal_faces = GalleryCommand(
+        CommandId::SelectInternalFaces, "model.select-faces.internal",
+        "Internal Faces", {}, assisted_selection);
+    internal_faces.tooltip =
+        "Select assembly-facing faces for the active model";
+    select_faces.items.emplace_back(std::move(internal_faces));
+    toolbar.items.emplace_back(std::move(select_faces));
     toolbar.items.emplace_back(GalleryCommand(
         CommandId::ClearSelection, "model.clear-selection", "Clear selection",
         {}, clear_selection, CommandVariant::Tertiary));
