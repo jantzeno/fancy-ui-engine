@@ -1,5 +1,7 @@
 #include "fancy_ui/steppenface/application_ui.hpp"
 #include "fancy_ui/theme.hpp"
+#include "internal/application_chrome.hpp"
+#include "internal/ui_asset_atlas.hpp"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -8,9 +10,11 @@
 #include <imgui_internal.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -104,16 +108,6 @@ WorkspaceSelectionGeometry(const WorkspaceKind workspace) {
   ImGui::NewFrame();
   (void)ui.Draw(view, {});
   ImGui::Render();
-  positions = collect_positions(selection_color);
-  minimum_x = std::numeric_limits<float>::max();
-  maximum_x = std::numeric_limits<float>::lowest();
-  minimum_y = std::numeric_limits<float>::max();
-  for (const ImVec2 position : positions) {
-    minimum_x = std::min(minimum_x, position.x);
-    maximum_x = std::max(maximum_x, position.x);
-    minimum_y = std::min(minimum_y, position.y);
-  }
-
   const auto normalize = [workspace, minimum_x, maximum_x, minimum_y](
                              const std::vector<ImVec2> &source_positions) {
     std::vector<std::pair<int, int>> normalized;
@@ -800,7 +794,7 @@ TEST_CASE("workspace switcher selected segments have mirrored geometry") {
 
   REQUIRE_FALSE(model_geometry.selection.empty());
   REQUIRE(model_geometry.selection == canvas_geometry.selection);
-  REQUIRE(model_geometry.focus.size() == 4);
+  REQUIRE_FALSE(model_geometry.focus.empty());
   REQUIRE(model_geometry.focus == canvas_geometry.focus);
 }
 
@@ -815,6 +809,132 @@ TEST_CASE("toolbar segmented controls share connected mirrored geometry") {
   REQUIRE(left.underline == right.underline);
   REQUIRE_FALSE(left.border.empty());
   REQUIRE(left.border == right.border);
+}
+
+TEST_CASE("workspace scope and tool segments share styling and hit targets") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(640.0f, 240.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  fancy_ui::detail::UiAssetAtlas assets;
+  fancy_ui::detail::ApplicationChrome chrome(assets);
+  const ToolbarSegmentedView segmented{
+      .id = {.value = "test.segment-style"},
+      .choices =
+          {
+              {.id = {.value = "test.segment.rest"}, .label = "A"},
+              {.id = {.value = "test.segment.selected"},
+               .label = "B",
+               .selected = true},
+              {.id = {.value = "test.segment.hover"},
+               .label = "C",
+               .selected = true},
+              {.id = {.value = "test.segment.pressed"},
+               .label = "D",
+               .selected = true},
+              {.id = {.value = "test.segment.disabled"},
+               .label = "E",
+               .action = {.availability =
+                              {
+                                  .enabled = false,
+                                  .disabled_reason = "Unavailable",
+                              }}},
+          },
+  };
+  constexpr std::array previews{
+      fancy_ui::detail::InteractionPreview::Rest,
+      fancy_ui::detail::InteractionPreview::Rest,
+      fancy_ui::detail::InteractionPreview::Hovered,
+      fancy_ui::detail::InteractionPreview::Pressed,
+      fancy_ui::detail::InteractionPreview::Rest,
+  };
+
+  ImGui::NewFrame();
+  ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+  ImGui::SetNextWindowSize(ImVec2(520.0f, 64.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::Begin("segment-style", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                   ImGuiWindowFlags_NoSavedSettings);
+  ImGui::PopStyleVar();
+  chrome.DrawToolbarSegmented(segmented, {}, previews, 500.0f);
+  const float segment_width =
+      ImGui::GetItemRectMax().x - ImGui::GetItemRectMin().x;
+  const ImDrawList *style_draw_list = ImGui::GetWindowDrawList();
+  ImGui::End();
+  ImGui::Render();
+
+  const fancy_ui::SemanticPalette palette =
+      fancy_ui::PaletteFor(fancy_ui::ResolvedTheme::Dark);
+  const auto color = [](const fancy_ui::ColorRgba value) {
+    return ImGui::ColorConvertFloat4ToU32(
+        ImVec4(value.red, value.green, value.blue, value.alpha));
+  };
+  const auto has_color = [style_draw_list](const ImU32 expected) {
+    return std::ranges::any_of(style_draw_list->VtxBuffer,
+                               [expected](const ImDrawVert &vertex) {
+                                 return vertex.col == expected;
+                               });
+  };
+
+  REQUIRE(segment_width == Catch::Approx(100.0f));
+  REQUIRE(has_color(color(palette.surface_raised)));
+  REQUIRE(has_color(color(palette.selection)));
+  REQUIRE(has_color(color(palette.control_hover)));
+  REQUIRE(has_color(color(palette.control_pressed)));
+  REQUIRE(has_color(color(palette.control_disabled_fill)));
+  REQUIRE(has_color(color(palette.border_strong)));
+  REQUIRE(has_color(color(palette.border)));
+  REQUIRE(has_color(color(palette.text_primary)));
+  REQUIRE(has_color(color(palette.text_disabled)));
+  REQUIRE_FALSE(has_color(color(palette.text_secondary)));
+  REQUIRE(std::ranges::any_of(
+      style_draw_list->VtxBuffer,
+      [focus = color(palette.focus)](const ImDrawVert &vertex) {
+        return vertex.col == focus && vertex.pos.y < 8.0f;
+      }));
+
+  std::optional<WorkspaceKind> activated_workspace;
+  const fancy_ui::detail::ApplicationChromeCallbacks callbacks{
+      .activate_workspace =
+          [&activated_workspace](const WorkspaceKind workspace) {
+            activated_workspace = workspace;
+          },
+  };
+  float workspace_segment_width = 0.0f;
+  const auto draw_workspace = [&] {
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+    ImGui::SetNextWindowSize(ImVec2(300.0f, 64.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::Begin("workspace-hit-target", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoSavedSettings);
+    ImGui::PopStyleVar();
+    chrome.DrawWorkspaceSwitcher({}, callbacks, {}, 138.0f);
+    workspace_segment_width =
+        ImGui::GetItemRectMax().x - ImGui::GetItemRectMin().x;
+    ImGui::End();
+    ImGui::Render();
+  };
+
+  io.AddMousePosEvent(270.0f, 16.0f);
+  draw_workspace();
+  io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+  draw_workspace();
+  io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+  draw_workspace();
+
+  REQUIRE(workspace_segment_width == Catch::Approx(138.0f));
+  REQUIRE(activated_workspace == WorkspaceKind::Canvas);
+  ImGui::DestroyContext();
 }
 
 static_assert(!std::is_convertible_v<fancy_ui::TextureHandle, bool>);

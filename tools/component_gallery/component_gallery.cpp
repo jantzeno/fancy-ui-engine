@@ -123,20 +123,14 @@ void DrawWorkspaceSwitcher(detail::ApplicationChrome &chrome,
                            GalleryState &state) {
   using steppenface::WorkspaceKind;
   const bool model = state.component_workspace == WorkspaceKind::Model3d;
-  ImGui::TextDisabled("%s · selected + focus", model ? "3D" : "Canvas");
+  ImGui::TextDisabled("%s · selected", model ? "3D" : "Canvas");
   ImGui::TextDisabled("%s · rest", model ? "Canvas" : "3D");
-  const std::array previews{
-      model ? detail::InteractionPreview::Focused
-            : detail::InteractionPreview::Rest,
-      model ? detail::InteractionPreview::Rest
-            : detail::InteractionPreview::Focused,
-  };
   chrome.DrawWorkspaceSwitcher({.active_workspace = state.component_workspace},
                                {.activate_workspace =
                                     [&state](const WorkspaceKind workspace) {
                                       state.component_workspace = workspace;
                                     }},
-                               previews, 138.0f);
+                               {}, 138.0f);
 }
 
 void DrawSelectionScope(detail::ApplicationChrome &chrome,

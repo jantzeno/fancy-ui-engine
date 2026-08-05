@@ -31,13 +31,6 @@ bool Available(const steppenface::Availability &availability) {
   return availability.visible && availability.enabled && !availability.busy;
 }
 
-struct WorkspaceSegmentInteraction {
-  const char *label = "";
-  bool hovered = false;
-  bool pressed = false;
-  bool keyboard_focused = false;
-};
-
 struct ToolbarSegmentInteraction {
   const ToolbarChoiceView *choice = nullptr;
   ImVec2 minimum;
@@ -169,114 +162,47 @@ public:
     return open;
   }
 
-  WorkspaceSegmentInteraction CaptureWorkspaceSegment(
-      const WorkspaceKind workspace, const char *label,
-      const ApplicationChromeCallbacks &callbacks, const LayoutMetrics &metrics,
-      const std::optional<InteractionPreview> preview) const {
-    ImGui::PushID(workspace == WorkspaceKind::Model3d ? "workspace.3d"
-                                                      : "workspace.canvas");
-    if (ImGui::InvisibleButton(
-            "##segment", ImVec2(Scale(72.0f), metrics.geometry.control_height),
-            ImGuiButtonFlags_EnableNav) &&
-        callbacks.activate_workspace) {
-      callbacks.activate_workspace(workspace);
-    }
-    WorkspaceSegmentInteraction interaction{
-        .label = label,
-        .hovered = ImGui::IsItemHovered(),
-        .pressed = ImGui::IsItemActive(),
-        .keyboard_focused = ImGui::IsItemFocused() && ImGui::GetIO().NavVisible,
-    };
-    if (preview.has_value()) {
-      interaction.hovered = *preview == InteractionPreview::Hovered ||
-                            *preview == InteractionPreview::Pressed;
-      interaction.pressed = *preview == InteractionPreview::Pressed;
-      interaction.keyboard_focused = *preview == InteractionPreview::Focused;
-    }
-    ImGui::PopID();
-    return interaction;
-  }
-
   void
   DrawWorkspaceSwitcher(const ApplicationBarView &bar,
                         const ApplicationChromeCallbacks &callbacks,
                         const LayoutMetrics &metrics,
                         const std::span<const InteractionPreview> previews = {},
                         const float logical_segment_width = 72.0f) const {
-    const float segment_width = Scale(logical_segment_width);
-    const SemanticPalette &palette = CurrentPalette();
-    const ImVec2 minimum = ImGui::GetCursorScreenPos();
-    const auto preview_at = [previews](const std::size_t index) {
-      return index < previews.size()
-                 ? std::optional<InteractionPreview>(previews[index])
-                 : std::nullopt;
+    const ToolbarSegmentedView segmented{
+        .id = {.value = "workspace-switcher"},
+        .choices =
+            {
+                {.id = {.value = "workspace.3d"},
+                 .label = "3D",
+                 .selected = bar.active_workspace == WorkspaceKind::Model3d,
+                 .action = {.field = {.value = "workspace"},
+                            .value = std::string("model")}},
+                {.id = {.value = "workspace.canvas"},
+                 .label = "Canvas",
+                 .selected = bar.active_workspace == WorkspaceKind::Canvas,
+                 .action = {.field = {.value = "workspace"},
+                            .value = std::string("canvas")}},
+            },
     };
-    const WorkspaceSegmentInteraction model = CaptureWorkspaceSegment(
-        WorkspaceKind::Model3d, "3D", callbacks, metrics, preview_at(0));
-    ImGui::SameLine(0.0f, 0.0f);
-    ImGui::SetCursorScreenPos(ImVec2(minimum.x + segment_width, minimum.y));
-    const WorkspaceSegmentInteraction canvas = CaptureWorkspaceSegment(
-        WorkspaceKind::Canvas, "Canvas", callbacks, metrics, preview_at(1));
-    const ImVec2 maximum(minimum.x + segment_width * 2.0f,
-                         minimum.y + metrics.geometry.control_height);
-
-    ImDrawList *draw_list = ImGui::GetWindowDrawList();
-    const std::array interactions{model, canvas};
-    for (std::size_t index = 0; index < interactions.size(); ++index) {
-      const WorkspaceSegmentInteraction &interaction = interactions[index];
-      const WorkspaceKind workspace =
-          index == 0 ? WorkspaceKind::Model3d : WorkspaceKind::Canvas;
-      const bool selected = workspace == bar.active_workspace;
-      const ColorRgba fill = selected              ? palette.selection
-                             : interaction.pressed ? palette.control_pressed
-                             : interaction.hovered ? palette.control_hover
-                                                   : palette.surface;
-      const ImVec2 segment_minimum(
-          minimum.x + segment_width * static_cast<float>(index), minimum.y);
-      const ImVec2 segment_maximum(segment_minimum.x + segment_width,
-                                   maximum.y);
-      const ImDrawFlags corners = index == 0 ? ImDrawFlags_RoundCornersLeft
-                                             : ImDrawFlags_RoundCornersRight;
-      draw_list->AddRectFilled(segment_minimum, segment_maximum,
-                               ImGui::GetColorU32(ToImVec4(fill)),
-                               metrics.geometry.surface_radius, corners);
-      const ImVec2 label_size = ImGui::CalcTextSize(interaction.label);
-      draw_list->AddText(
-          ImVec2(std::floor(
-                     (segment_minimum.x + segment_maximum.x - label_size.x) *
-                     0.5f),
-                 std::floor(
-                     (segment_minimum.y + segment_maximum.y - label_size.y) *
-                     0.5f)),
-          ImGui::GetColorU32(ToImVec4(selected ? palette.text_primary
-                                               : palette.text_secondary)),
-          interaction.label);
-      if (selected) {
-        draw_list->AddRectFilled(
-            ImVec2(segment_minimum.x + metrics.geometry.border,
-                   maximum.y - Scale(3.0f)),
-            ImVec2(segment_maximum.x - metrics.geometry.border,
-                   maximum.y - metrics.geometry.border),
-            ImGui::GetColorU32(ToImVec4(palette.focus)));
+    ApplicationChromeCallbacks workspace_callbacks = callbacks;
+    workspace_callbacks.commit_action = [activate_workspace =
+                                             callbacks.activate_workspace](
+                                            const ControlActionView &action) {
+      if (!activate_workspace) {
+        return;
       }
-      if (interaction.keyboard_focused) {
-        draw_list->AddRect(ImVec2(segment_minimum.x + Scale(3.0f),
-                                  segment_minimum.y + Scale(3.0f)),
-                           ImVec2(segment_maximum.x - Scale(3.0f),
-                                  segment_maximum.y - Scale(3.0f)),
-                           ImGui::GetColorU32(ToImVec4(palette.focus)),
-                           metrics.geometry.focus_ring, corners,
-                           metrics.geometry.focus_ring);
+      const std::string *workspace = std::get_if<std::string>(&action.value);
+      if (workspace == nullptr) {
+        return;
       }
-    }
-    draw_list->AddRect(minimum, maximum,
-                       ImGui::GetColorU32(ToImVec4(palette.border)),
-                       metrics.geometry.surface_radius,
-                       ImDrawFlags_RoundCornersAll, metrics.geometry.border);
-    const float separator_x = minimum.x + segment_width;
-    draw_list->AddLine(
-        ImVec2(separator_x, minimum.y), ImVec2(separator_x, maximum.y),
-        ImGui::GetColorU32(ToImVec4(palette.border)), metrics.geometry.border);
+      if (*workspace == "model") {
+        activate_workspace(WorkspaceKind::Model3d);
+      } else if (*workspace == "canvas") {
+        activate_workspace(WorkspaceKind::Canvas);
+      }
+    };
+    DrawToolbarSegmented(segmented, workspace_callbacks, metrics, previews,
+                         logical_segment_width * 2.0f);
   }
 
   void DrawLayoutIcon(const std::string_view semantic_id, const ImVec2 minimum,
@@ -695,28 +621,49 @@ public:
     }
 
     const SemanticPalette &palette = CurrentPalette();
+    const auto corners_for = [&interactions](const std::size_t index) {
+      if (interactions.size() == 1) {
+        return ImDrawFlags_RoundCornersAll;
+      }
+      if (index == 0) {
+        return ImDrawFlags_RoundCornersLeft;
+      }
+      return index + 1 == interactions.size() ? ImDrawFlags_RoundCornersRight
+                                              : ImDrawFlags_RoundCornersNone;
+    };
+    const auto colors_for =
+        [&palette](const ToolbarSegmentInteraction &interaction) {
+          ControlColors colors{
+              .fill = palette.surface_raised,
+              .border = palette.border_strong,
+              .text = palette.text_primary,
+          };
+          if (interaction.choice->selected) {
+            colors.fill = palette.selection;
+            colors.border = palette.focus;
+          }
+          if (interaction.hovered) {
+            colors.fill = palette.control_hover;
+          }
+          if (interaction.pressed) {
+            colors.fill = palette.control_pressed;
+          }
+          if (interaction.disabled) {
+            colors.fill = palette.control_disabled_fill;
+            colors.border = palette.border;
+            colors.text = palette.text_disabled;
+          }
+          return colors;
+        };
     ImDrawList *draw_list = ImGui::GetWindowDrawList();
     for (std::size_t index = 0; index < interactions.size(); ++index) {
       const ToolbarSegmentInteraction &interaction = interactions[index];
-      const bool first = index == 0;
-      const bool last = index + 1 == interactions.size();
-      const ImDrawFlags corners = first && last ? ImDrawFlags_RoundCornersAll
-                                  : first       ? ImDrawFlags_RoundCornersLeft
-                                  : last        ? ImDrawFlags_RoundCornersRight
-                                                : ImDrawFlags_RoundCornersNone;
       const bool selected = interaction.choice->selected;
-      const ColorRgba fill = interaction.disabled
-                                 ? palette.control_disabled_fill
-                             : selected            ? palette.selection
-                             : interaction.pressed ? palette.control_pressed
-                             : interaction.hovered ? palette.control_hover
-                                                   : palette.surface;
-      const ColorRgba foreground = interaction.disabled ? palette.text_disabled
-                                   : selected ? palette.focus
-                                              : palette.text_secondary;
+      const ControlColors colors = colors_for(interaction);
       draw_list->AddRectFilled(interaction.minimum, interaction.maximum,
-                               ImGui::GetColorU32(ToImVec4(fill)),
-                               metrics.geometry.surface_radius, corners);
+                               ImGui::GetColorU32(ToImVec4(colors.fill)),
+                               metrics.geometry.control_radius,
+                               corners_for(index));
       const ImVec2 label_size =
           ImGui::CalcTextSize(interaction.choice->label.c_str());
       draw_list->AddText(
@@ -725,9 +672,8 @@ public:
                             0.5f),
                  std::floor((interaction.minimum.y + interaction.maximum.y -
                              label_size.y) *
-                                0.5f -
-                            Scale(1.0f))),
-          ImGui::GetColorU32(ToImVec4(foreground)),
+                            0.5f)),
+          ImGui::GetColorU32(ToImVec4(colors.text)),
           interaction.choice->label.c_str());
       if (selected) {
         draw_list->AddRectFilled(
@@ -737,28 +683,37 @@ public:
                    interaction.maximum.y - metrics.geometry.border),
             ImGui::GetColorU32(ToImVec4(palette.focus)));
       }
-      if (interaction.keyboard_focused) {
-        draw_list->AddRect(ImVec2(interaction.minimum.x + Scale(3.0f),
-                                  interaction.minimum.y + Scale(3.0f)),
-                           ImVec2(interaction.maximum.x - Scale(3.0f),
-                                  interaction.maximum.y - Scale(3.0f)),
-                           ImGui::GetColorU32(ToImVec4(palette.focus)),
-                           metrics.geometry.surface_radius, corners,
-                           metrics.geometry.focus_ring);
+    }
+    const auto draw_border = [&](const std::size_t index) {
+      const ToolbarSegmentInteraction &interaction = interactions[index];
+      draw_list->AddRect(
+          interaction.minimum, interaction.maximum,
+          ImGui::GetColorU32(ToImVec4(colors_for(interaction).border)),
+          metrics.geometry.control_radius, corners_for(index),
+          metrics.geometry.border);
+    };
+    for (std::size_t index = 0; index < interactions.size(); ++index) {
+      if (!interactions[index].choice->selected) {
+        draw_border(index);
       }
     }
-    const ImVec2 group_minimum = interactions.front().minimum;
-    const ImVec2 group_maximum = interactions.back().maximum;
-    draw_list->AddRect(group_minimum, group_maximum,
-                       ImGui::GetColorU32(ToImVec4(palette.border_strong)),
-                       metrics.geometry.surface_radius,
-                       ImDrawFlags_RoundCornersAll, metrics.geometry.border);
-    for (std::size_t index = 1; index < interactions.size(); ++index) {
-      const float separator_x = interactions[index].minimum.x;
-      draw_list->AddLine(ImVec2(separator_x, group_minimum.y),
-                         ImVec2(separator_x, group_maximum.y),
-                         ImGui::GetColorU32(ToImVec4(palette.border)),
-                         metrics.geometry.border);
+    for (std::size_t index = 0; index < interactions.size(); ++index) {
+      if (interactions[index].choice->selected) {
+        draw_border(index);
+      }
+    }
+    for (std::size_t index = 0; index < interactions.size(); ++index) {
+      const ToolbarSegmentInteraction &interaction = interactions[index];
+      if (!interaction.keyboard_focused) {
+        continue;
+      }
+      draw_list->AddRect(ImVec2(interaction.minimum.x + Scale(3.0f),
+                                interaction.minimum.y + Scale(3.0f)),
+                         ImVec2(interaction.maximum.x - Scale(3.0f),
+                                interaction.maximum.y - Scale(3.0f)),
+                         ImGui::GetColorU32(ToImVec4(palette.focus)),
+                         metrics.geometry.control_radius, corners_for(index),
+                         metrics.geometry.focus_ring);
     }
     ImGui::PopID();
   }
