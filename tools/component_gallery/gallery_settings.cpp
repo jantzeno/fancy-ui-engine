@@ -617,6 +617,11 @@ void DrawSettingsWindow(detail::UiAssetAtlas &assets, GalleryState &gallery) {
   }
   ImGui::SetNextWindowSizeConstraints(minimum, maximum);
   bool open = state.window_open;
+  const SemanticPalette &palette = CurrentPalette();
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, Scale(5.0f));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg,
+                        ImVec4(palette.surface.red, palette.surface.green,
+                               palette.surface.blue, palette.surface.alpha));
   const bool visible = ImGui::Begin("System Settings##gallery", &open,
                                     ImGuiWindowFlags_NoSavedSettings);
   const bool escape =
@@ -689,6 +694,8 @@ void DrawSettingsWindow(detail::UiAssetAtlas &assets, GalleryState &gallery) {
     }
   }
   ImGui::End();
+  ImGui::PopStyleColor();
+  ImGui::PopStyleVar();
   if (!open || escape) {
     RequestSettingsClose(gallery);
   }

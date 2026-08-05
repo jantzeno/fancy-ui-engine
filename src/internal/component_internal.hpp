@@ -38,6 +38,20 @@ private:
   std::optional<InteractionPreview> previous_;
 };
 
+/** Keeps compact developer-gallery fields inline without changing panels. */
+class ScopedFieldLayoutPreview {
+public:
+  explicit ScopedFieldLayoutPreview(float label_width);
+  ~ScopedFieldLayoutPreview();
+
+  ScopedFieldLayoutPreview(const ScopedFieldLayoutPreview &) = delete;
+  ScopedFieldLayoutPreview &
+  operator=(const ScopedFieldLayoutPreview &) = delete;
+
+private:
+  std::optional<float> previous_label_width_;
+};
+
 struct ControlState {
   bool disabled = false;
   bool selected = false;

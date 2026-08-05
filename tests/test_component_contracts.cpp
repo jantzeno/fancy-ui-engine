@@ -116,12 +116,23 @@ TEST_CASE("theme scale clamps and scales shared interaction metrics") {
   REQUIRE(ImGui::GetStyle().ButtonTextAlign.x == Catch::Approx(0.5f));
   REQUIRE(ImGui::GetStyle().ButtonTextAlign.y == Catch::Approx(0.5f));
   REQUIRE(ImGui::GetStyle().DisabledAlpha == Catch::Approx(1.0f));
+  REQUIRE(ImGui::GetStyle().ChildRounding == Catch::Approx(8.0f));
+  REQUIRE(ImGui::GetStyle().ScrollbarSize == Catch::Approx(20.0f));
+  REQUIRE(ImGui::GetStyle().TabBarOverlineSize == Catch::Approx(6.0f));
   const fancy_ui::SemanticPalette dark =
       fancy_ui::PaletteFor(fancy_ui::ResolvedTheme::Dark);
   const ImVec4 tree_lines = ImGui::GetStyle().Colors[ImGuiCol_TreeLines];
   REQUIRE(tree_lines.x == Catch::Approx(dark.border_strong.red));
   REQUIRE(tree_lines.y == Catch::Approx(dark.border_strong.green));
   REQUIRE(tree_lines.z == Catch::Approx(dark.border_strong.blue));
+  const ImVec4 title = ImGui::GetStyle().Colors[ImGuiCol_TitleBgActive];
+  REQUIRE(title.x == Catch::Approx(dark.surface_raised.red));
+  REQUIRE(title.y == Catch::Approx(dark.surface_raised.green));
+  REQUIRE(title.z == Catch::Approx(dark.surface_raised.blue));
+  const ImVec4 selected_tab = ImGui::GetStyle().Colors[ImGuiCol_TabSelected];
+  REQUIRE(selected_tab.x == Catch::Approx(dark.selection.red));
+  REQUIRE(selected_tab.y == Catch::Approx(dark.selection.green));
+  REQUIRE(selected_tab.z == Catch::Approx(dark.selection.blue));
 
   fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Light, 0.5f);
   REQUIRE(fancy_ui::CurrentUiScale() == Catch::Approx(0.75f));
@@ -222,17 +233,20 @@ TEST_CASE("compact buttons center labels without leaking frame padding") {
 
   ImGui::NewFrame();
   ImGui::Begin("compact-button-contract");
+  const float font_size = ImGui::GetFontSize();
   static_cast<void>(fancy_ui::Button({
       .id = "compact",
       .label = "Compact",
       .size = {.x = 96.0f, .y = 24.0f},
   }));
+  const float restored_font_size = ImGui::GetFontSize();
   const ImVec2 minimum = ImGui::GetItemRectMin();
   const ImVec2 maximum = ImGui::GetItemRectMax();
   ImGui::End();
   ImGui::Render();
 
   REQUIRE(maximum.y - minimum.y == Catch::Approx(24.0f));
+  REQUIRE(restored_font_size == Catch::Approx(font_size));
   REQUIRE(ImGui::GetStyle().FramePadding.x == Catch::Approx(frame_padding.x));
   REQUIRE(ImGui::GetStyle().FramePadding.y == Catch::Approx(frame_padding.y));
   ImGui::DestroyContext();
@@ -390,6 +404,49 @@ TEST_CASE("logical control dimensions follow the configured UI scale") {
 
   REQUIRE(maximum.x - minimum.x == Catch::Approx(160.0f));
   REQUIRE(maximum.y - minimum.y == Catch::Approx(64.0f));
+  ImGui::DestroyContext();
+}
+
+TEST_CASE("gallery field layout preview keeps narrow fields inline only while "
+          "scoped") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(640.0f, 480.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  ImGui::NewFrame();
+  ImGui::SetNextWindowSize(ImVec2(278.0f, 240.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::Begin("field-layout-preview", nullptr, ImGuiWindowFlags_NoDecoration);
+  ImGui::PopStyleVar();
+
+  const fancy_ui::detail::FieldLayout stacked =
+      fancy_ui::detail::BeginFieldLayout("Spacing");
+  fancy_ui::detail::EndFieldLayout(stacked, {});
+  bool inline_preview = false;
+  {
+    const fancy_ui::detail::ScopedFieldLayoutPreview preview(76.0f);
+    const fancy_ui::detail::FieldLayout layout =
+        fancy_ui::detail::BeginFieldLayout("Spacing");
+    inline_preview = layout.table;
+    fancy_ui::detail::EndFieldLayout(layout, {});
+  }
+  const fancy_ui::detail::FieldLayout restored =
+      fancy_ui::detail::BeginFieldLayout("Spacing");
+  fancy_ui::detail::EndFieldLayout(restored, {});
+
+  ImGui::End();
+  ImGui::Render();
+
+  REQUIRE_FALSE(stacked.table);
+  REQUIRE(inline_preview);
+  REQUIRE_FALSE(restored.table);
   ImGui::DestroyContext();
 }
 

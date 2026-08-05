@@ -10,6 +10,7 @@
 namespace fancy_ui {
 
 ButtonResult Button(const ButtonSpec &spec) {
+  ImGui::PushFont(nullptr, Scale(21.0f));
   const std::string id = detail::Owned(spec.id);
   const std::string label =
       detail::Owned(spec.availability.busy ? std::string(spec.label) + "..."
@@ -81,6 +82,7 @@ ButtonResult Button(const ButtonSpec &spec) {
   }
   ImGui::PopStyleColor(5);
   ImGui::PopID();
+  ImGui::PopFont();
   detail::DrawValidationHint(spec.validation);
 
   ButtonResult result;

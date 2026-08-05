@@ -303,8 +303,13 @@ struct GalleryState {
   int hours = 0;
   int minutes = 5;
   float explode = 38.0f;
-  int rotations = 8;
-  std::string button_feedback = "Activate a button to inspect its result.";
+  int rotations = 4;
+  steppenface::WorkspaceKind component_workspace =
+      steppenface::WorkspaceKind::Model3d;
+  steppenface::SelectionScope component_selection_scope =
+      steppenface::SelectionScope::Canvas;
+  steppenface::SelectionTool component_selection_tool =
+      steppenface::SelectionTool::Pointer;
   bool availability_selected = true;
   ToggleState checkbox = ToggleState::On;
   ToggleState checkbox_off = ToggleState::Off;

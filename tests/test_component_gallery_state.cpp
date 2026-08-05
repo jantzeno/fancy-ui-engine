@@ -59,7 +59,7 @@ TEST_CASE("gallery screenshots use state-sheet-specific logical extents") {
       GalleryScreenshotLogicalExtent(GalleryTab::Status);
 
   REQUIRE(components.width == 1280);
-  REQUIRE(components.height == 1200);
+  REQUIRE(components.height == 1320);
   REQUIRE(shell.width == 1280);
   REQUIRE(shell.height == 720);
   REQUIRE(settings.width == 1280);
@@ -162,6 +162,18 @@ TEST_CASE("application shell gallery starts with both side panels visible") {
   REQUIRE(state.model_toolbar.grid_target == "all");
   REQUIRE(state.model_toolbar.beds[0].grid_spacing_mm == 25);
   REQUIRE(state.model_toolbar.beds[1].snap_to_grid);
+}
+
+TEST_CASE("component gallery starts in the canonical mockup selections") {
+  const GalleryState state;
+
+  REQUIRE(state.component_workspace ==
+          fancy_ui::steppenface::WorkspaceKind::Model3d);
+  REQUIRE(state.component_selection_scope ==
+          fancy_ui::steppenface::SelectionScope::Canvas);
+  REQUIRE(state.component_selection_tool ==
+          fancy_ui::steppenface::SelectionTool::Pointer);
+  REQUIRE(state.rotations == 4);
 }
 
 TEST_CASE("gallery shell merge preserves application bar visibility changes") {

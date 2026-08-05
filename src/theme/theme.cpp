@@ -114,10 +114,18 @@ void ApplyTheme(const ResolvedTheme theme, const float ui_scale) {
   ImGuiStyle &style = ImGui::GetStyle();
   style.WindowPadding =
       ImVec2(metrics.spacing.space05, metrics.spacing.space05);
+  style.ChildRounding = metrics.geometry.surface_radius;
   style.FramePadding = ImVec2(metrics.spacing.space04, Scale(6.0f));
   style.ItemSpacing = ImVec2(metrics.spacing.space03, metrics.spacing.space03);
   style.ItemInnerSpacing =
       ImVec2(metrics.spacing.space03, metrics.spacing.space02);
+  style.ScrollbarSize = Scale(10.0f);
+  style.ScrollbarRounding = metrics.geometry.control_radius;
+  style.GrabRounding = metrics.geometry.control_radius;
+  style.TabRounding = metrics.geometry.control_radius;
+  style.TabBorderSize = metrics.geometry.border;
+  style.TabBarBorderSize = metrics.geometry.border;
+  style.TabBarOverlineSize = Scale(3.0f);
   style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
   style.FrameRounding = metrics.geometry.control_radius;
   style.FrameBorderSize = metrics.geometry.border;
@@ -137,6 +145,7 @@ void ApplyTheme(const ResolvedTheme theme, const float ui_scale) {
   colors[ImGuiCol_ChildBg] = ToImVec4(active_palette.surface);
   colors[ImGuiCol_PopupBg] = ToImVec4(active_palette.surface_raised);
   colors[ImGuiCol_Border] = ToImVec4(active_palette.border);
+  colors[ImGuiCol_BorderShadow] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
   colors[ImGuiCol_FrameBg] = ToImVec4(active_palette.control);
   colors[ImGuiCol_FrameBgHovered] = ToImVec4(active_palette.control_hover);
   colors[ImGuiCol_FrameBgActive] = ToImVec4(active_palette.control_pressed);
@@ -146,12 +155,45 @@ void ApplyTheme(const ResolvedTheme theme, const float ui_scale) {
   colors[ImGuiCol_Header] = ToImVec4(active_palette.selection);
   colors[ImGuiCol_HeaderHovered] = ToImVec4(active_palette.control_hover);
   colors[ImGuiCol_HeaderActive] = ToImVec4(active_palette.control_pressed);
+  colors[ImGuiCol_TitleBg] = ToImVec4(active_palette.surface_raised);
+  colors[ImGuiCol_TitleBgActive] = ToImVec4(active_palette.surface_raised);
+  colors[ImGuiCol_TitleBgCollapsed] = ToImVec4(active_palette.surface_muted);
+  colors[ImGuiCol_ScrollbarBg] = ToImVec4(active_palette.surface_muted);
+  colors[ImGuiCol_ScrollbarGrab] = ToImVec4(active_palette.border_strong);
+  colors[ImGuiCol_ScrollbarGrabHovered] =
+      ToImVec4(active_palette.text_secondary);
+  colors[ImGuiCol_ScrollbarGrabActive] = ToImVec4(active_palette.text_primary);
+  colors[ImGuiCol_Separator] = ToImVec4(active_palette.border);
+  colors[ImGuiCol_SeparatorHovered] = ToImVec4(active_palette.focus);
+  colors[ImGuiCol_SeparatorActive] = ToImVec4(active_palette.focus);
+  colors[ImGuiCol_ResizeGrip] = ToImVec4(active_palette.border_strong);
+  colors[ImGuiCol_ResizeGripHovered] = ToImVec4(active_palette.focus);
+  colors[ImGuiCol_ResizeGripActive] = ToImVec4(active_palette.focus);
+  colors[ImGuiCol_InputTextCursor] = ToImVec4(active_palette.text_primary);
+  colors[ImGuiCol_Tab] = ToImVec4(active_palette.surface_muted);
+  colors[ImGuiCol_TabHovered] = ToImVec4(active_palette.control_hover);
+  colors[ImGuiCol_TabSelected] = ToImVec4(active_palette.selection);
+  colors[ImGuiCol_TabSelectedOverline] = ToImVec4(active_palette.focus);
+  colors[ImGuiCol_TabDimmed] = ToImVec4(active_palette.surface_muted);
+  colors[ImGuiCol_TabDimmedSelected] = ToImVec4(active_palette.selection);
+  colors[ImGuiCol_TabDimmedSelectedOverline] = ToImVec4(active_palette.focus);
+  colors[ImGuiCol_TableHeaderBg] = ToImVec4(active_palette.surface_muted);
+  colors[ImGuiCol_TableBorderStrong] = ToImVec4(active_palette.border_strong);
+  colors[ImGuiCol_TableBorderLight] = ToImVec4(active_palette.border);
+  colors[ImGuiCol_TableRowBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+  colors[ImGuiCol_TableRowBgAlt] = ToImVec4(active_palette.surface_muted);
+  colors[ImGuiCol_TextLink] = ToImVec4(active_palette.focus);
+  colors[ImGuiCol_TextSelectedBg] = ToImVec4(active_palette.selection);
   colors[ImGuiCol_TreeLines] = ToImVec4(active_palette.border_strong);
   colors[ImGuiCol_CheckMark] = ToImVec4(active_palette.action_primary);
   colors[ImGuiCol_SliderGrab] = ToImVec4(active_palette.action_primary);
   colors[ImGuiCol_SliderGrabActive] =
       ToImVec4(active_palette.action_primary_hover);
   colors[ImGuiCol_NavCursor] = ToImVec4(active_palette.focus);
+  colors[ImGuiCol_ModalWindowDimBg] =
+      ImVec4(active_palette.application_surface.red,
+             active_palette.application_surface.green,
+             active_palette.application_surface.blue, 0.72f);
 }
 
 const SemanticPalette &CurrentPalette() { return active_palette; }

@@ -1,6 +1,7 @@
 #include "component_gallery.hpp"
 
 #include "fancy_ui/fancy_ui.hpp"
+#include "internal/application_chrome.hpp"
 #include "internal/component_internal.hpp"
 #include "internal/ui_asset_atlas.hpp"
 
@@ -20,14 +21,12 @@ namespace {
 
 void Heading(const char *title, ImFont *font) {
   if (font != nullptr) {
-    ImGui::PushFont(font);
+    ImGui::PushFont(font, Scale(24.0f));
   }
   ImGui::TextUnformatted(title);
   if (font != nullptr) {
     ImGui::PopFont();
   }
-  ImGui::Separator();
-  ImGui::Spacing();
 }
 
 void GalleryCard(const char *id, const char *title, ImFont *heading_font,
@@ -39,7 +38,10 @@ void GalleryCard(const char *id, const char *title, ImFont *heading_font,
       ImGuiCol_ChildBg,
       ImVec4(CurrentPalette().surface.red, CurrentPalette().surface.green,
              CurrentPalette().surface.blue, CurrentPalette().surface.alpha));
-  if (ImGui::BeginChild("##card", ImVec2(Scale(300.0f), Scale(236.0f)),
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                      ImVec2(Scale(12.0f), Scale(8.0f)));
+  ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+  if (ImGui::BeginChild("##card", ImVec2(Scale(302.0f), Scale(220.0f)),
                         ImGuiChildFlags_Borders,
                         scrollable ? ImGuiWindowFlags_NoSavedSettings
                                    : ImGuiWindowFlags_NoScrollbar)) {
@@ -47,6 +49,7 @@ void GalleryCard(const char *id, const char *title, ImFont *heading_font,
     draw();
   }
   ImGui::EndChild();
+  ImGui::PopStyleVar(2);
   ImGui::PopStyleColor();
   ImGui::PopID();
 }
@@ -57,31 +60,21 @@ ButtonResult PreviewButton(const char *id, const char *label,
   return Button({
       .id = id,
       .label = label,
-      .size = {.x = 128.0f, .y = 32.0f},
+      .size = {.x = 134.0f, .y = 32.0f},
   });
 }
 
-void DrawButtons(GalleryState &state) {
-  if (PreviewButton("default", "Default", detail::InteractionPreview::Rest)
-          .activated) {
-    state.button_feedback = "Default button activated.";
-  }
+void DrawButtons() {
+  static_cast<void>(
+      PreviewButton("default", "Default", detail::InteractionPreview::Rest));
   ImGui::SameLine();
-  if (PreviewButton("hovered", "Hovered", detail::InteractionPreview::Hovered)
-          .activated) {
-    state.button_feedback = "Hovered preview activated.";
-  }
-  if (PreviewButton("pressed", "Pressed", detail::InteractionPreview::Pressed)
-          .activated) {
-    state.button_feedback = "Pressed preview activated.";
-  }
+  static_cast<void>(
+      PreviewButton("hovered", "Hovered", detail::InteractionPreview::Hovered));
+  static_cast<void>(
+      PreviewButton("pressed", "Pressed", detail::InteractionPreview::Pressed));
   ImGui::SameLine();
-  if (PreviewButton("focused", "Focused", detail::InteractionPreview::Focused)
-          .activated) {
-    state.button_feedback = "Focused preview activated.";
-  }
-  ImGui::Spacing();
-  ImGui::TextDisabled("%s", state.button_feedback.c_str());
+  static_cast<void>(
+      PreviewButton("focused", "Focused", detail::InteractionPreview::Focused));
 }
 
 void DrawAvailability(GalleryState &state) {
@@ -89,7 +82,7 @@ void DrawAvailability(GalleryState &state) {
       .id = "selected",
       .label = "Selected",
       .selected = state.availability_selected,
-      .size = {.x = 82.0f, .y = 32.0f},
+      .size = {.x = 134.0f, .y = 32.0f},
   });
   if (selected.activated) {
     state.availability_selected = !state.availability_selected;
@@ -103,9 +96,8 @@ void DrawAvailability(GalleryState &state) {
               .enabled = false,
               .reason = "Select an eligible object",
           },
-      .size = {.x = 82.0f, .y = 32.0f},
+      .size = {.x = 134.0f, .y = 32.0f},
   }));
-  ImGui::SameLine();
   const ButtonResult invalid = Button({
       .id = "invalid",
       .label = "Invalid",
@@ -113,15 +105,131 @@ void DrawAvailability(GalleryState &state) {
           {
               .invalid = true,
           },
-      .size = {.x = 76.0f, .y = 32.0f},
+      .size = {.x = 134.0f, .y = 32.0f},
   });
-  ImGui::Spacing();
+  ImGui::SameLine();
+  static_cast<void>(Button({
+      .id = "busy",
+      .label = "Busy",
+      .availability = {.busy = true},
+      .size = {.x = 134.0f, .y = 32.0f},
+  }));
   ImGui::TextDisabled(
       "%s", invalid.activated ? "Invalid control activated; validation remains."
                               : "Disabled - select an eligible object");
 }
 
+void DrawWorkspaceSwitcher(detail::ApplicationChrome &chrome,
+                           GalleryState &state) {
+  using steppenface::WorkspaceKind;
+  const bool model = state.component_workspace == WorkspaceKind::Model3d;
+  ImGui::TextDisabled("%s · selected + focus", model ? "3D" : "Canvas");
+  ImGui::TextDisabled("%s · rest", model ? "Canvas" : "3D");
+  const std::array previews{
+      model ? detail::InteractionPreview::Focused
+            : detail::InteractionPreview::Rest,
+      model ? detail::InteractionPreview::Rest
+            : detail::InteractionPreview::Focused,
+  };
+  chrome.DrawWorkspaceSwitcher({.active_workspace = state.component_workspace},
+                               {.activate_workspace =
+                                    [&state](const WorkspaceKind workspace) {
+                                      state.component_workspace = workspace;
+                                    }},
+                               previews, 138.0f);
+}
+
+void DrawSelectionScope(detail::ApplicationChrome &chrome,
+                        GalleryState &state) {
+  using steppenface::SelectionScope;
+  const bool canvas = state.component_selection_scope == SelectionScope::Canvas;
+  ImGui::TextDisabled("%s · selected", canvas ? "Canvas" : "Object");
+  ImGui::TextDisabled("%s · hover", canvas ? "Object" : "Canvas");
+  const steppenface::ToolbarSegmentedView segmented{
+      .id = {.value = "component.selection-scope"},
+      .choices =
+          {
+              {.id = {.value = "component.scope.canvas"},
+               .label = "Canvas",
+               .selected = canvas,
+               .action = {.field = {.value = "component.selection-scope"},
+                          .value = SelectionScope::Canvas}},
+              {.id = {.value = "component.scope.object"},
+               .label = "Object",
+               .selected = !canvas,
+               .action = {.field = {.value = "component.selection-scope"},
+                          .value = SelectionScope::Object}},
+          },
+  };
+  const std::array previews{
+      canvas ? detail::InteractionPreview::Rest
+             : detail::InteractionPreview::Hovered,
+      canvas ? detail::InteractionPreview::Hovered
+             : detail::InteractionPreview::Rest,
+  };
+  chrome.DrawToolbarSegmented(
+      segmented,
+      {.commit_action =
+           [&state](const steppenface::ControlActionView &action) {
+             if (const auto *scope =
+                     std::get_if<SelectionScope>(&action.value)) {
+               state.component_selection_scope = *scope;
+             }
+           }},
+      previews, 276.0f);
+}
+
+void DrawSelectionTool(detail::ApplicationChrome &chrome, GalleryState &state) {
+  using steppenface::SelectionTool;
+  ImGui::TextDisabled("Pointer · selected");
+  ImGui::TextDisabled("Rectangle · pressed · Oval · disabled");
+  const steppenface::ToolbarSegmentedView segmented{
+      .id = {.value = "component.selection-tool"},
+      .choices =
+          {
+              {.id = {.value = "component.tool.pointer"},
+               .label = "Pointer",
+               .selected =
+                   state.component_selection_tool == SelectionTool::Pointer,
+               .action = {.field = {.value = "component.selection-tool"},
+                          .value = SelectionTool::Pointer}},
+              {.id = {.value = "component.tool.rectangle"},
+               .label = "Rectangle",
+               .selected =
+                   state.component_selection_tool == SelectionTool::Rectangle,
+               .action = {.field = {.value = "component.selection-tool"},
+                          .value = SelectionTool::Rectangle}},
+              {.id = {.value = "component.tool.oval"},
+               .label = "Oval",
+               .selected =
+                   state.component_selection_tool == SelectionTool::Oval,
+               .action =
+                   {.field = {.value = "component.selection-tool"},
+                    .value = SelectionTool::Oval,
+                    .availability = {.enabled = false,
+                                     .disabled_reason =
+                                         "The owning product view supplies the "
+                                         "unavailable reason"}}},
+          },
+  };
+  constexpr std::array previews{
+      detail::InteractionPreview::Rest,
+      detail::InteractionPreview::Pressed,
+      detail::InteractionPreview::Rest,
+  };
+  chrome.DrawToolbarSegmented(
+      segmented,
+      {.commit_action =
+           [&state](const steppenface::ControlActionView &action) {
+             if (const auto *tool = std::get_if<SelectionTool>(&action.value)) {
+               state.component_selection_tool = *tool;
+             }
+           }},
+      previews, 276.0f);
+}
+
 void DrawInputs(GalleryState &state) {
+  const detail::ScopedFieldLayoutPreview layout(Scale(76.0f));
   const NumericInputResult spacing = NumericInput({
       .id = "spacing",
       .label = "Spacing",
@@ -689,6 +797,34 @@ void DrawProgress() {
   ImGui::TextDisabled("Preparing geometry...");
 }
 
+void DrawOperation(detail::UiAssetAtlas &assets) {
+  if (ImGui::BeginTable("##operation-status", 2,
+                        ImGuiTableFlags_SizingStretchSame)) {
+    ImGui::TableNextColumn();
+    StatusCard({.id = "preview",
+                .message = "8 pieces ready",
+                .status = SemanticStatus::Preview,
+                .icon = assets.Painter("visibility")});
+    ImGui::TableNextColumn();
+    StatusCard({.id = "busy",
+                .message = "Iteration 24",
+                .status = SemanticStatus::Busy,
+                .icon = assets.Painter("busy")});
+    ImGui::EndTable();
+  }
+  ProgressBar({.id = "search-progress",
+               .label = "Search progress: 62%",
+               .value = 0.62f,
+               .status = SemanticStatus::Busy,
+               .size = {.x = 124.0f, .y = 6.0f}});
+  ImGui::SameLine();
+  static_cast<void>(Button(
+      {.id = "pause", .label = "Pause", .size = {.x = 64.0f, .y = 24.0f}}));
+  ImGui::SameLine();
+  static_cast<void>(Button(
+      {.id = "stop", .label = "Stop", .size = {.x = 52.0f, .y = 24.0f}}));
+}
+
 void DrawMixedValues(detail::UiAssetAtlas &assets, GalleryState &state) {
   static_cast<void>(ValueDisplay({
       .id = "margin",
@@ -804,6 +940,9 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
   if (shell_preview) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+  } else {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(Scale(24.0f), Scale(24.0f)));
   }
   ImGui::Begin("Fancy UI component gallery", nullptr,
                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
@@ -824,6 +963,7 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
     }
     return;
   }
+  ImGui::PopStyleVar();
 
   if (assets.bold_font() != nullptr) {
     ImGui::PushFont(assets.bold_font());
@@ -897,10 +1037,11 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
       }
     };
     tab("Components", GalleryTab::Components, [&assets, &state] {
+      detail::ApplicationChrome chrome(assets);
       ImGui::TextDisabled(
           "Shared controls, hierarchy rows, semantic feedback, and values.");
       ImGui::Spacing();
-      const float table_width = Scale(4.0f * 300.0f + 3.0f * 8.0f);
+      const float table_width = Scale(4.0f * 302.0f + 3.0f * 8.0f);
       if (ImGui::BeginChild("##gallery-scroll", ImVec2(0.0f, 0.0f), false,
                             ImGuiWindowFlags_HorizontalScrollbar)) {
         if (ImGui::BeginTable("##component-grid", 4,
@@ -908,12 +1049,18 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
                               ImVec2(table_width, 0.0f))) {
           for (int column = 0; column < 4; ++column) {
             ImGui::TableSetupColumn(
-                "component", ImGuiTableColumnFlags_WidthFixed, Scale(300.0f));
+                "component", ImGuiTableColumnFlags_WidthFixed, Scale(302.0f));
           }
-          GalleryCard("buttons", "Buttons", assets.bold_font(),
-                      [&state] { DrawButtons(state); });
+          GalleryCard("buttons", "Buttons", assets.bold_font(), DrawButtons);
           GalleryCard("availability", "Availability", assets.bold_font(),
                       [&state] { DrawAvailability(state); });
+          GalleryCard(
+              "workspace-switcher", "Workspace switcher", assets.bold_font(),
+              [&chrome, &state] { DrawWorkspaceSwitcher(chrome, state); });
+          GalleryCard("selection-scope", "Selection scope", assets.bold_font(),
+                      [&chrome, &state] { DrawSelectionScope(chrome, state); });
+          GalleryCard("selection-tool", "Selection tool", assets.bold_font(),
+                      [&chrome, &state] { DrawSelectionTool(chrome, state); });
           GalleryCard("inputs", "Inputs", assets.bold_font(),
                       [&state] { DrawInputs(state); });
           GalleryCard("slider", "Slider", assets.bold_font(),
@@ -936,6 +1083,8 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
               [&assets, &state] { DrawIssueHierarchy(assets, state); }, true);
           GalleryCard("status-types", "Status types", assets.bold_font(),
                       [&assets] { DrawStatusTypes(assets); });
+          GalleryCard("operation", "Operation", assets.bold_font(),
+                      [&assets] { DrawOperation(assets); });
           GalleryCard("mixed-values", "Mixed values", assets.bold_font(),
                       [&assets, &state] { DrawMixedValues(assets, state); });
           GalleryCard("empty-overflow", "Empty & overflow", assets.bold_font(),

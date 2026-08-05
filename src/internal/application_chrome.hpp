@@ -1,10 +1,12 @@
 #pragma once
 
 #include "fancy_ui/steppenface/application_view.hpp"
+#include "internal/component_internal.hpp"
 
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <span>
 
 namespace fancy_ui::detail {
 
@@ -57,6 +59,14 @@ public:
       const ChromeLayoutState &layout,
       const ApplicationChromeCallbacks &callbacks,
       ApplicationBarHost host = ApplicationBarHost::MainViewport);
+  void DrawWorkspaceSwitcher(const steppenface::ApplicationBarView &view,
+                             const ApplicationChromeCallbacks &callbacks,
+                             std::span<const InteractionPreview> previews = {},
+                             float logical_segment_width = 72.0f);
+  void DrawToolbarSegmented(const steppenface::ToolbarSegmentedView &view,
+                            const ApplicationChromeCallbacks &callbacks,
+                            std::span<const InteractionPreview> previews = {},
+                            float logical_width = 0.0f);
   void DrawContextToolbar(const steppenface::ContextToolbarView &view,
                           const ApplicationChromeCallbacks &callbacks);
 

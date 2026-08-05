@@ -169,10 +169,10 @@ public:
     return open;
   }
 
-  WorkspaceSegmentInteraction
-  CaptureWorkspaceSegment(const WorkspaceKind workspace, const char *label,
-                          const ApplicationChromeCallbacks &callbacks,
-                          const LayoutMetrics &metrics) const {
+  WorkspaceSegmentInteraction CaptureWorkspaceSegment(
+      const WorkspaceKind workspace, const char *label,
+      const ApplicationChromeCallbacks &callbacks, const LayoutMetrics &metrics,
+      const std::optional<InteractionPreview> preview) const {
     ImGui::PushID(workspace == WorkspaceKind::Model3d ? "workspace.3d"
                                                       : "workspace.canvas");
     if (ImGui::InvisibleButton(
@@ -181,28 +181,42 @@ public:
         callbacks.activate_workspace) {
       callbacks.activate_workspace(workspace);
     }
-    const WorkspaceSegmentInteraction interaction{
+    WorkspaceSegmentInteraction interaction{
         .label = label,
         .hovered = ImGui::IsItemHovered(),
         .pressed = ImGui::IsItemActive(),
         .keyboard_focused = ImGui::IsItemFocused() && ImGui::GetIO().NavVisible,
     };
+    if (preview.has_value()) {
+      interaction.hovered = *preview == InteractionPreview::Hovered ||
+                            *preview == InteractionPreview::Pressed;
+      interaction.pressed = *preview == InteractionPreview::Pressed;
+      interaction.keyboard_focused = *preview == InteractionPreview::Focused;
+    }
     ImGui::PopID();
     return interaction;
   }
 
-  void DrawWorkspaceSwitcher(const ApplicationBarView &bar,
-                             const ApplicationChromeCallbacks &callbacks,
-                             const LayoutMetrics &metrics) const {
-    const float segment_width = Scale(72.0f);
+  void
+  DrawWorkspaceSwitcher(const ApplicationBarView &bar,
+                        const ApplicationChromeCallbacks &callbacks,
+                        const LayoutMetrics &metrics,
+                        const std::span<const InteractionPreview> previews = {},
+                        const float logical_segment_width = 72.0f) const {
+    const float segment_width = Scale(logical_segment_width);
     const SemanticPalette &palette = CurrentPalette();
     const ImVec2 minimum = ImGui::GetCursorScreenPos();
+    const auto preview_at = [previews](const std::size_t index) {
+      return index < previews.size()
+                 ? std::optional<InteractionPreview>(previews[index])
+                 : std::nullopt;
+    };
     const WorkspaceSegmentInteraction model = CaptureWorkspaceSegment(
-        WorkspaceKind::Model3d, "3D", callbacks, metrics);
+        WorkspaceKind::Model3d, "3D", callbacks, metrics, preview_at(0));
     ImGui::SameLine(0.0f, 0.0f);
     ImGui::SetCursorScreenPos(ImVec2(minimum.x + segment_width, minimum.y));
     const WorkspaceSegmentInteraction canvas = CaptureWorkspaceSegment(
-        WorkspaceKind::Canvas, "Canvas", callbacks, metrics);
+        WorkspaceKind::Canvas, "Canvas", callbacks, metrics, preview_at(1));
     const ImVec2 maximum(minimum.x + segment_width * 2.0f,
                          minimum.y + metrics.geometry.control_height);
 
@@ -606,9 +620,12 @@ public:
     return activated && !disabled;
   }
 
-  void DrawToolbarSegmented(const ToolbarSegmentedView &segmented,
-                            const ApplicationChromeCallbacks &callbacks,
-                            const LayoutMetrics &metrics) const {
+  void
+  DrawToolbarSegmented(const ToolbarSegmentedView &segmented,
+                       const ApplicationChromeCallbacks &callbacks,
+                       const LayoutMetrics &metrics,
+                       const std::span<const InteractionPreview> previews = {},
+                       const float logical_width = 0.0f) const {
     std::vector<const ToolbarChoiceView *> choices;
     for (const ToolbarChoiceView &choice : segmented.choices) {
       if (choice.action.availability.visible) {
@@ -621,6 +638,10 @@ public:
 
     ImGui::PushID(segmented.id.value.c_str());
     std::vector<ToolbarSegmentInteraction> interactions;
+    const float equal_width =
+        logical_width > 0.0f
+            ? Scale(logical_width) / static_cast<float>(choices.size())
+            : 0.0f;
     for (std::size_t index = 0; index < choices.size(); ++index) {
       if (index > 0) {
         ImGui::SameLine(0.0f, 0.0f);
@@ -630,8 +651,11 @@ public:
           choice.action.availability;
       const bool disabled = !availability.enabled || availability.busy;
       const ImVec2 size(
-          std::max(Scale(56.0f), ImGui::CalcTextSize(choice.label.c_str()).x +
-                                     metrics.spacing.space06),
+          equal_width > 0.0f
+              ? equal_width
+              : std::max(Scale(56.0f),
+                         ImGui::CalcTextSize(choice.label.c_str()).x +
+                             metrics.spacing.space06),
           metrics.geometry.control_height);
       ImGui::PushID(choice.id.value.c_str());
       ImGui::BeginDisabled(disabled);
@@ -647,6 +671,14 @@ public:
               ImGui::IsItemFocused() && ImGui::GetIO().NavVisible,
           .disabled = disabled,
       });
+      if (index < previews.size()) {
+        ToolbarSegmentInteraction &interaction = interactions.back();
+        interaction.hovered = previews[index] == InteractionPreview::Hovered ||
+                              previews[index] == InteractionPreview::Pressed;
+        interaction.pressed = previews[index] == InteractionPreview::Pressed;
+        interaction.keyboard_focused =
+            previews[index] == InteractionPreview::Focused;
+      }
       ImGui::EndDisabled();
       if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
         const std::string &message = availability.enabled
@@ -973,6 +1005,23 @@ void ApplicationChrome::DrawApplicationBar(
     const ApplicationChromeCallbacks &callbacks,
     const ApplicationBarHost host) {
   impl_->DrawApplicationBar(view, layout, callbacks, host);
+}
+
+void ApplicationChrome::DrawWorkspaceSwitcher(
+    const ApplicationBarView &view, const ApplicationChromeCallbacks &callbacks,
+    const std::span<const InteractionPreview> previews,
+    const float logical_segment_width) {
+  impl_->DrawWorkspaceSwitcher(view, callbacks, CurrentLayoutMetrics(),
+                               previews, logical_segment_width);
+}
+
+void ApplicationChrome::DrawToolbarSegmented(
+    const ToolbarSegmentedView &view,
+    const ApplicationChromeCallbacks &callbacks,
+    const std::span<const InteractionPreview> previews,
+    const float logical_width) {
+  impl_->DrawToolbarSegmented(view, callbacks, CurrentLayoutMetrics(), previews,
+                              logical_width);
 }
 
 void ApplicationChrome::DrawContextToolbar(

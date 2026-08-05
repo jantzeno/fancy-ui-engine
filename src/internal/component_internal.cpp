@@ -12,6 +12,7 @@ namespace fancy_ui::detail {
 namespace {
 
 thread_local std::optional<InteractionPreview> interaction_preview;
+thread_local std::optional<float> field_layout_preview_label_width;
 
 ImVec4 ToImVec4(const ColorRgba color) {
   return ImVec4(color.red, color.green, color.blue, color.alpha);
@@ -27,6 +28,15 @@ ScopedInteractionPreview::ScopedInteractionPreview(
 
 ScopedInteractionPreview::~ScopedInteractionPreview() {
   interaction_preview = previous_;
+}
+
+ScopedFieldLayoutPreview::ScopedFieldLayoutPreview(const float label_width)
+    : previous_label_width_(field_layout_preview_label_width) {
+  field_layout_preview_label_width = std::max(0.0f, label_width);
+}
+
+ScopedFieldLayoutPreview::~ScopedFieldLayoutPreview() {
+  field_layout_preview_label_width = previous_label_width_;
 }
 
 std::string Owned(const std::string_view value) {
@@ -55,7 +65,8 @@ float ResolveButtonVerticalPadding(const float requested_height,
 FieldLayout BeginFieldLayout(const std::string_view label) {
   const LayoutMetrics metrics = CurrentLayoutMetrics();
   const std::string owned_label = Owned(label);
-  if (ImGui::GetContentRegionAvail().x < metrics.inspector.stack_breakpoint) {
+  if (!field_layout_preview_label_width.has_value() &&
+      ImGui::GetContentRegionAvail().x < metrics.inspector.stack_breakpoint) {
     ImGui::PushStyleColor(ImGuiCol_Text,
                           ToImVec4(CurrentPalette().text_secondary));
     ImGui::TextUnformatted(owned_label.c_str());
@@ -70,7 +81,8 @@ FieldLayout BeginFieldLayout(const std::string_view label) {
                                            ImGuiTableFlags_NoSavedSettings);
   if (table) {
     ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed,
-                            metrics.inspector.label_width);
+                            field_layout_preview_label_width.value_or(
+                                metrics.inspector.label_width));
     ImGui::TableSetupColumn("gap", ImGuiTableColumnFlags_WidthFixed,
                             metrics.spacing.space03);
     ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch);
