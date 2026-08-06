@@ -54,6 +54,7 @@ float ColorPickerPopupWidth(const ColorPickerPopupSpec &spec) {
 } // namespace
 
 NumericInputResult NumericInput(const NumericInputSpec &spec) {
+  ImGui::PushFont(nullptr, Scale(21.0f));
   const std::string id = detail::Owned(spec.id);
   std::string format = detail::Owned(spec.format);
   if (!spec.unit.empty()) {
@@ -89,6 +90,7 @@ NumericInputResult NumericInput(const NumericInputSpec &spec) {
   result.committed = committed;
   result.cancelled = cancelled;
   result.value = cancelled ? spec.value : value;
+  ImGui::PopFont();
   return result;
 }
 
@@ -126,6 +128,7 @@ TextInputResult TextInput(const TextInputSpec &spec) {
 }
 
 SelectResult Select(const SelectSpec &spec) {
+  ImGui::PushFont(nullptr, Scale(21.0f));
   const std::string id = detail::Owned(spec.id);
   const std::size_t selected =
       spec.options.empty()
@@ -170,10 +173,12 @@ SelectResult Select(const SelectSpec &spec) {
   result.changed =
       changed && spec.availability.enabled && !spec.availability.busy;
   result.selected_index = result.changed ? result_index : selected;
+  ImGui::PopFont();
   return result;
 }
 
 DurationResult Duration(const DurationSpec &spec) {
+  ImGui::PushFont(nullptr, Scale(21.0f));
   const std::string id = detail::Owned(spec.id);
   int hours = std::clamp(spec.hours, 0, 23);
   int minutes = std::clamp(spec.minutes, 0, 59);
@@ -229,6 +234,7 @@ DurationResult Duration(const DurationSpec &spec) {
   result.cancelled = cancelled;
   result.hours = cancelled ? spec.hours : hours;
   result.minutes = cancelled ? spec.minutes : minutes;
+  ImGui::PopFont();
   return result;
 }
 

@@ -3,6 +3,8 @@
 #include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/theme.hpp"
 
+#include <imgui_internal.h>
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -16,6 +18,174 @@ thread_local std::optional<float> field_layout_preview_label_width;
 
 ImVec4 ToImVec4(const ColorRgba color) {
   return ImVec4(color.red, color.green, color.blue, color.alpha);
+}
+
+void PushInvisibleSliderStyle() {
+  constexpr ImVec4 transparent{};
+  ImGui::PushStyleColor(ImGuiCol_FrameBg, transparent);
+  ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, transparent);
+  ImGui::PushStyleColor(ImGuiCol_FrameBgActive, transparent);
+  ImGui::PushStyleColor(ImGuiCol_SliderGrab, transparent);
+  ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, transparent);
+  ImGui::PushStyleColor(ImGuiCol_Text, transparent);
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+}
+
+void PopInvisibleSliderStyle() {
+  ImGui::PopStyleVar();
+  ImGui::PopStyleColor(6);
+}
+
+template <typename Value>
+std::string FormatSliderValue(const Value value, const ImGuiDataType data_type,
+                              const std::string_view format,
+                              const std::string_view unit) {
+  char buffer[64]{};
+  const std::string owned_format = Owned(format);
+  ImGui::DataTypeFormatString(buffer, sizeof(buffer), data_type, &value,
+                              owned_format.c_str());
+  std::string text(buffer);
+  if (!unit.empty()) {
+    if (unit != "%") {
+      text += ' ';
+    }
+    text += unit;
+  }
+  return text;
+}
+
+struct SliderGeometry {
+  ImVec2 minimum;
+  ImVec2 maximum;
+  float thumb_width;
+  float thumb_height;
+  float track_minimum_x;
+  float track_maximum_x;
+  float track_y;
+};
+
+SliderGeometry ResolveSliderGeometry(const std::string_view output,
+                                     const bool framed) {
+  constexpr float grab_padding = 2.0f;
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  const ImVec2 minimum = ImGui::GetItemRectMin();
+  const ImVec2 maximum = ImGui::GetItemRectMax();
+  const float thumb_width = metrics.geometry.icon;
+  const float horizontal_padding = framed ? metrics.spacing.space03 : 0.0f;
+  const float output_width =
+      output.empty()
+          ? 0.0f
+          : ImGui::CalcTextSize(output.data(), output.data() + output.size()).x;
+  const float output_start = maximum.x - horizontal_padding - output_width;
+  const float thumb_inset = grab_padding + thumb_width * 0.5f;
+  const float track_minimum_x = minimum.x + horizontal_padding + thumb_inset;
+  const float track_maximum_x =
+      std::max(track_minimum_x,
+               (output.empty() ? maximum.x - horizontal_padding
+                               : output_start - metrics.spacing.space03) -
+                   thumb_inset);
+  return {
+      .minimum = minimum,
+      .maximum = maximum,
+      .thumb_width = thumb_width,
+      .thumb_height = metrics.geometry.compact_target - metrics.spacing.space02,
+      .track_minimum_x = track_minimum_x,
+      .track_maximum_x = track_maximum_x,
+      .track_y = (minimum.y + maximum.y) * 0.5f,
+  };
+}
+
+template <typename Value>
+bool RetargetMouseSlider(const ImGuiID item_id, Value &value,
+                         const Value original_value,
+                         const ImGuiDataType data_type, const Value minimum,
+                         const Value maximum, const char *format,
+                         const ImGuiSliderFlags flags,
+                         const SliderGeometry &geometry) {
+  ImGuiContext &context = *GImGui;
+  if (context.ActiveId != item_id ||
+      context.ActiveIdSource != ImGuiInputSource_Mouse ||
+      !context.IO.MouseDown[0] || ImGui::TempInputIsActive(item_id)) {
+    return value != original_value;
+  }
+
+  constexpr float grab_padding = 2.0f;
+  const float behavior_inset = grab_padding + geometry.thumb_width * 0.5f;
+  const ImRect behavior_bounds(
+      ImVec2(geometry.track_minimum_x - behavior_inset, geometry.minimum.y),
+      ImVec2(geometry.track_maximum_x + behavior_inset, geometry.maximum.y));
+  ImRect grab_bounds;
+  value = original_value;
+  const bool changed =
+      ImGui::SliderBehavior(behavior_bounds, item_id, data_type, &value,
+                            &minimum, &maximum, format, flags, &grab_bounds);
+  if (changed) {
+    ImGui::MarkItemEdited(item_id);
+  }
+  return value != original_value;
+}
+
+void DrawSliderPresentation(const float normalized_value,
+                            const std::string_view output, const bool framed) {
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  const SemanticPalette &palette = CurrentPalette();
+  const SliderGeometry geometry = ResolveSliderGeometry(output, framed);
+  const bool active = ImGui::IsItemActive();
+  const bool hovered = ImGui::IsItemHovered();
+  const ImVec4 frame_color =
+      ImGui::GetStyleColorVec4(active    ? ImGuiCol_FrameBgActive
+                               : hovered ? ImGuiCol_FrameBgHovered
+                                         : ImGuiCol_FrameBg);
+  const ImVec4 grab_color = ImGui::GetStyleColorVec4(
+      active ? ImGuiCol_SliderGrabActive : ImGuiCol_SliderGrab);
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+
+  if (framed) {
+    draw_list->AddRectFilled(geometry.minimum, geometry.maximum,
+                             ImGui::GetColorU32(frame_color),
+                             metrics.geometry.control_radius);
+    draw_list->AddRect(
+        geometry.minimum, geometry.maximum, ImGui::GetColorU32(ImGuiCol_Border),
+        metrics.geometry.control_radius, 0, metrics.geometry.border);
+  }
+
+  const float track_radius = metrics.spacing.space02 * 0.5f;
+  const ImVec2 track_minimum(geometry.track_minimum_x,
+                             geometry.track_y - metrics.spacing.space02 * 0.5f);
+  const ImVec2 track_maximum(geometry.track_maximum_x,
+                             geometry.track_y + metrics.spacing.space02 * 0.5f);
+  draw_list->AddRectFilled(track_minimum, track_maximum,
+                           ImGui::GetColorU32(ToImVec4(palette.border)),
+                           track_radius);
+
+  const float thumb_x = geometry.track_minimum_x +
+                        (geometry.track_maximum_x - geometry.track_minimum_x) *
+                            std::clamp(normalized_value, 0.0f, 1.0f);
+  if (thumb_x > geometry.track_minimum_x) {
+    draw_list->AddRectFilled(track_minimum, ImVec2(thumb_x, track_maximum.y),
+                             ImGui::GetColorU32(grab_color), track_radius);
+  }
+  const ImVec2 thumb_minimum(thumb_x - geometry.thumb_width * 0.5f,
+                             geometry.track_y - geometry.thumb_height * 0.5f);
+  const ImVec2 thumb_maximum(thumb_x + geometry.thumb_width * 0.5f,
+                             geometry.track_y + geometry.thumb_height * 0.5f);
+  draw_list->AddRectFilled(thumb_minimum, thumb_maximum,
+                           ImGui::GetColorU32(frame_color),
+                           metrics.geometry.control_radius);
+  draw_list->AddRect(
+      thumb_minimum, thumb_maximum, ImGui::GetColorU32(grab_color),
+      metrics.geometry.control_radius, 0, metrics.geometry.focus_ring);
+
+  if (!output.empty()) {
+    const ImVec2 text_size =
+        ImGui::CalcTextSize(output.data(), output.data() + output.size());
+    draw_list->AddText(ImVec2(geometry.maximum.x -
+                                  (framed ? metrics.spacing.space03 : 0.0f) -
+                                  text_size.x,
+                              geometry.track_y - text_size.y * 0.5f),
+                       ImGui::GetColorU32(ImGuiCol_Text), output.data(),
+                       output.data() + output.size());
+  }
 }
 
 } // namespace
@@ -248,6 +418,78 @@ void DrawFocusRing(const InteractionResult &interaction,
                      ImGui::GetColorU32(ToImVec4(CurrentPalette().focus)),
                      Scale(rounding + 2.0f), ImDrawFlags_RoundCornersAll,
                      Scale(2.0f));
+}
+
+bool DrawSliderFloat(const std::string_view id, float &value,
+                     const float minimum, const float maximum,
+                     const std::string_view format, const std::string_view unit,
+                     const bool show_output, const bool framed,
+                     const ImGuiSliderFlags flags) {
+  const std::string owned_id = Owned(id);
+  const std::string owned_format = Owned(format);
+  const ImGuiID item_id = ImGui::GetID(owned_id.c_str());
+  const float original_value = value;
+  const bool editing_exact_value = ImGui::TempInputIsActive(item_id);
+  ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize,
+                      CurrentLayoutMetrics().geometry.icon);
+  if (!editing_exact_value) {
+    PushInvisibleSliderStyle();
+  }
+  bool changed = ImGui::SliderFloat(owned_id.c_str(), &value, minimum, maximum,
+                                    owned_format.c_str(), flags);
+  if (!editing_exact_value) {
+    PopInvisibleSliderStyle();
+    const std::string output =
+        show_output ? FormatSliderValue(original_value, ImGuiDataType_Float,
+                                        format, unit)
+                    : std::string{};
+    changed = RetargetMouseSlider(
+        item_id, value, original_value, ImGuiDataType_Float, minimum, maximum,
+        owned_format.c_str(), flags, ResolveSliderGeometry(output, framed));
+    DrawSliderPresentation(
+        maximum > minimum ? (value - minimum) / (maximum - minimum) : 0.0f,
+        show_output
+            ? FormatSliderValue(value, ImGuiDataType_Float, format, unit)
+            : std::string{},
+        framed);
+  }
+  ImGui::PopStyleVar();
+  return changed;
+}
+
+bool DrawSliderInt(const std::string_view id, int &value, const int minimum,
+                   const int maximum, const bool show_output, const bool framed,
+                   const ImGuiSliderFlags flags) {
+  const std::string owned_id = Owned(id);
+  const ImGuiID item_id = ImGui::GetID(owned_id.c_str());
+  const int original_value = value;
+  const bool editing_exact_value = ImGui::TempInputIsActive(item_id);
+  ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize,
+                      CurrentLayoutMetrics().geometry.icon);
+  if (!editing_exact_value) {
+    PushInvisibleSliderStyle();
+  }
+  bool changed =
+      ImGui::SliderInt(owned_id.c_str(), &value, minimum, maximum, "%d", flags);
+  if (!editing_exact_value) {
+    PopInvisibleSliderStyle();
+    const std::string output =
+        show_output
+            ? FormatSliderValue(original_value, ImGuiDataType_S32, "%d", {})
+            : std::string{};
+    changed = RetargetMouseSlider(item_id, value, original_value,
+                                  ImGuiDataType_S32, minimum, maximum, "%d",
+                                  flags, ResolveSliderGeometry(output, framed));
+    DrawSliderPresentation(
+        maximum > minimum ? static_cast<float>(value - minimum) /
+                                static_cast<float>(maximum - minimum)
+                          : 0.0f,
+        show_output ? FormatSliderValue(value, ImGuiDataType_S32, "%d", {})
+                    : std::string{},
+        framed);
+  }
+  ImGui::PopStyleVar();
+  return changed;
 }
 
 void DrawValidationHint(const Validation &validation) {

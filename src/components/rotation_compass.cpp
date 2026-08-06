@@ -59,6 +59,7 @@ std::string FormatRotationDegrees(const double degrees) {
 }
 
 RotationCompassResult RotationCompass(const RotationCompassSpec &spec) {
+  ImGui::PushFont(nullptr, Scale(21.0f));
   const std::string id = detail::Owned(spec.id);
   int count = ClampRotationCount(spec.count);
   const bool disabled = !spec.availability.enabled || spec.availability.busy;
@@ -115,9 +116,9 @@ RotationCompassResult RotationCompass(const RotationCompassSpec &spec) {
     ImGui::PopStyleColor();
     ImGui::SetNextItemWidth(editor_width);
     detail::BeginAvailability(spec.availability);
-    changed = ImGui::SliderInt("##count", &count, kRotationCountMinimum,
-                               kRotationCountMaximum, "%d",
-                               ImGuiSliderFlags_AlwaysClamp);
+    changed = detail::DrawSliderInt("##count", count, kRotationCountMinimum,
+                                    kRotationCountMaximum, false, false,
+                                    ImGuiSliderFlags_AlwaysClamp);
     interaction = detail::CaptureInteraction();
     committed = ImGui::IsItemDeactivatedAfterEdit();
     detail::DrawFocusRing(interaction, true);
@@ -136,17 +137,6 @@ RotationCompassResult RotationCompass(const RotationCompassSpec &spec) {
     draw_list->AddCircle(center, radius,
                          ImGui::GetColorU32(ToImVec4(palette.border_strong)),
                          48, Scale(1.0f));
-    for (int index = 0; index < 16; ++index) {
-      const double angle = (static_cast<double>(index) * 22.5 - 90.0) *
-                           std::numbers::pi_v<double> / 180.0;
-      const ImVec2 outer(center.x + std::cos(angle) * (radius - Scale(3.0f)),
-                         center.y + std::sin(angle) * (radius - Scale(3.0f)));
-      const ImVec2 inner(center.x + std::cos(angle) * (radius - Scale(9.0f)),
-                         center.y + std::sin(angle) * (radius - Scale(9.0f)));
-      draw_list->AddLine(inner, outer,
-                         ImGui::GetColorU32(ToImVec4(palette.text_secondary)),
-                         Scale(1.0f));
-    }
     for (const double degrees : EvenlySpacedRotationAngles(count)) {
       const double angle =
           (degrees - 90.0) * std::numbers::pi_v<double> / 180.0;
@@ -155,8 +145,7 @@ RotationCompassResult RotationCompass(const RotationCompassSpec &spec) {
       const ImVec2 inner(center.x + std::cos(angle) * (radius - Scale(14.0f)),
                          center.y + std::sin(angle) * (radius - Scale(14.0f)));
       draw_list->AddLine(inner, outer,
-                         ImGui::GetColorU32(ToImVec4(
-                             disabled ? palette.text_disabled : palette.focus)),
+                         ImGui::GetColorU32(ToImVec4(palette.focus)),
                          Scale(2.0f));
     }
     draw_list->AddCircleFilled(
@@ -176,6 +165,7 @@ RotationCompassResult RotationCompass(const RotationCompassSpec &spec) {
   result.changed = changed && !disabled;
   result.committed = committed && !disabled;
   result.count = ClampRotationCount(count);
+  ImGui::PopFont();
   return result;
 }
 

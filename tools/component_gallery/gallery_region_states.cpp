@@ -999,11 +999,13 @@ void DrawZoomPanel(const StatusSample &sample,
     ImGui::Text("%.0f%%", zoom.percent);
     float slider_position = StatusZoomSliderPositionFromPercent(zoom.percent);
     ImGui::SetNextItemWidth(-1.0f);
-    if (ImGui::SliderFloat("##zoom-slider", &slider_position, 0.0f, 100.0f, "",
-                           ImGuiSliderFlags_AlwaysClamp)) {
+    if (detail::DrawSliderFloat("##zoom-slider", slider_position, 0.0f, 100.0f,
+                                "%.0f", {}, false, false,
+                                ImGuiSliderFlags_AlwaysClamp)) {
       zoom.percent = StatusZoomPercentFromSliderPosition(slider_position);
       zoom.feedback = "Zoom adjusted";
     }
+    detail::DrawFocusRing(detail::CaptureInteraction(), true);
     DrawSecondaryText("10%");
     ImGui::SameLine(ImGui::GetContentRegionMax().x -
                     ImGui::CalcTextSize("1600%").x);

@@ -562,6 +562,7 @@ public:
       return;
     }
 
+    ImGui::PushFont(nullptr, Scale(21.0f));
     ImGui::PushID(segmented.id.value.c_str());
     std::vector<ToolbarSegmentInteraction> interactions;
     const float equal_width =
@@ -716,6 +717,7 @@ public:
                          metrics.geometry.focus_ring);
     }
     ImGui::PopID();
+    ImGui::PopFont();
   }
 
   void DrawToolbarPopover(const ToolbarPopoverView &popover,

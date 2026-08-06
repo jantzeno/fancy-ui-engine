@@ -262,6 +262,65 @@ TEST_CASE("rotation compass derives evenly spaced canonical angles") {
   REQUIRE(angles == std::vector<double>{0.0, 90.0, 180.0, 270.0});
 }
 
+TEST_CASE("shared slider thumb stays under the mouse while dragging") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(480.0f, 180.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int texture_width = 0;
+  int texture_height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &texture_width, &texture_height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  float value = 38.0f;
+  ImVec2 item_minimum;
+  ImVec2 item_maximum;
+  const auto draw_slider = [&]() {
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(io.DisplaySize, ImGuiCond_Always);
+    ImGui::Begin("slider-drag", nullptr, ImGuiWindowFlags_NoDecoration);
+    ImGui::SetNextItemWidth(240.0f);
+    const bool changed = fancy_ui::detail::DrawSliderFloat(
+        "explode", value, 0.0f, 100.0f, "%.0f", "%", true, true);
+    item_minimum = ImGui::GetItemRectMin();
+    item_maximum = ImGui::GetItemRectMax();
+    ImGui::End();
+    ImGui::Render();
+    return changed;
+  };
+
+  static_cast<void>(draw_slider());
+  const fancy_ui::LayoutMetrics metrics = fancy_ui::CurrentLayoutMetrics();
+  const float thumb_inset = 2.0f + metrics.geometry.icon * 0.5f;
+  const float track_minimum =
+      item_minimum.x + metrics.spacing.space03 + thumb_inset;
+  const float output_width = ImGui::CalcTextSize("38%").x;
+  const float track_maximum = item_maximum.x - metrics.spacing.space03 -
+                              output_width - metrics.spacing.space03 -
+                              thumb_inset;
+  const float track_y = (item_minimum.y + item_maximum.y) * 0.5f;
+  const float thumb_x = track_minimum + (track_maximum - track_minimum) * 0.38f;
+
+  io.AddMousePosEvent(thumb_x, track_y);
+  static_cast<void>(draw_slider());
+  io.AddMouseButtonEvent(0, true);
+  REQUIRE_FALSE(draw_slider());
+  REQUIRE(value == Catch::Approx(38.0f));
+
+  const float target_x =
+      track_minimum + (track_maximum - track_minimum) * 0.75f;
+  io.AddMousePosEvent(target_x, track_y);
+  REQUIRE(draw_slider());
+  REQUIRE(value == Catch::Approx(75.0f));
+
+  io.AddMouseButtonEvent(0, false);
+  static_cast<void>(draw_slider());
+  ImGui::DestroyContext();
+}
+
 TEST_CASE("system theme falls back to dark without a platform preference") {
   REQUIRE(fancy_ui::ResolveTheme(fancy_ui::ThemeMode::System) ==
           fancy_ui::ResolvedTheme::Dark);

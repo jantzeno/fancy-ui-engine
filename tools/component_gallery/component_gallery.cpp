@@ -261,6 +261,7 @@ void DrawInputs(GalleryState &state) {
 }
 
 void DrawSlider(GalleryState &state) {
+  const detail::ScopedFieldLayoutPreview layout(Scale(76.0f));
   const SliderResult result = Slider({
       .id = "explode",
       .label = "Explode",
@@ -330,6 +331,8 @@ void DrawCheckboxes(GalleryState &state) {
   if (mixed.changed) {
     state.checkbox_mixed = mixed.state;
   }
+  constexpr std::string_view unavailable_reason =
+      "Controlled by the active profile";
   static_cast<void>(Checkbox({
       .id = "unavailable",
       .label = "Unavailable",
@@ -337,12 +340,19 @@ void DrawCheckboxes(GalleryState &state) {
       .availability =
           {
               .enabled = false,
-              .reason = "Controlled by the active profile",
+              .reason = unavailable_reason,
           },
   }));
+  ImGui::Indent(Scale(24.0f));
+  ImGui::PushTextWrapPos();
+  ImGui::TextDisabled("%.*s", static_cast<int>(unavailable_reason.size()),
+                      unavailable_reason.data());
+  ImGui::PopTextWrapPos();
+  ImGui::Unindent(Scale(24.0f));
 }
 
 void DrawVisibility(detail::UiAssetAtlas &assets, GalleryState &state) {
+  const detail::ScopedFieldLayoutPreview layout(Scale(76.0f));
   const IconPainter visible = assets.Painter("visibility");
   const IconPainter hidden = assets.Painter("visibility-off");
   const VisibilityToggleResult result = VisibilityToggle({
@@ -377,42 +387,39 @@ void DrawVisibility(detail::UiAssetAtlas &assets, GalleryState &state) {
   }
 }
 
-void DrawEnabledLocked(detail::UiAssetAtlas &assets, GalleryState &state) {
-  const IconPainter enabled = assets.Painter("check");
+void DrawEnabledLocked(detail::UiAssetAtlas &assets) {
+  const IconPainter enabled = assets.Painter("success");
+  const IconPainter disabled = assets.Painter("failure");
   const IconPainter locked = assets.Painter("orbit-locked");
   const IconPainter unlocked = assets.Painter("orbit-unlocked");
-  const CheckboxResult enabled_result = Checkbox({
-      .id = "enabled",
-      .label = "Direction enabled",
-      .state = state.enabled,
-      .on_icon = enabled,
-  });
-  if (enabled_result.changed) {
-    state.enabled = enabled_result.state;
+  if (ImGui::BeginTable("##enabled-locked-grid", 2,
+                        ImGuiTableFlags_SizingStretchSame |
+                            ImGuiTableFlags_NoSavedSettings)) {
+    const auto cell = [](const char *id, const char *category,
+                         const char *label, const ToggleState state,
+                         const IconPainter &on_icon,
+                         const IconPainter &off_icon) {
+      ImGui::TableNextColumn();
+      ImGui::TextDisabled("%s", category);
+      static_cast<void>(Checkbox({
+          .id = id,
+          .label = label,
+          .state = state,
+          .on_icon = on_icon,
+          .off_icon = off_icon,
+          .show_checkbox = false,
+      }));
+    };
+    cell("grain-enabled", "Grain", "Enabled", ToggleState::On, enabled,
+         disabled);
+    cell("grain-disabled", "Grain", "Disabled", ToggleState::Off, enabled,
+         disabled);
+    cell("direction-locked", "Direction", "Locked", ToggleState::On, locked,
+         unlocked);
+    cell("direction-unlocked", "Direction", "Unlocked", ToggleState::Off,
+         locked, unlocked);
+    ImGui::EndTable();
   }
-  const CheckboxResult locked_result = Checkbox({
-      .id = "locked",
-      .label = state.locked == ToggleState::On ? "Direction locked"
-                                               : "Direction unlocked",
-      .state = state.locked,
-      .on_icon = locked,
-      .off_icon = unlocked,
-  });
-  if (locked_result.changed) {
-    state.locked = locked_result.state;
-  }
-  static_cast<void>(Checkbox({
-      .id = "inherited",
-      .label = "Inherited and locked",
-      .state = ToggleState::On,
-      .on_icon = locked,
-      .off_icon = unlocked,
-      .availability =
-          {
-              .enabled = false,
-              .reason = "Inherited from parent",
-          },
-  }));
 }
 
 template <std::size_t Size>
@@ -1069,7 +1076,7 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
           GalleryCard("visibility", "Visibility", assets.bold_font(),
                       [&assets, &state] { DrawVisibility(assets, state); });
           GalleryCard("enabled-locked", "Enabled & locked", assets.bold_font(),
-                      [&assets, &state] { DrawEnabledLocked(assets, state); });
+                      [&assets] { DrawEnabledLocked(assets); });
           GalleryCard("tree-rows", "Tree rows", assets.bold_font(),
                       [&assets, &state] { DrawTreeRows(assets, state); });
           GalleryCard(

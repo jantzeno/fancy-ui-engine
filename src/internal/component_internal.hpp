@@ -94,6 +94,15 @@ void EndAvailability(const Availability &availability,
 [[nodiscard]] ControlColors ResolveControlColors(const ControlState &state);
 void DrawFocusRing(const InteractionResult &interaction,
                    bool high_contrast_separator = false, float rounding = 4.0f);
+[[nodiscard]] bool
+DrawSliderFloat(std::string_view id, float &value, float minimum, float maximum,
+                std::string_view format, std::string_view unit,
+                bool show_output, bool framed,
+                ImGuiSliderFlags flags = ImGuiSliderFlags_None);
+[[nodiscard]] bool
+DrawSliderInt(std::string_view id, int &value, int minimum, int maximum,
+              bool show_output, bool framed,
+              ImGuiSliderFlags flags = ImGuiSliderFlags_None);
 void DrawValidationHint(const Validation &validation);
 [[nodiscard]] ImVec4 StatusColor(SemanticStatus status);
 [[nodiscard]] ImVec4 StatusBackground(SemanticStatus status);

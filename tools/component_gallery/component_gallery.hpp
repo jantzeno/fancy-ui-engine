@@ -317,8 +317,6 @@ struct GalleryState {
   ToggleState visible = ToggleState::On;
   ToggleState guides_visible = ToggleState::Off;
   ToggleState selection_visible = ToggleState::Mixed;
-  ToggleState enabled = ToggleState::On;
-  ToggleState locked = ToggleState::Off;
   ToggleState margins = ToggleState::Mixed;
   ToggleState mixed_visibility = ToggleState::Mixed;
 

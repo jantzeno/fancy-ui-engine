@@ -10,12 +10,8 @@
 namespace fancy_ui {
 
 SliderResult Slider(const SliderSpec &spec) {
+  ImGui::PushFont(nullptr, Scale(21.0f));
   const std::string id = detail::Owned(spec.id);
-  std::string format = detail::Owned(spec.format);
-  if (!spec.unit.empty()) {
-    format += " ";
-    format += detail::Owned(spec.unit);
-  }
   float value = spec.value;
   const bool disabled = !spec.availability.enabled || spec.availability.busy;
   const SemanticPalette &palette = CurrentPalette();
@@ -32,8 +28,9 @@ SliderResult Slider(const SliderSpec &spec) {
                           to_imgui(palette.text_disabled));
   }
   detail::BeginAvailability(spec.availability);
-  const bool changed = ImGui::SliderFloat("##value", &value, spec.minimum,
-                                          spec.maximum, format.c_str());
+  const bool changed =
+      detail::DrawSliderFloat("##value", value, spec.minimum, spec.maximum,
+                              spec.format, spec.unit, true, true);
   const InteractionResult interaction = detail::CaptureInteraction();
   const bool committed = ImGui::IsItemDeactivatedAfterEdit();
   detail::DrawFocusRing(interaction, true);
@@ -50,6 +47,7 @@ SliderResult Slider(const SliderSpec &spec) {
   result.changed = changed;
   result.committed = committed;
   result.value = value;
+  ImGui::PopFont();
   return result;
 }
 
