@@ -19,6 +19,7 @@ ImVec4 ToImVec4(const ColorRgba color) {
 } // namespace
 
 CheckboxResult Checkbox(const CheckboxSpec &spec) {
+  ImGui::PushFont(nullptr, Scale(21.0f));
   const std::string id = detail::Owned(spec.id);
   const std::string label = detail::Owned(spec.label);
   const bool disabled = !spec.availability.enabled || spec.availability.busy;
@@ -112,6 +113,7 @@ CheckboxResult Checkbox(const CheckboxSpec &spec) {
   detail::EndAvailability(spec.availability, spec.tooltip);
   ImGui::PopID();
   detail::DrawValidationHint(spec.validation);
+  ImGui::PopFont();
 
   CheckboxResult result;
   static_cast<InteractionResult &>(result) = interaction;

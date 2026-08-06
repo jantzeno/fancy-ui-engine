@@ -397,6 +397,7 @@ void DrawEnabledLocked(detail::UiAssetAtlas &assets, GalleryState &state) {
                         const char *on_label, const char *off_label,
                         ToggleState &state, const IconPainter &on_icon,
                         const IconPainter &off_icon) {
+    ImGui::PushFont(nullptr, Scale(21.0f));
     const detail::FieldLayout field_layout = detail::BeginFieldLayout(category);
     const CheckboxResult result = Checkbox({
         .id = id,
@@ -407,6 +408,7 @@ void DrawEnabledLocked(detail::UiAssetAtlas &assets, GalleryState &state) {
         .show_checkbox = true,
     });
     detail::EndFieldLayout(field_layout, {});
+    ImGui::PopFont();
     if (result.changed) {
       state = result.state;
     }
@@ -779,7 +781,9 @@ void DrawStatusTypes(detail::UiAssetAtlas &assets) {
 }
 
 void DrawProgress() {
+  ImGui::PushFont(nullptr, Scale(21.0f));
   ImGui::TextUnformatted("Determinate · 62%");
+  ImGui::PopFont();
   ProgressBar({
       .id = "determinate",
       .label = "Search progress: 62%",
@@ -787,7 +791,9 @@ void DrawProgress() {
       .status = SemanticStatus::Busy,
   });
   ImGui::Spacing();
+  ImGui::PushFont(nullptr, Scale(21.0f));
   ImGui::TextUnformatted("Indeterminate");
+  ImGui::PopFont();
   ProgressBar({
       .id = "indeterminate",
       .label = "Preparing geometry",
@@ -917,7 +923,7 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
   ImGui::PopStyleVar();
 
   if (assets.bold_font() != nullptr) {
-    ImGui::PushFont(assets.bold_font());
+    ImGui::PushFont(assets.bold_font(), Scale(29.0f));
   }
   ImGui::TextUnformatted("Fancy UI gallery");
   if (assets.bold_font() != nullptr) {
@@ -947,8 +953,10 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
     state.theme = ResolvedTheme::Dark;
     state.settings.system_theme = ResolvedTheme::Dark;
   }
+  ImGui::PushFont(nullptr, Scale(21.0f));
   ImGui::TextDisabled(
       "Canonical light/dark parity; pointer and keyboard states remain live.");
+  ImGui::PopFont();
   ImGui::Spacing();
 
   const auto move_tab = [&state](const int delta) {
@@ -989,8 +997,10 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
     };
     tab("Components", GalleryTab::Components, [&assets, &state] {
       detail::ApplicationChrome chrome(assets);
+      ImGui::PushFont(nullptr, Scale(21.0f));
       ImGui::TextDisabled(
           "Shared controls, hierarchy rows, semantic feedback, and values.");
+      ImGui::PopFont();
       ImGui::Spacing();
       const float table_width = Scale(4.0f * 302.0f + 3.0f * 8.0f);
       if (ImGui::BeginChild("##gallery-scroll", ImVec2(0.0f, 0.0f), false,

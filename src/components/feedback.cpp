@@ -78,11 +78,13 @@ void StatusCard(const StatusCardSpec &spec) {
   }
   draw_list->PushClipRect(ImVec2(copy_x, minimum.y),
                           ImVec2(maximum.x - Scale(7.0f), maximum.y), true);
-  draw_list->AddText(ImVec2(copy_x, minimum.y + Scale(4.0f)),
+  ImFont *font = ImGui::GetFont();
+  draw_list->AddText(font, Scale(13.0f),
+                     ImVec2(copy_x, minimum.y + Scale(4.0f)),
                      ImGui::GetColorU32(foreground), title.c_str());
-  draw_list->AddText(ImVec2(copy_x, minimum.y + Scale(23.0f)),
-                     ImGui::GetColorU32(ToImVec4(palette.text_primary)),
-                     message.c_str());
+  draw_list->AddText(
+      font, Scale(14.0f), ImVec2(copy_x, minimum.y + Scale(23.0f)),
+      ImGui::GetColorU32(ToImVec4(palette.text_primary)), message.c_str());
   draw_list->PopClipRect();
   ImGui::PopID();
 }

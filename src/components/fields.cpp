@@ -95,6 +95,7 @@ NumericInputResult NumericInput(const NumericInputSpec &spec) {
 }
 
 TextInputResult TextInput(const TextInputSpec &spec) {
+  ImGui::PushFont(nullptr, Scale(21.0f));
   const std::string id = detail::Owned(spec.id);
   const std::size_t capacity = std::clamp<std::size_t>(spec.capacity, 2, 4096);
   std::vector<char> buffer(capacity, '\0');
@@ -124,6 +125,7 @@ TextInputResult TextInput(const TextInputSpec &spec) {
   result.cancelled = cancelled;
   result.value =
       cancelled ? std::string(spec.value) : std::string(buffer.data());
+  ImGui::PopFont();
   return result;
 }
 
@@ -239,6 +241,7 @@ DurationResult Duration(const DurationSpec &spec) {
 }
 
 VisibilityToggleResult VisibilityToggle(const VisibilityToggleSpec &spec) {
+  ImGui::PushFont(nullptr, Scale(21.0f));
   ImGui::PushID(detail::Owned(spec.id).c_str());
   const detail::FieldLayout layout = detail::BeginFieldLayout(spec.label);
   const std::string state_label = spec.state == ToggleState::On    ? "Visible"
@@ -261,6 +264,7 @@ VisibilityToggleResult VisibilityToggle(const VisibilityToggleSpec &spec) {
   static_cast<InteractionResult &>(result) = checkbox;
   result.changed = checkbox.changed;
   result.state = checkbox.state;
+  ImGui::PopFont();
   return result;
 }
 
@@ -367,6 +371,7 @@ ColorPickerPopupResult ColorPickerPopup(const ColorPickerPopupSpec &spec,
 
 ColorSwatchResult ColorSwatch(const ColorSwatchSpec &spec,
                               ColorPickerState &state) {
+  ImGui::PushFont(nullptr, Scale(21.0f));
   ImGui::PushID(detail::Owned(spec.id).c_str());
   const detail::FieldLayout layout = detail::BeginFieldLayout(spec.label);
   detail::BeginAvailability(spec.availability);
@@ -431,6 +436,7 @@ ColorSwatchResult ColorSwatch(const ColorSwatchSpec &spec,
   result.cancelled = picker.cancelled;
   result.picker_open = picker.picker_open;
   result.value = picker.value;
+  ImGui::PopFont();
   return result;
 }
 

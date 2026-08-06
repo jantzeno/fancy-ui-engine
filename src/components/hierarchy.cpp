@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
 
 namespace fancy_ui {
@@ -150,6 +151,8 @@ void HierarchyTree::Pop() {
 HierarchyRowResult HierarchyRow(HierarchyTree &tree,
                                 const HierarchyRowSpec &spec) {
   const std::string id = detail::Owned(spec.id);
+  const std::string label = detail::Owned(spec.label);
+  const std::string secondary_label = detail::Owned(spec.secondary_label);
   const bool disabled = !spec.availability.enabled || spec.availability.busy;
   const LayoutMetrics metrics = CurrentLayoutMetrics();
   const SemanticPalette &palette = CurrentPalette();
@@ -249,23 +252,25 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
                                 : spec.status == SemanticStatus::Neutral
                                     ? colors.text
                                     : StatusForeground(spec.status);
-  const ImVec2 label_size =
-      ImGui::CalcTextSize(detail::Owned(spec.label).c_str());
-  const float text_y = spec.secondary_label.empty()
+  ImFont *font = ImGui::GetFont();
+  const float label_font_size = Scale(21.0f);
+  const float secondary_font_size = Scale(12.0f);
+  const ImVec2 label_size = font->CalcTextSizeA(
+      label_font_size, std::numeric_limits<float>::max(), 0.0f, label.c_str());
+  const float text_y = secondary_label.empty()
                            ? std::floor(center_y - label_size.y * 0.5f)
                            : minimum.y + Scale(3.0f);
   draw_list->PushClipRect(
       ImVec2(text_x, minimum.y),
       ImVec2(maximum.x - trailing_width - Scale(4.0f), maximum.y), true);
-  draw_list->AddText(ImVec2(text_x, text_y),
-                     ImGui::GetColorU32(ToImVec4(label_color)),
-                     detail::Owned(spec.label).c_str());
-  if (!spec.secondary_label.empty()) {
+  draw_list->AddText(font, label_font_size, ImVec2(text_x, text_y),
+                     ImGui::GetColorU32(ToImVec4(label_color)), label.c_str());
+  if (!secondary_label.empty()) {
     draw_list->AddText(
-        ImVec2(text_x, minimum.y + Scale(17.0f)),
+        font, secondary_font_size, ImVec2(text_x, minimum.y + Scale(20.0f)),
         ImGui::GetColorU32(ToImVec4(disabled ? palette.text_disabled
                                              : palette.text_secondary)),
-        detail::Owned(spec.secondary_label).c_str());
+        secondary_label.c_str());
   }
   draw_list->PopClipRect();
 

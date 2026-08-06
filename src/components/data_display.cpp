@@ -72,11 +72,14 @@ std::string Ellipsize(const std::string &text, const float width) {
 } // namespace
 
 void StatusText(const StatusTextSpec &spec) {
+  ImGui::PushFont(nullptr, Scale(21.0f));
   const std::string label = detail::Owned(spec.label);
   ImGui::TextColored(detail::StatusColor(spec.status), "%s", label.c_str());
+  ImGui::PopFont();
 }
 
 void EmptyState(const EmptyStateSpec &spec) {
+  ImGui::PushFont(nullptr, Scale(21.0f));
   const std::string id = detail::Owned(spec.id);
   const std::string title = detail::Owned(spec.title);
   const std::string message = detail::Owned(spec.message);
@@ -119,9 +122,11 @@ void EmptyState(const EmptyStateSpec &spec) {
         message.c_str());
   }
   ImGui::PopID();
+  ImGui::PopFont();
 }
 
 InteractionResult ValueDisplay(const ValueDisplaySpec &spec) {
+  ImGui::PushFont(nullptr, Scale(21.0f));
   const std::string id = detail::Owned(spec.id);
   const std::string label = detail::Owned(spec.label);
   const std::string complete_value =
@@ -144,7 +149,9 @@ InteractionResult ValueDisplay(const ValueDisplaySpec &spec) {
       minimum, maximum,
       ImGui::GetColorU32(ToImVec4(CurrentPalette().border_strong)), Scale(3.0f),
       ImDrawFlags_RoundCornersAll, Scale(1.0f));
-  const float label_width = Scale(std::max(spec.label_width, 0.0f));
+  const float label_width =
+      std::max(Scale(std::max(spec.label_width, 0.0f)),
+               ImGui::CalcTextSize(label.c_str()).x + Scale(8.0f));
   const float text_y = minimum.y + (height - ImGui::GetTextLineHeight()) * 0.5f;
   draw_list->AddText(
       ImVec2(minimum.x + Scale(8.0f), text_y),
@@ -171,6 +178,7 @@ InteractionResult ValueDisplay(const ValueDisplaySpec &spec) {
     }
   }
   ImGui::PopID();
+  ImGui::PopFont();
   return interaction;
 }
 
