@@ -73,11 +73,17 @@ constexpr LayoutMetrics kLogicalMetrics{
             .search_height = 32.0f,
             .summary_minimum_height = 40.0f,
             .tree_indent = 16.0f,
+            .detailed_tree_row_height = 40.0f,
+            .tree_connector_thickness = 2.0f,
             .audit_tools_height = 32.0f,
-            .audit_columns_height = 24.0f,
+            .audit_columns_height = 28.0f,
             .audit_color_column_width = 38.0f,
             .audit_action_column_width = 28.0f,
             .audit_visibility_column_width = 28.0f,
+            .labeled_audit_breakpoint = 480.0f,
+            .labeled_audit_color_column_width = 64.0f,
+            .labeled_audit_action_column_width = 48.0f,
+            .labeled_audit_visibility_column_width = 104.0f,
         },
     .inspector =
         {
@@ -164,11 +170,17 @@ LayoutMetrics ResolveLayoutMetrics(const float requested_scale) {
   resolve(metrics.explorer.search_height);
   resolve(metrics.explorer.summary_minimum_height);
   resolve(metrics.explorer.tree_indent);
+  resolve(metrics.explorer.detailed_tree_row_height);
+  resolve(metrics.explorer.tree_connector_thickness);
   resolve(metrics.explorer.audit_tools_height);
   resolve(metrics.explorer.audit_columns_height);
   resolve(metrics.explorer.audit_color_column_width);
   resolve(metrics.explorer.audit_action_column_width);
   resolve(metrics.explorer.audit_visibility_column_width);
+  resolve(metrics.explorer.labeled_audit_breakpoint);
+  resolve(metrics.explorer.labeled_audit_color_column_width);
+  resolve(metrics.explorer.labeled_audit_action_column_width);
+  resolve(metrics.explorer.labeled_audit_visibility_column_width);
 
   resolve(metrics.inspector.label_width);
   resolve(metrics.inspector.stack_breakpoint);

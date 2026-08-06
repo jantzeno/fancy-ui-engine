@@ -62,7 +62,8 @@ Public components always report actual Dear ImGui pointer and keyboard input.
 The gallery's value controls retain their example state. Color swatches open a
 transactional picker (Apply or Enter commits; Cancel or Escape rolls back),
 with full Current/Original and compact layouts shown side by side. Tree rows
-keep 32 px targets in a dense native hierarchy with connector lines, and own
+use readable 40 px detailed rows or 32 px compact rows with explicit elbow
+connectors, and own
 expansion and Ctrl/Shift selection separately from inline color, action, and
 visibility targets. Issue groups aggregate descendant visibility without
 coupling it to issue selection or review navigation. The operation page covers
@@ -83,7 +84,7 @@ to the tab that opened the preview. An unclaimed Escape does the same; an open
 menu, popup, text edit, or active control consumes the first Escape instead.
 
 Shell screenshots use the canonical 1280 × 720 logical canvas, scaled by
-`--scale`. Components screenshots use 1280 × 1320, while Settings,
+`--scale`. Components screenshots use 1280 × 1540, while Settings,
 Operations, and Status use 1280 × 1440.
 
 The Settings page opens one modeless 880 × 560 System Settings window with

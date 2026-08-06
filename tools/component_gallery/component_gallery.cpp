@@ -32,7 +32,7 @@ void Heading(const char *title, ImFont *font) {
 
 void GalleryCard(const char *id, const char *title, ImFont *heading_font,
                  const std::function<void()> &draw,
-                 const bool scrollable = false) {
+                 const bool scrollable = false, const bool wide = false) {
   ImGui::TableNextColumn();
   ImGui::PushID(id);
   ImGui::PushStyleColor(
@@ -42,7 +42,8 @@ void GalleryCard(const char *id, const char *title, ImFont *heading_font,
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                       ImVec2(Scale(12.0f), Scale(8.0f)));
   ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
-  if (ImGui::BeginChild("##card", ImVec2(Scale(302.0f), Scale(220.0f)),
+  const float width = wide ? 2.0f * Scale(302.0f) + Scale(8.0f) : Scale(302.0f);
+  if (ImGui::BeginChild("##card", ImVec2(width, Scale(220.0f)),
                         ImGuiChildFlags_Borders,
                         scrollable ? ImGuiWindowFlags_NoSavedSettings
                                    : ImGuiWindowFlags_NoScrollbar)) {
@@ -53,6 +54,9 @@ void GalleryCard(const char *id, const char *title, ImFont *heading_font,
   ImGui::PopStyleVar(2);
   ImGui::PopStyleColor();
   ImGui::PopID();
+  if (wide) {
+    ImGui::TableNextColumn();
+  }
 }
 
 ButtonResult PreviewButton(const char *id, const char *label,
@@ -461,7 +465,7 @@ void DrawTreeColumnHeaders() {
                      metrics.geometry.border);
 
   ImFont *font = ImGui::GetFont();
-  const float font_size = Scale(12.0f);
+  const float font_size = Scale(21.0f);
   const auto draw_label = [&](const std::string_view label,
                               const float center_x) {
     const ImVec2 size =
@@ -478,14 +482,14 @@ void DrawTreeColumnHeaders() {
         label.data(), label.data() + label.size());
   };
   const float visibility_center =
-      maximum.x - metrics.explorer.audit_visibility_column_width * 0.5f;
+      maximum.x - metrics.explorer.labeled_audit_visibility_column_width * 0.5f;
   const float action_center =
-      maximum.x - metrics.explorer.audit_visibility_column_width -
-      metrics.explorer.audit_action_column_width * 0.5f - Scale(4.0f);
-  const float color_center = maximum.x -
-                             metrics.explorer.audit_visibility_column_width -
-                             metrics.explorer.audit_action_column_width -
-                             metrics.explorer.audit_color_column_width * 0.5f;
+      maximum.x - metrics.explorer.labeled_audit_visibility_column_width -
+      metrics.explorer.labeled_audit_action_column_width * 0.5f;
+  const float color_center =
+      maximum.x - metrics.explorer.labeled_audit_visibility_column_width -
+      metrics.explorer.labeled_audit_action_column_width -
+      metrics.explorer.labeled_audit_color_column_width * 0.5f;
   draw_label("Hierarchy",
              minimum.x + metrics.spacing.space03 +
                  font->CalcTextSizeA(font_size,
@@ -498,11 +502,22 @@ void DrawTreeColumnHeaders() {
   draw_label("Visibility", visibility_center);
 }
 
-void DrawTreeRows(detail::UiAssetAtlas &assets, GalleryState &state) {
+void DrawTreeRows(detail::UiAssetAtlas &assets, GalleryState &state,
+                  const bool show_metadata) {
   static constexpr std::array<std::string_view, 3> labels{
       "Bed 1",
       "Frame plate",
       "Path 184",
+  };
+  static constexpr std::array<std::string_view, 3> metadata{
+      "6 objects",
+      "Selected",
+      "Invalid",
+  };
+  const std::array<std::string, 3> tooltips{
+      std::string(labels[0]) + " — " + std::string(metadata[0]),
+      std::string(labels[1]) + " — " + std::string(metadata[1]),
+      std::string(labels[2]) + " — " + std::string(metadata[2]),
   };
   const IconPainter visible = assets.Painter("visibility");
   const IconPainter hidden = assets.Painter("visibility-off");
@@ -526,7 +541,9 @@ void DrawTreeRows(detail::UiAssetAtlas &assets, GalleryState &state) {
           tree, {
                     .id = "reference-bed",
                     .label = labels[0],
-                    .secondary_label = "6 objects",
+                    .secondary_label =
+                        show_metadata ? metadata[0] : std::string_view{},
+                    .tooltip = tooltips[0],
                     .expandable = true,
                     .expanded = state.reference_bed_expanded,
                     .selected = state.reference_tree_selected[0],
@@ -570,7 +587,9 @@ void DrawTreeRows(detail::UiAssetAtlas &assets, GalleryState &state) {
           tree, {
                     .id = "reference-frame",
                     .label = labels[1],
-                    .secondary_label = "Selected",
+                    .secondary_label =
+                        show_metadata ? metadata[1] : std::string_view{},
+                    .tooltip = tooltips[1],
                     .expandable = true,
                     .expanded = state.reference_frame_expanded,
                     .selected = state.reference_tree_selected[1],
@@ -617,7 +636,9 @@ void DrawTreeRows(detail::UiAssetAtlas &assets, GalleryState &state) {
               tree, {
                         .id = "reference-path",
                         .label = labels[2],
-                        .secondary_label = "Invalid",
+                        .secondary_label =
+                            show_metadata ? metadata[2] : std::string_view{},
+                        .tooltip = tooltips[2],
                         .selected = state.reference_tree_selected[2],
                         .status = SemanticStatus::Failure,
                         .color = state.reference_tree_colors[2],
@@ -699,7 +720,6 @@ void DrawTreeRows(detail::UiAssetAtlas &assets, GalleryState &state) {
     }
     ImGui::EndPopup();
   }
-  ImGui::Spacing();
   ImGui::TextDisabled("%s", state.reference_tree_feedback.c_str());
 }
 
@@ -1219,7 +1239,8 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
       if (ImGui::BeginChild("##gallery-scroll", ImVec2(0.0f, 0.0f), false,
                             ImGuiWindowFlags_HorizontalScrollbar)) {
         if (ImGui::BeginTable("##component-grid", 4,
-                              ImGuiTableFlags_SizingFixedFit,
+                              ImGuiTableFlags_SizingFixedFit |
+                                  ImGuiTableFlags_NoClip,
                               ImVec2(table_width, 0.0f))) {
           for (int column = 0; column < 4; ++column) {
             ImGui::TableSetupColumn(
@@ -1250,8 +1271,14 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
                       [&assets, &state] { DrawVisibility(assets, state); });
           GalleryCard("enabled-locked", "Enabled & locked", assets.bold_font(),
                       [&assets, &state] { DrawEnabledLocked(assets, state); });
-          GalleryCard("tree-rows", "Tree rows", assets.bold_font(),
-                      [&assets, &state] { DrawTreeRows(assets, state); });
+          GalleryCard(
+              "tree-rows", "Tree rows", assets.bold_font(),
+              [&assets, &state] { DrawTreeRows(assets, state, true); }, false,
+              true);
+          GalleryCard(
+              "tree-rows-compact", "Tree rows · compact", assets.bold_font(),
+              [&assets, &state] { DrawTreeRows(assets, state, false); }, false,
+              true);
           GalleryCard(
               "issue-hierarchy", "Issue hierarchy", assets.bold_font(),
               [&assets, &state] { DrawIssueHierarchy(assets, state); }, true);

@@ -30,7 +30,7 @@ struct GalleryCaptureExtent {
 GalleryScreenshotLogicalExtent(const GalleryTab tab) {
   switch (tab) {
   case GalleryTab::Components:
-    return {.width = 1280, .height = 1320};
+    return {.width = 1280, .height = 1540};
   case GalleryTab::Shell:
     return {.width = 1280, .height = 720};
   case GalleryTab::Settings:

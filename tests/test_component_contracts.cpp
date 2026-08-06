@@ -159,9 +159,16 @@ TEST_CASE("layout metrics expose the normative shell and panel geometry") {
   REQUIRE(metrics.shell.status_bar_height == 24.0f);
 
   REQUIRE(metrics.geometry.progress_height == 6.0f);
+  REQUIRE(metrics.explorer.detailed_tree_row_height == 40.0f);
+  REQUIRE(metrics.explorer.tree_connector_thickness == 2.0f);
+  REQUIRE(metrics.explorer.audit_columns_height == 28.0f);
   REQUIRE(metrics.explorer.audit_color_column_width == 38.0f);
   REQUIRE(metrics.explorer.audit_action_column_width == 28.0f);
   REQUIRE(metrics.explorer.audit_visibility_column_width == 28.0f);
+  REQUIRE(metrics.explorer.labeled_audit_breakpoint == 480.0f);
+  REQUIRE(metrics.explorer.labeled_audit_color_column_width == 64.0f);
+  REQUIRE(metrics.explorer.labeled_audit_action_column_width == 48.0f);
+  REQUIRE(metrics.explorer.labeled_audit_visibility_column_width == 104.0f);
   REQUIRE(metrics.inspector.label_width == 112.0f);
   REQUIRE(metrics.inspector.stack_breakpoint == 288.0f);
   REQUIRE(metrics.menu.popup_width == 264.0f);
@@ -178,7 +185,9 @@ TEST_CASE("resolved layout metrics clamp scale and round once") {
   REQUIRE(fractional.spacing.condensed == 1.0f);
   REQUIRE(fractional.geometry.focus_ring == 3.0f);
   REQUIRE(fractional.shell.explorer_width == 320.0f);
+  REQUIRE(fractional.explorer.detailed_tree_row_height == 50.0f);
   REQUIRE(fractional.explorer.audit_color_column_width == 48.0f);
+  REQUIRE(fractional.explorer.labeled_audit_visibility_column_width == 130.0f);
   REQUIRE(maximum.shell.inspector_width == 640.0f);
 }
 
@@ -735,8 +744,10 @@ TEST_CASE("hierarchy inline targets do not activate the selectable row") {
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                      ImGuiWindowFlags_NoSavedSettings);
     row_minimum = ImGui::GetCursorScreenPos();
-    row_maximum = ImVec2(row_minimum.x + ImGui::GetContentRegionAvail().x,
-                         row_minimum.y + fancy_ui::Scale(32.0f));
+    row_maximum = ImVec2(
+        row_minimum.x + ImGui::GetContentRegionAvail().x,
+        row_minimum.y +
+            fancy_ui::CurrentLayoutMetrics().explorer.detailed_tree_row_height);
     {
       fancy_ui::HierarchyTree tree;
       result = fancy_ui::HierarchyRow(
@@ -815,7 +826,8 @@ TEST_CASE("hierarchy inline targets do not activate the selectable row") {
   ImGui::DestroyContext();
 }
 
-TEST_CASE("hierarchy trees keep dense 32 pixel row targets") {
+TEST_CASE(
+    "hierarchy trees size detailed and compact rows from shared metrics") {
   const auto verify_scale = [](const float scale) {
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
@@ -832,6 +844,8 @@ TEST_CASE("hierarchy trees keep dense 32 pixel row targets") {
     ImVec2 parent_maximum;
     ImVec2 child_minimum;
     ImVec2 child_maximum;
+    ImVec2 compact_minimum;
+    ImVec2 compact_maximum;
     float scoped_spacing = 0.0f;
     float restored_spacing = 0.0f;
     bool parent_expanded = false;
@@ -848,19 +862,31 @@ TEST_CASE("hierarchy trees keep dense 32 pixel row targets") {
           fancy_ui::HierarchyRow(tree, {
                                            .id = "parent",
                                            .label = "Parent",
+                                           .secondary_label = "3 items",
                                            .expandable = true,
                                            .expanded = true,
                                        });
       parent_expanded = parent.expanded;
       parent_minimum = ImGui::GetItemRectMin();
       parent_maximum = ImGui::GetItemRectMax();
-      static_cast<void>(fancy_ui::HierarchyRow(tree, {
-                                                         .id = "child",
-                                                         .label = "Child",
-                                                     }));
+      static_cast<void>(
+          fancy_ui::HierarchyRow(tree, {
+                                           .id = "child",
+                                           .label = "Child",
+                                           .secondary_label = "Ready",
+                                       }));
       child_minimum = ImGui::GetItemRectMin();
       child_maximum = ImGui::GetItemRectMax();
       tree.Pop();
+    }
+    {
+      fancy_ui::HierarchyTree tree;
+      static_cast<void>(fancy_ui::HierarchyRow(tree, {
+                                                         .id = "compact",
+                                                         .label = "Compact",
+                                                     }));
+      compact_minimum = ImGui::GetItemRectMin();
+      compact_maximum = ImGui::GetItemRectMax();
     }
     restored_spacing = ImGui::GetStyle().ItemSpacing.y;
     ImGui::End();
@@ -869,8 +895,10 @@ TEST_CASE("hierarchy trees keep dense 32 pixel row targets") {
 
     REQUIRE(parent_expanded);
     REQUIRE(parent_maximum.y - parent_minimum.y ==
+            Catch::Approx(40.0f * scale));
+    REQUIRE(child_maximum.y - child_minimum.y == Catch::Approx(40.0f * scale));
+    REQUIRE(compact_maximum.y - compact_minimum.y ==
             Catch::Approx(32.0f * scale));
-    REQUIRE(child_maximum.y - child_minimum.y == Catch::Approx(32.0f * scale));
     REQUIRE(child_minimum.y - parent_maximum.y == Catch::Approx(1.0f * scale));
     REQUIRE(child_minimum.x == Catch::Approx(parent_minimum.x));
     REQUIRE(scoped_spacing == Catch::Approx(1.0f * scale));

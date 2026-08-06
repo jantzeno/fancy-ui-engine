@@ -59,7 +59,7 @@ TEST_CASE("gallery screenshots use state-sheet-specific logical extents") {
       GalleryScreenshotLogicalExtent(GalleryTab::Status);
 
   REQUIRE(components.width == 1280);
-  REQUIRE(components.height == 1320);
+  REQUIRE(components.height == 1540);
   REQUIRE(shell.width == 1280);
   REQUIRE(shell.height == 720);
   REQUIRE(settings.width == 1280);

@@ -89,6 +89,25 @@ InlineTargetResult IconTarget(const char *id, const ImVec2 position,
   return target;
 }
 
+void DrawTreeConnector(ImDrawList *draw_list, const int depth,
+                       const ImVec2 node_cursor, const ImVec2 minimum,
+                       const ImVec2 maximum, const float row_height,
+                       const LayoutMetrics &metrics, const ColorRgba color) {
+  if (depth <= 0) {
+    return;
+  }
+  const float elbow_x =
+      node_cursor.x - metrics.explorer.tree_indent + metrics.spacing.space02;
+  const float center_y = (minimum.y + maximum.y) * 0.5f;
+  const float start_y =
+      minimum.y - row_height * 0.5f - metrics.spacing.condensed;
+  const ImU32 native_color = ImGui::GetColorU32(ToImVec4(color));
+  draw_list->AddLine(ImVec2(elbow_x, start_y), ImVec2(elbow_x, center_y),
+                     native_color, metrics.explorer.tree_connector_thickness);
+  draw_list->AddLine(ImVec2(elbow_x, center_y), ImVec2(node_cursor.x, center_y),
+                     native_color, metrics.explorer.tree_connector_thickness);
+}
+
 } // namespace
 
 ToggleState
@@ -114,18 +133,11 @@ ToggleState NextVisibilityState(const ToggleState current) {
 
 HierarchyTree::HierarchyTree() {
   const LayoutMetrics metrics = CurrentLayoutMetrics();
-  const float vertical_padding = std::max(
-      (metrics.geometry.row_height - ImGui::GetFontSize()) * 0.5f, 0.0f);
   const ImGuiStyle &style = ImGui::GetStyle();
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                       ImVec2(style.ItemSpacing.x, metrics.spacing.condensed));
-  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                      ImVec2(metrics.spacing.space03, vertical_padding));
   ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing,
                       metrics.explorer.tree_indent);
-  ImGui::PushStyleVar(ImGuiStyleVar_TreeLinesSize, metrics.geometry.border);
-  ImGui::PushStyleVar(ImGuiStyleVar_TreeLinesRounding,
-                      metrics.geometry.surface_radius);
 }
 
 HierarchyTree::~HierarchyTree() {
@@ -134,7 +146,7 @@ HierarchyTree::~HierarchyTree() {
     ImGui::TreePop();
     --open_nodes_;
   }
-  ImGui::PopStyleVar(5);
+  ImGui::PopStyleVar(2);
   IM_ASSERT(!unbalanced &&
             "Every expanded hierarchy row must have a matching Pop()");
 }
@@ -156,23 +168,19 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
   const bool disabled = !spec.availability.enabled || spec.availability.busy;
   const LayoutMetrics metrics = CurrentLayoutMetrics();
   const SemanticPalette &palette = CurrentPalette();
-  const float color_width =
-      spec.color.has_value() ? metrics.explorer.audit_color_column_width : 0.0f;
-  const float action_width =
-      spec.action_icon ? metrics.explorer.audit_action_column_width : 0.0f;
-  const float visibility_width =
-      spec.visibility.has_value()
-          ? metrics.explorer.audit_visibility_column_width
-          : 0.0f;
-  const float trailing_width = color_width + action_width + visibility_width;
+  const float row_height = secondary_label.empty()
+                               ? metrics.geometry.row_height
+                               : metrics.explorer.detailed_tree_row_height;
+  const float vertical_padding =
+      std::max((row_height - ImGui::GetFontSize()) * 0.5f, 0.0f);
+  const int depth = tree.open_nodes_;
 
   const ImVec2 node_cursor = ImGui::GetCursorScreenPos();
   const std::string native_id = "##" + id;
   ImGuiTreeNodeFlags flags =
       ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_OpenOnArrow |
       ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding |
-      ImGuiTreeNodeFlags_NavLeftJumpsToParent |
-      ImGuiTreeNodeFlags_DrawLinesFull;
+      ImGuiTreeNodeFlags_NavLeftJumpsToParent;
   if (spec.selected) {
     flags |= ImGuiTreeNodeFlags_Selected;
   }
@@ -184,15 +192,37 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
 
   detail::BeginAvailability(spec.availability);
   ImGui::SetNextItemAllowOverlap();
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                      ImVec2(metrics.spacing.space03, vertical_padding));
   ImGui::PushStyleColor(
       ImGuiCol_Text,
       ToImVec4(disabled ? palette.text_disabled : palette.text_secondary));
   const bool native_open = ImGui::TreeNodeEx(native_id.c_str(), flags);
   ImGui::PopStyleColor();
+  ImGui::PopStyleVar();
   const InteractionResult interaction = detail::CaptureInteraction();
   const ImVec2 minimum = ImGui::GetItemRectMin();
   const ImVec2 maximum = ImGui::GetItemRectMax();
   const ImVec2 cursor_after = ImGui::GetCursorScreenPos();
+  const bool labeled_columns =
+      maximum.x - minimum.x >= metrics.explorer.labeled_audit_breakpoint;
+  const float color_width =
+      spec.color.has_value()
+          ? labeled_columns ? metrics.explorer.labeled_audit_color_column_width
+                            : metrics.explorer.audit_color_column_width
+          : 0.0f;
+  const float action_width =
+      spec.action_icon
+          ? labeled_columns ? metrics.explorer.labeled_audit_action_column_width
+                            : metrics.explorer.audit_action_column_width
+          : 0.0f;
+  const float visibility_width =
+      spec.visibility.has_value()
+          ? labeled_columns
+                ? metrics.explorer.labeled_audit_visibility_column_width
+                : metrics.explorer.audit_visibility_column_width
+          : 0.0f;
+  const float trailing_width = color_width + action_width + visibility_width;
   const bool expansion_changed = spec.expandable && ImGui::IsItemToggledOpen();
   const bool pointer_over_trailing =
       trailing_width > 0.0f &&
@@ -221,6 +251,9 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
       .focused = interaction.focused,
   });
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  DrawTreeConnector(draw_list, depth, node_cursor, minimum, maximum, row_height,
+                    metrics,
+                    disabled ? palette.text_disabled : palette.text_secondary);
   if (spec.selected) {
     draw_list->AddRectFilled(minimum,
                              ImVec2(minimum.x + Scale(3.0f), maximum.y),
@@ -254,23 +287,31 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
                                     : StatusForeground(spec.status);
   ImFont *font = ImGui::GetFont();
   const float label_font_size = Scale(21.0f);
-  const float secondary_font_size = Scale(12.0f);
+  const float secondary_font_size = Scale(16.0f);
   const ImVec2 label_size = font->CalcTextSizeA(
       label_font_size, std::numeric_limits<float>::max(), 0.0f, label.c_str());
-  const float text_y = secondary_label.empty()
-                           ? std::floor(center_y - label_size.y * 0.5f)
-                           : minimum.y + Scale(3.0f);
+  const ImVec2 secondary_size = font->CalcTextSizeA(
+      secondary_font_size, std::numeric_limits<float>::max(), 0.0f,
+      secondary_label.c_str());
+  const float copy_height =
+      secondary_label.empty()
+          ? label_size.y
+          : label_size.y + metrics.spacing.space01 + secondary_size.y;
+  const float text_y = std::floor(center_y - copy_height * 0.5f);
   draw_list->PushClipRect(
       ImVec2(text_x, minimum.y),
       ImVec2(maximum.x - trailing_width - Scale(4.0f), maximum.y), true);
   draw_list->AddText(font, label_font_size, ImVec2(text_x, text_y),
                      ImGui::GetColorU32(ToImVec4(label_color)), label.c_str());
   if (!secondary_label.empty()) {
+    const ColorRgba secondary_color = disabled ? palette.text_disabled
+                                      : spec.status == SemanticStatus::Neutral
+                                          ? palette.text_secondary
+                                          : StatusForeground(spec.status);
     draw_list->AddText(
-        font, secondary_font_size, ImVec2(text_x, minimum.y + Scale(20.0f)),
-        ImGui::GetColorU32(ToImVec4(disabled ? palette.text_disabled
-                                             : palette.text_secondary)),
-        secondary_label.c_str());
+        font, secondary_font_size,
+        ImVec2(text_x, text_y + label_size.y + metrics.spacing.space01),
+        ImGui::GetColorU32(ToImVec4(secondary_color)), secondary_label.c_str());
   }
   draw_list->PopClipRect();
 
@@ -386,9 +427,6 @@ InformationTree::InformationTree() {
                       ImVec2(metrics.spacing.space03, vertical_padding));
   ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing,
                       metrics.explorer.tree_indent);
-  ImGui::PushStyleVar(ImGuiStyleVar_TreeLinesSize, metrics.geometry.border);
-  ImGui::PushStyleVar(ImGuiStyleVar_TreeLinesRounding,
-                      metrics.geometry.surface_radius);
 }
 
 InformationTree::~InformationTree() {
@@ -397,7 +435,7 @@ InformationTree::~InformationTree() {
     ImGui::TreePop();
     --open_nodes_;
   }
-  ImGui::PopStyleVar(5);
+  ImGui::PopStyleVar(3);
   IM_ASSERT(!unbalanced &&
             "Every expanded information row must have a matching Pop()");
 }
@@ -420,6 +458,7 @@ InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
   const bool disabled = !spec.availability.enabled || spec.availability.busy;
   const LayoutMetrics metrics = CurrentLayoutMetrics();
   const SemanticPalette &palette = CurrentPalette();
+  const int depth = tree.open_nodes_;
   const float visibility_width =
       spec.visibility.has_value()
           ? metrics.explorer.audit_visibility_column_width
@@ -438,8 +477,7 @@ InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
   ImGuiTreeNodeFlags flags =
       ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_OpenOnArrow |
       ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding |
-      ImGuiTreeNodeFlags_NavLeftJumpsToParent |
-      ImGuiTreeNodeFlags_DrawLinesFull;
+      ImGuiTreeNodeFlags_NavLeftJumpsToParent;
   if (!spec.expandable) {
     flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
   } else {
@@ -469,6 +507,9 @@ InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
   draw_list->AddRect(minimum, maximum,
                      ImGui::GetColorU32(ToImVec4(palette.border)), 0.0f, 0,
                      metrics.geometry.border);
+  DrawTreeConnector(draw_list, depth, node_cursor, minimum, maximum,
+                    metrics.inspector.information_row_minimum_height, metrics,
+                    disabled ? palette.text_disabled : palette.text_secondary);
   detail::DrawFocusRing(interaction);
 
   ImFont *font = ImGui::GetFont();
