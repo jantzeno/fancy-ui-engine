@@ -174,6 +174,10 @@ TEST_CASE("component gallery starts in the canonical mockup selections") {
   REQUIRE(state.component_selection_tool ==
           fancy_ui::steppenface::SelectionTool::Pointer);
   REQUIRE(state.rotations == 4);
+  REQUIRE(state.grain_enabled == fancy_ui::ToggleState::On);
+  REQUIRE(state.grain_disabled == fancy_ui::ToggleState::Off);
+  REQUIRE(state.direction_locked == fancy_ui::ToggleState::On);
+  REQUIRE(state.direction_unlocked == fancy_ui::ToggleState::Off);
 }
 
 TEST_CASE("gallery shell merge preserves application bar visibility changes") {

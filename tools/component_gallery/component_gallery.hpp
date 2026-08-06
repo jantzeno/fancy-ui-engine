@@ -317,8 +317,10 @@ struct GalleryState {
   ToggleState visible = ToggleState::On;
   ToggleState guides_visible = ToggleState::Off;
   ToggleState selection_visible = ToggleState::Mixed;
-  ToggleState margins = ToggleState::Mixed;
-  ToggleState mixed_visibility = ToggleState::Mixed;
+  ToggleState grain_enabled = ToggleState::On;
+  ToggleState grain_disabled = ToggleState::Off;
+  ToggleState direction_locked = ToggleState::On;
+  ToggleState direction_unlocked = ToggleState::Off;
 
   bool assembly_expanded = true;
   bool part_expanded = true;
@@ -343,14 +345,6 @@ struct GalleryState {
       ToggleState::On, ToggleState::Off,
   };
   std::string issue_feedback = "Expand a group and select an issue.";
-
-  bool bed_color_mixed = true;
-  ColorRgba bed_color{
-      .red = 0.27f,
-      .green = 0.58f,
-      .blue = 0.97f,
-  };
-  ColorPickerState bed_color_picker;
 
   ColorRgba preview_picker_color{
       .red = 0.64f,

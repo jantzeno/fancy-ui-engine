@@ -387,39 +387,38 @@ void DrawVisibility(detail::UiAssetAtlas &assets, GalleryState &state) {
   }
 }
 
-void DrawEnabledLocked(detail::UiAssetAtlas &assets) {
+void DrawEnabledLocked(detail::UiAssetAtlas &assets, GalleryState &state) {
+  const detail::ScopedFieldLayoutPreview layout(Scale(76.0f));
   const IconPainter enabled = assets.Painter("success");
   const IconPainter disabled = assets.Painter("failure");
   const IconPainter locked = assets.Painter("orbit-locked");
   const IconPainter unlocked = assets.Painter("orbit-unlocked");
-  if (ImGui::BeginTable("##enabled-locked-grid", 2,
-                        ImGuiTableFlags_SizingStretchSame |
-                            ImGuiTableFlags_NoSavedSettings)) {
-    const auto cell = [](const char *id, const char *category,
-                         const char *label, const ToggleState state,
-                         const IconPainter &on_icon,
-                         const IconPainter &off_icon) {
-      ImGui::TableNextColumn();
-      ImGui::TextDisabled("%s", category);
-      static_cast<void>(Checkbox({
-          .id = id,
-          .label = label,
-          .state = state,
-          .on_icon = on_icon,
-          .off_icon = off_icon,
-          .show_checkbox = false,
-      }));
-    };
-    cell("grain-enabled", "Grain", "Enabled", ToggleState::On, enabled,
-         disabled);
-    cell("grain-disabled", "Grain", "Disabled", ToggleState::Off, enabled,
-         disabled);
-    cell("direction-locked", "Direction", "Locked", ToggleState::On, locked,
-         unlocked);
-    cell("direction-unlocked", "Direction", "Unlocked", ToggleState::Off,
-         locked, unlocked);
-    ImGui::EndTable();
-  }
+  const auto field = [](const char *id, const char *category,
+                        const char *on_label, const char *off_label,
+                        ToggleState &state, const IconPainter &on_icon,
+                        const IconPainter &off_icon) {
+    const detail::FieldLayout field_layout = detail::BeginFieldLayout(category);
+    const CheckboxResult result = Checkbox({
+        .id = id,
+        .label = state == ToggleState::On ? on_label : off_label,
+        .state = state,
+        .on_icon = on_icon,
+        .off_icon = off_icon,
+        .show_checkbox = true,
+    });
+    detail::EndFieldLayout(field_layout, {});
+    if (result.changed) {
+      state = result.state;
+    }
+  };
+  field("grain-enabled", "Grain", "Enabled", "Disabled", state.grain_enabled,
+        enabled, disabled);
+  field("grain-disabled", "Grain", "Enabled", "Disabled", state.grain_disabled,
+        enabled, disabled);
+  field("direction-locked", "Direction", "Locked", "Unlocked",
+        state.direction_locked, locked, unlocked);
+  field("direction-unlocked", "Direction", "Locked", "Unlocked",
+        state.direction_unlocked, locked, unlocked);
 }
 
 template <std::size_t Size>
@@ -826,55 +825,6 @@ void DrawOperation(detail::UiAssetAtlas &assets) {
       {.id = "stop", .label = "Stop", .size = {.x = 52.0f, .y = 24.0f}}));
 }
 
-void DrawMixedValues(detail::UiAssetAtlas &assets, GalleryState &state) {
-  static_cast<void>(ValueDisplay({
-      .id = "margin",
-      .label = "Margin",
-      .value = state.bed_color_mixed ? std::string_view{} : "Single value",
-      .mixed = state.bed_color_mixed,
-  }));
-  ImGui::Spacing();
-  static constexpr std::array colors{
-      ColorRgba{.red = 0.27f, .green = 0.58f, .blue = 0.97f},
-      ColorRgba{.red = 0.64f, .green = 0.44f, .blue = 0.97f},
-  };
-  const std::span<const ColorRgba> preview =
-      state.bed_color_mixed ? std::span<const ColorRgba>(colors)
-                            : std::span<const ColorRgba>(&state.bed_color, 1);
-  const ColorSwatchResult color = ColorSwatch(
-      {
-          .id = "color",
-          .label = "Bed color",
-          .tooltip = "Open color picker",
-          .picker_title = "Bed color",
-          .value = state.bed_color,
-          .colors = preview,
-      },
-      state.bed_color_picker);
-  if (color.changed) {
-    state.bed_color = color.value;
-    state.bed_color_mixed = false;
-  }
-  const CheckboxResult margins = Checkbox({
-      .id = "checkbox",
-      .label = "Margins - Mixed",
-      .state = state.margins,
-  });
-  if (margins.changed) {
-    state.margins = margins.state;
-  }
-  const VisibilityToggleResult visibility = VisibilityToggle({
-      .id = "visibility",
-      .label = "Visibility",
-      .state = state.mixed_visibility,
-      .visible_icon = assets.Painter("visibility"),
-      .hidden_icon = assets.Painter("visibility-off"),
-  });
-  if (visibility.changed) {
-    state.mixed_visibility = visibility.state;
-  }
-}
-
 void DrawEmptyOverflow() {
   EmptyState({
       .id = "empty",
@@ -1076,7 +1026,7 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
           GalleryCard("visibility", "Visibility", assets.bold_font(),
                       [&assets, &state] { DrawVisibility(assets, state); });
           GalleryCard("enabled-locked", "Enabled & locked", assets.bold_font(),
-                      [&assets] { DrawEnabledLocked(assets); });
+                      [&assets, &state] { DrawEnabledLocked(assets, state); });
           GalleryCard("tree-rows", "Tree rows", assets.bold_font(),
                       [&assets, &state] { DrawTreeRows(assets, state); });
           GalleryCard(
@@ -1086,8 +1036,6 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
                       [&assets] { DrawStatusTypes(assets); });
           GalleryCard("operation", "Operation", assets.bold_font(),
                       [&assets] { DrawOperation(assets); });
-          GalleryCard("mixed-values", "Mixed values", assets.bold_font(),
-                      [&assets, &state] { DrawMixedValues(assets, state); });
           GalleryCard("empty-overflow", "Empty & overflow", assets.bold_font(),
                       DrawEmptyOverflow);
           GalleryCard("color-pickers", "Color pickers", assets.bold_font(),
