@@ -931,13 +931,13 @@ public:
     StatusText({.label = operation.title, .status = ToStatus(operation.tone)});
     if (!operation.indeterminate) {
       ImGui::SameLine(0.0f, metrics.spacing.space03);
-      align_to_row(Scale(6.0f));
+      align_to_row(metrics.geometry.progress_height);
       ProgressBar({
           .id = "operation-progress",
           .label = operation.title,
           .value = std::clamp(operation.progress, 0.0f, 1.0f),
           .status = ToStatus(operation.tone),
-          .size = {.x = 180.0f, .y = 6.0f},
+          .size = {.x = 180.0f},
       });
     }
     for (const CommandView &command : operation.commands) {

@@ -433,13 +433,16 @@ float ActionWidth(const OperationAction &action) {
 }
 
 void DrawOperationProgress(const OperationSample &sample) {
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
   const float progress_width = Scale(144.0f);
   const float bar_width = Scale(88.0f);
   const float gap = Scale(8.0f);
   const float item_height = Scale(kOperationStripItemHeight);
   const ImVec2 origin = ImGui::GetCursorScreenPos();
   ImGui::SetCursorScreenPos(ImVec2(
-      origin.x, origin.y + std::floor((item_height - Scale(6.0f)) * 0.5f)));
+      origin.x,
+      origin.y +
+          std::floor((item_height - metrics.geometry.progress_height) * 0.5f)));
   ProgressBar({
       .id = "operation-progress",
       .label =
@@ -448,7 +451,7 @@ void DrawOperationProgress(const OperationSample &sample) {
       .status = sample.indeterminate
                     ? SemanticStatus::Busy
                     : PresentationForPhase(sample.phase).status,
-      .size = {.x = 88.0f, .y = 6.0f},
+      .size = {.x = 88.0f},
   });
   const float text_y =
       origin.y + std::floor((item_height - ImGui::GetTextLineHeight()) * 0.5f);

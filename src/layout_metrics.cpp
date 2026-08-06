@@ -36,6 +36,7 @@ constexpr LayoutMetrics kLogicalMetrics{
             .child_window_radius = 5.0f,
             .icon = 16.0f,
             .activity_icon = 24.0f,
+            .progress_height = 6.0f,
             .compact_target = 24.0f,
             .control_height = 32.0f,
             .row_height = 32.0f,
@@ -132,6 +133,7 @@ LayoutMetrics ResolveLayoutMetrics(const float requested_scale) {
   resolve(metrics.geometry.child_window_radius);
   resolve(metrics.geometry.icon);
   resolve(metrics.geometry.activity_icon);
+  resolve(metrics.geometry.progress_height);
   resolve(metrics.geometry.compact_target);
   resolve(metrics.geometry.control_height);
   resolve(metrics.geometry.row_height);

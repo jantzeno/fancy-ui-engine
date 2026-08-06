@@ -158,6 +158,7 @@ TEST_CASE("layout metrics expose the normative shell and panel geometry") {
   REQUIRE(metrics.shell.operation_strip_height == 32.0f);
   REQUIRE(metrics.shell.status_bar_height == 24.0f);
 
+  REQUIRE(metrics.geometry.progress_height == 6.0f);
   REQUIRE(metrics.explorer.audit_color_column_width == 38.0f);
   REQUIRE(metrics.explorer.audit_action_column_width == 28.0f);
   REQUIRE(metrics.explorer.audit_visibility_column_width == 28.0f);
@@ -179,6 +180,45 @@ TEST_CASE("resolved layout metrics clamp scale and round once") {
   REQUIRE(fractional.shell.explorer_width == 320.0f);
   REQUIRE(fractional.explorer.audit_color_column_width == 48.0f);
   REQUIRE(maximum.shell.inspector_width == 640.0f);
+}
+
+TEST_CASE("default progress bars flex and use the shared height") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(640.0f, 480.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int texture_width = 0;
+  int texture_height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &texture_width, &texture_height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  const auto draw = [](const float window_width) {
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(window_width, 80.0f), ImGuiCond_Always);
+    ImGui::Begin("progress-contract", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoSavedSettings);
+    fancy_ui::ProgressBar({
+        .id = "progress",
+        .label = "Search progress",
+        .value = 0.62f,
+    });
+    const ImVec2 size = ImGui::GetItemRectSize();
+    ImGui::End();
+    ImGui::Render();
+    return size;
+  };
+
+  const ImVec2 narrow = draw(240.0f);
+  const ImVec2 wide = draw(440.0f);
+  REQUIRE(wide.x > narrow.x);
+  REQUIRE(
+      narrow.y ==
+      Catch::Approx(fancy_ui::CurrentLayoutMetrics().geometry.progress_height));
+  ImGui::DestroyContext();
 }
 
 TEST_CASE("shared tooltips use eight scaled pixels without changing windows") {
@@ -839,6 +879,80 @@ TEST_CASE("hierarchy trees keep dense 32 pixel row targets") {
 
   verify_scale(1.0f);
   verify_scale(2.0f);
+}
+
+TEST_CASE("information tree rows expose disclosure and aggregate visibility") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(640.0f, 480.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  const fancy_ui::IconPainter icon = [](const fancy_ui::Rect &,
+                                        const fancy_ui::ColorRgba) {};
+  fancy_ui::InformationTreeRowResult result;
+  ImVec2 row_minimum;
+  ImVec2 row_maximum;
+  const auto draw = [&] {
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(420.0f, 100.0f), ImGuiCond_Always);
+    ImGui::Begin("information-tree-contract", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoSavedSettings);
+    {
+      fancy_ui::InformationTree tree;
+      row_minimum = ImGui::GetCursorScreenPos();
+      row_maximum =
+          ImVec2(row_minimum.x + ImGui::GetContentRegionAvail().x,
+                 row_minimum.y + fancy_ui::CurrentLayoutMetrics()
+                                     .inspector.information_row_minimum_height);
+      result = fancy_ui::InformationTreeRow(
+          tree, {
+                    .id = "repairable",
+                    .label = "Repairable",
+                    .value = "5",
+                    .expandable = true,
+                    .expanded = true,
+                    .status = fancy_ui::SemanticStatus::Information,
+                    .visibility = fancy_ui::ToggleState::Mixed,
+                    .visible_icon = icon,
+                    .hidden_icon = icon,
+                });
+      if (result.expanded) {
+        tree.Pop();
+      }
+    }
+    ImGui::End();
+    ImGui::Render();
+  };
+
+  draw();
+  REQUIRE(result.expanded);
+  REQUIRE_FALSE(result.visibility_changed);
+
+  const ImVec2 visibility_target(row_maximum.x - fancy_ui::Scale(14.0f),
+                                 (row_minimum.y + row_maximum.y) * 0.5f);
+  io.AddMousePosEvent(visibility_target.x, visibility_target.y);
+  draw();
+  io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+  draw();
+  fancy_ui::InformationTreeRowResult clicked = result;
+  io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+  draw();
+  clicked.visibility_changed |= result.visibility_changed;
+  if (result.visibility_changed) {
+    clicked.visibility = result.visibility;
+  }
+
+  REQUIRE(clicked.visibility_changed);
+  REQUIRE(clicked.visibility == fancy_ui::ToggleState::On);
+  ImGui::DestroyContext();
 }
 
 TEST_CASE("color picker layouts fit their popup work area at the right edge") {

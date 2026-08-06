@@ -1,5 +1,6 @@
 #include "fancy_ui/components/feedback.hpp"
 
+#include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/theme.hpp"
 #include "internal/component_internal.hpp"
 
@@ -28,7 +29,7 @@ ColorRgba FromImVec4(const ImVec4 color) {
 std::string DefaultTitle(const SemanticStatus status) {
   switch (status) {
   case SemanticStatus::Information:
-    return "INFO";
+    return "INFORMATION";
   case SemanticStatus::Success:
     return "SUCCESS";
   case SemanticStatus::Warning:
@@ -53,9 +54,16 @@ void StatusCard(const StatusCardSpec &spec) {
                                                : detail::Owned(spec.title);
   const std::string message = detail::Owned(spec.message);
   const SemanticPalette &palette = CurrentPalette();
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
   const ImVec4 foreground = detail::StatusColor(spec.status);
   const ImVec4 background = detail::StatusBackground(spec.status);
-  const float height = Scale(46.0f);
+  const float title_font_size = Scale(13.0f);
+  const float title_line_height = Scale(14.0f);
+  const float message_font_size = Scale(14.0f);
+  const float message_line_height = Scale(15.0f);
+  const float copy_height = title_line_height + message_line_height;
+  const float height =
+      std::max(Scale(46.0f), copy_height + metrics.spacing.space02 * 2.0f);
 
   ImGui::PushID(id.c_str());
   ImGui::InvisibleButton("##status-card",
@@ -67,23 +75,24 @@ void StatusCard(const StatusCardSpec &spec) {
   draw_list->AddRectFilled(minimum, ImVec2(minimum.x + Scale(3.0f), maximum.y),
                            ImGui::GetColorU32(foreground));
 
-  float copy_x = minimum.x + Scale(8.0f);
+  float copy_x = minimum.x + metrics.spacing.space03;
   if (spec.icon) {
-    const float icon_size = Scale(16.0f);
+    const float icon_size = metrics.geometry.icon;
     const float icon_y = minimum.y + (height - icon_size) * 0.5f;
     spec.icon({.minimum = {.x = copy_x, .y = icon_y},
                .maximum = {.x = copy_x + icon_size, .y = icon_y + icon_size}},
               FromImVec4(foreground));
-    copy_x += Scale(23.0f);
+    copy_x += icon_size + metrics.spacing.space03;
   }
-  draw_list->PushClipRect(ImVec2(copy_x, minimum.y),
-                          ImVec2(maximum.x - Scale(7.0f), maximum.y), true);
+  const float copy_y = minimum.y + (height - copy_height) * 0.5f;
+  draw_list->PushClipRect(
+      ImVec2(copy_x, minimum.y),
+      ImVec2(maximum.x - metrics.spacing.space03, maximum.y), true);
   ImFont *font = ImGui::GetFont();
-  draw_list->AddText(font, Scale(13.0f),
-                     ImVec2(copy_x, minimum.y + Scale(4.0f)),
+  draw_list->AddText(font, title_font_size, ImVec2(copy_x, copy_y),
                      ImGui::GetColorU32(foreground), title.c_str());
   draw_list->AddText(
-      font, Scale(14.0f), ImVec2(copy_x, minimum.y + Scale(23.0f)),
+      font, message_font_size, ImVec2(copy_x, copy_y + title_line_height),
       ImGui::GetColorU32(ToImVec4(palette.text_primary)), message.c_str());
   draw_list->PopClipRect();
   ImGui::PopID();
@@ -120,9 +129,11 @@ void Notification(const NotificationSpec &spec) {
 
 void ProgressBar(const ProgressBarSpec &spec) {
   const std::string id = detail::Owned(spec.id);
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
   const float width = spec.size.x > 0.0f ? Scale(spec.size.x)
                                          : ImGui::GetContentRegionAvail().x;
-  const float height = Scale(std::max(spec.size.y, 1.0f));
+  const float height = spec.size.y > 0.0f ? Scale(spec.size.y)
+                                          : metrics.geometry.progress_height;
   const float progress = std::clamp(spec.value.value_or(0.46f), 0.0f, 1.0f);
 
   ImGui::PushID(id.c_str());

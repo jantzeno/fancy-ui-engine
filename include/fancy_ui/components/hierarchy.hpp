@@ -95,4 +95,54 @@ private:
 [[nodiscard]] HierarchyRowResult HierarchyRow(HierarchyTree &tree,
                                               const HierarchyRowSpec &spec);
 
+struct InformationTreeRowSpec {
+  std::string_view id;
+  std::string_view label;
+  std::string_view value;
+  bool expandable = false;
+  bool expanded = false;
+  SemanticStatus status = SemanticStatus::Neutral;
+  std::optional<ToggleState> visibility;
+  IconPainter visible_icon;
+  IconPainter hidden_icon;
+  std::string_view visibility_tooltip;
+  Availability availability;
+};
+
+struct InformationTreeRowResult : InteractionResult {
+  bool expansion_changed = false;
+  bool expanded = false;
+  bool visibility_changed = false;
+  ToggleState visibility = ToggleState::Off;
+};
+
+/** Scopes one non-selectable Inspector information tree. */
+class InformationTree {
+public:
+  InformationTree();
+  ~InformationTree();
+
+  InformationTree(const InformationTree &) = delete;
+  InformationTree &operator=(const InformationTree &) = delete;
+  InformationTree(InformationTree &&) = delete;
+  InformationTree &operator=(InformationTree &&) = delete;
+
+  void Pop();
+
+private:
+  friend InformationTreeRowResult
+  InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec);
+
+  int open_nodes_ = 0;
+};
+
+/**
+ * Draws an Inspector information row with disclosure and aggregate visibility.
+ *
+ * Unlike HierarchyRow(), the row has no Explorer selection or review-action
+ * behavior.
+ */
+[[nodiscard]] InformationTreeRowResult
+InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec);
+
 } // namespace fancy_ui

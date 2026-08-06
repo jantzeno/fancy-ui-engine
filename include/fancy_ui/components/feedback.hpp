@@ -41,7 +41,7 @@ struct ProgressBarSpec {
   std::string_view label;
   std::optional<float> value;
   SemanticStatus status = SemanticStatus::Busy;
-  Vec2 size = {.x = 0.0f, .y = 6.0f};
+  Vec2 size;
 };
 
 void ProgressBar(const ProgressBarSpec &spec);

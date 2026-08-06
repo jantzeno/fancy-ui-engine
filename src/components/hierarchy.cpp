@@ -274,6 +274,10 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
   }
   draw_list->PopClipRect();
 
+  std::optional<detail::ScopedInteractionPreview> inline_preview;
+  if (detail::CurrentInteractionPreview().has_value()) {
+    inline_preview.emplace(detail::InteractionPreview::Rest);
+  }
   ImGui::PushID(id.c_str());
   float trailing_x = maximum.x - trailing_width;
   bool color_activated = false;
@@ -363,6 +367,173 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
   result.expanded = spec.expandable && native_open;
   result.color_activated = color_activated && !disabled;
   result.action_activated = action_activated && !disabled;
+  result.visibility_changed = visibility_changed && !disabled;
+  result.visibility = visibility;
+  return result;
+}
+
+InformationTree::InformationTree() {
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  const float vertical_padding =
+      std::max((metrics.inspector.information_row_minimum_height -
+                ImGui::GetFontSize()) *
+                   0.5f,
+               0.0f);
+  const ImGuiStyle &style = ImGui::GetStyle();
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                      ImVec2(style.ItemSpacing.x, metrics.spacing.condensed));
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                      ImVec2(metrics.spacing.space03, vertical_padding));
+  ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing,
+                      metrics.explorer.tree_indent);
+  ImGui::PushStyleVar(ImGuiStyleVar_TreeLinesSize, metrics.geometry.border);
+  ImGui::PushStyleVar(ImGuiStyleVar_TreeLinesRounding,
+                      metrics.geometry.surface_radius);
+}
+
+InformationTree::~InformationTree() {
+  const bool unbalanced = open_nodes_ != 0;
+  while (open_nodes_ > 0) {
+    ImGui::TreePop();
+    --open_nodes_;
+  }
+  ImGui::PopStyleVar(5);
+  IM_ASSERT(!unbalanced &&
+            "Every expanded information row must have a matching Pop()");
+}
+
+void InformationTree::Pop() {
+  IM_ASSERT(open_nodes_ > 0 &&
+            "Cannot pop an information tree with no open parent");
+  if (open_nodes_ <= 0) {
+    return;
+  }
+  ImGui::TreePop();
+  --open_nodes_;
+}
+
+InformationTreeRowResult
+InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
+  const std::string id = detail::Owned(spec.id);
+  const std::string label = detail::Owned(spec.label);
+  const std::string value = detail::Owned(spec.value);
+  const bool disabled = !spec.availability.enabled || spec.availability.busy;
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  const SemanticPalette &palette = CurrentPalette();
+  const float visibility_width =
+      spec.visibility.has_value()
+          ? metrics.explorer.audit_visibility_column_width
+          : 0.0f;
+  const ImVec2 node_cursor = ImGui::GetCursorScreenPos();
+  const ImVec2 content_min(ImGui::GetWindowPos().x +
+                               ImGui::GetWindowContentRegionMin().x,
+                           node_cursor.y);
+  const ImVec2 content_max(
+      ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x,
+      node_cursor.y + metrics.inspector.information_row_minimum_height);
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  draw_list->AddRectFilled(content_min, content_max,
+                           ImGui::GetColorU32(ToImVec4(palette.surface_muted)));
+
+  ImGuiTreeNodeFlags flags =
+      ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_OpenOnArrow |
+      ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding |
+      ImGuiTreeNodeFlags_NavLeftJumpsToParent |
+      ImGuiTreeNodeFlags_DrawLinesFull;
+  if (!spec.expandable) {
+    flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+  } else {
+    ImGui::SetNextItemOpen(spec.expanded, ImGuiCond_Always);
+  }
+
+  const ColorRgba foreground = disabled ? palette.text_disabled
+                               : spec.status == SemanticStatus::Neutral
+                                   ? palette.text_primary
+                                   : StatusForeground(spec.status);
+  const std::string native_id = "##" + id;
+  detail::BeginAvailability(spec.availability);
+  ImGui::SetNextItemAllowOverlap();
+  ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(foreground));
+  const bool native_open = ImGui::TreeNodeEx(native_id.c_str(), flags);
+  ImGui::PopStyleColor();
+  const InteractionResult interaction = detail::CaptureInteraction();
+  const ImVec2 minimum = ImGui::GetItemRectMin();
+  const ImVec2 maximum = ImGui::GetItemRectMax();
+  const ImVec2 cursor_after = ImGui::GetCursorScreenPos();
+  const bool expansion_changed = spec.expandable && ImGui::IsItemToggledOpen();
+  detail::EndAvailability(spec.availability, {});
+  if (spec.expandable && native_open) {
+    ++tree.open_nodes_;
+  }
+
+  draw_list->AddRect(minimum, maximum,
+                     ImGui::GetColorU32(ToImVec4(palette.border)), 0.0f, 0,
+                     metrics.geometry.border);
+  detail::DrawFocusRing(interaction);
+
+  ImFont *font = ImGui::GetFont();
+  const float font_size = Scale(21.0f);
+  const ImVec2 label_size = font->CalcTextSizeA(
+      font_size, std::numeric_limits<float>::max(), 0.0f, label.c_str());
+  const ImVec2 value_size = font->CalcTextSizeA(
+      font_size, std::numeric_limits<float>::max(), 0.0f, value.c_str());
+  const float text_y =
+      std::floor((minimum.y + maximum.y - label_size.y) * 0.5f);
+  const float label_x = node_cursor.x + ImGui::GetTreeNodeToLabelSpacing();
+  const float value_x =
+      maximum.x - visibility_width - metrics.spacing.space03 - value_size.x;
+  draw_list->PushClipRect(
+      ImVec2(label_x, minimum.y),
+      ImVec2(std::max(label_x, value_x - metrics.spacing.space03), maximum.y),
+      true);
+  draw_list->AddText(font, font_size, ImVec2(label_x, text_y),
+                     ImGui::GetColorU32(ToImVec4(foreground)), label.c_str());
+  draw_list->PopClipRect();
+  draw_list->AddText(font, font_size, ImVec2(value_x, text_y),
+                     ImGui::GetColorU32(ToImVec4(foreground)), value.c_str());
+
+  bool visibility_changed = false;
+  ToggleState visibility = spec.visibility.value_or(ToggleState::Off);
+  if (spec.visibility.has_value()) {
+    const IconPainter &icon =
+        visibility == ToggleState::Off ? spec.hidden_icon : spec.visible_icon;
+    const std::string visibility_tooltip =
+        !spec.visibility_tooltip.empty()
+            ? detail::Owned(spec.visibility_tooltip)
+        : visibility == ToggleState::On    ? "Hide"
+        : visibility == ToggleState::Mixed ? "Show all descendants"
+                                           : "Show";
+    ImGui::PushID(id.c_str());
+    const InlineTargetResult target = IconTarget(
+        "##visibility",
+        ImVec2(maximum.x - visibility_width + Scale(2.0f),
+               (minimum.y + maximum.y) * 0.5f - Scale(12.0f)),
+        icon, disabled ? palette.text_disabled : palette.text_secondary,
+        visibility_tooltip, spec.availability);
+    ImGui::PopID();
+    visibility_changed = target.activated;
+    if (visibility == ToggleState::Mixed) {
+      draw_list->AddLine(
+          ImVec2(target.minimum.x + Scale(7.0f),
+                 target.maximum.y - Scale(4.0f)),
+          ImVec2(target.maximum.x - Scale(7.0f),
+                 target.maximum.y - Scale(4.0f)),
+          ImGui::GetColorU32(ToImVec4(disabled ? palette.text_disabled
+                                               : palette.text_primary)),
+          Scale(2.0f));
+    }
+    if (visibility_changed) {
+      visibility = NextVisibilityState(visibility);
+    }
+    ImGui::SetCursorScreenPos(ImVec2(
+        cursor_after.x, cursor_after.y - ImGui::GetStyle().ItemSpacing.y));
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+  }
+
+  InformationTreeRowResult result;
+  static_cast<InteractionResult &>(result) = interaction;
+  result.expansion_changed = expansion_changed;
+  result.expanded = spec.expandable && native_open;
   result.visibility_changed = visibility_changed && !disabled;
   result.visibility = visibility;
   return result;

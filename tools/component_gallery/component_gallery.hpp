@@ -322,6 +322,22 @@ struct GalleryState {
   ToggleState direction_locked = ToggleState::On;
   ToggleState direction_unlocked = ToggleState::Off;
 
+  bool reference_bed_expanded = true;
+  bool reference_frame_expanded = true;
+  std::array<bool, 3> reference_tree_selected{false, true, false};
+  int reference_tree_selection_anchor = 1;
+  std::array<ToggleState, 2> reference_tree_visibility{ToggleState::On,
+                                                       ToggleState::Off};
+  std::array<ColorRgba, 3> reference_tree_colors{
+      ColorRgba{.red = 0.27f, .green = 0.58f, .blue = 0.97f},
+      ColorRgba{.red = 0.31f, .green = 0.76f, .blue = 0.36f},
+      ColorRgba{.red = 0.98f, .green = 0.36f, .blue = 0.32f},
+  };
+  ColorPickerState reference_tree_color_picker;
+  int reference_tree_color_row = 1;
+  int reference_tree_action_row = -1;
+  std::string reference_tree_feedback = "Select a row or use an inline action.";
+
   bool assembly_expanded = true;
   bool part_expanded = true;
   std::array<bool, 3> tree_selected{true, false, false};
@@ -337,14 +353,9 @@ struct GalleryState {
   std::string tree_feedback = "Select a row or use an inline action.";
 
   bool show_issue_labels = true;
-  std::array<bool, 3> issue_groups_expanded{false, false, false};
-  std::array<bool, 5> issue_selected{};
-  int issue_selection_anchor = -1;
-  std::array<ToggleState, 5> issue_visibility{
-      ToggleState::On, ToggleState::Off, ToggleState::On,
-      ToggleState::On, ToggleState::Off,
-  };
-  std::string issue_feedback = "Expand a group and select an issue.";
+  bool repairable_expanded = true;
+  std::array<ToggleState, 2> issue_visibility{ToggleState::On,
+                                              ToggleState::Off};
 
   ColorRgba preview_picker_color{
       .red = 0.64f,

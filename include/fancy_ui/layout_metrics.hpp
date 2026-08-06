@@ -35,6 +35,7 @@ struct LayoutMetrics {
     float child_window_radius;
     float icon;
     float activity_icon;
+    float progress_height;
     float compact_target;
     float control_height;
     float row_height;
