@@ -407,7 +407,8 @@ void DrawEnabledLocked(detail::UiAssetAtlas &assets, GalleryState &state) {
                         const char *on_label, const char *off_label,
                         ToggleState &state, const IconPainter &on_icon,
                         const IconPainter &off_icon) {
-    ImGui::PushFont(nullptr, Scale(21.0f));
+    ImGui::PushFont(nullptr,
+                    CurrentLayoutMetrics().typography.body_font_height);
     const detail::FieldLayout field_layout = detail::BeginFieldLayout(category);
     const CheckboxResult result = Checkbox({
         .id = id,
@@ -903,7 +904,7 @@ void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
   const IconPainter visible = assets.Painter("visibility");
   const IconPainter hidden = assets.Painter("visibility-off");
 
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   const detail::FieldLayout field_layout =
       detail::BeginFieldLayout("Issue labels");
   const CheckboxResult labels = Checkbox(
@@ -1087,7 +1088,7 @@ void DrawStatusTypes(detail::UiAssetAtlas &assets) {
 }
 
 void DrawProgress() {
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   ImGui::TextUnformatted("Determinate · 62%");
   ImGui::PopFont();
   ProgressBar({
@@ -1097,7 +1098,7 @@ void DrawProgress() {
       .status = SemanticStatus::Busy,
   });
   ImGui::Spacing();
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   ImGui::TextUnformatted("Indeterminate");
   ImGui::PopFont();
   ProgressBar({
@@ -1126,9 +1127,11 @@ void DrawOperation(detail::UiAssetAtlas &assets) {
   }
   const LayoutMetrics metrics = CurrentLayoutMetrics();
   ImFont *font = ImGui::GetFont();
-  const auto intrinsic_button_width = [font](const std::string_view label) {
-    return font->CalcTextSizeA(Scale(21.0f), std::numeric_limits<float>::max(),
-                               0.0f, label.data(), label.data() + label.size())
+  const auto intrinsic_button_width = [font,
+                                       &metrics](const std::string_view label) {
+    return font->CalcTextSizeA(metrics.typography.body_font_height,
+                               std::numeric_limits<float>::max(), 0.0f,
+                               label.data(), label.data() + label.size())
                .x +
            ImGui::GetStyle().FramePadding.x * 2.0f;
   };

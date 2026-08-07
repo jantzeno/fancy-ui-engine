@@ -1,5 +1,6 @@
 #include "internal/ui_asset_atlas.hpp"
 
+#include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/theme.hpp"
 
 #include <lunasvg.h>
@@ -79,9 +80,11 @@ UiAssetAtlas::Load(const std::filesystem::path &asset_root,
 
   const std::span<const std::string_view> fonts =
       steppenface::RequiredUiFontFiles();
-  impl_->regular_font = load_font(fonts[0], 16.0f * impl_->ui_scale);
+  const float body_font_height =
+      ResolveLayoutMetrics(impl_->ui_scale).typography.body_font_height;
+  impl_->regular_font = load_font(fonts[0], body_font_height);
   impl_->bold_font = load_font(fonts[1], 18.0f * impl_->ui_scale);
-  impl_->mono_font = load_font(fonts[2], 16.0f * impl_->ui_scale);
+  impl_->mono_font = load_font(fonts[2], body_font_height);
   if (impl_->regular_font == nullptr) {
     impl_->regular_font = io.Fonts->AddFontDefault();
     report.used_fallback_font = true;

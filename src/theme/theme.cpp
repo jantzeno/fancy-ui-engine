@@ -112,10 +112,14 @@ void ApplyTheme(const ResolvedTheme theme, const float ui_scale) {
   active_ui_scale = std::clamp(ui_scale, 0.75f, 2.0f);
   const LayoutMetrics metrics = CurrentLayoutMetrics();
   ImGuiStyle &style = ImGui::GetStyle();
+  const float vertical_frame_padding =
+      std::max(0.0f, (metrics.geometry.control_height -
+                      metrics.typography.body_font_height) *
+                         0.5f);
   style.WindowPadding =
       ImVec2(metrics.spacing.space05, metrics.spacing.space05);
   style.ChildRounding = metrics.geometry.surface_radius;
-  style.FramePadding = ImVec2(metrics.spacing.space04, Scale(6.0f));
+  style.FramePadding = ImVec2(metrics.spacing.space04, vertical_frame_padding);
   style.ItemSpacing = ImVec2(metrics.spacing.space03, metrics.spacing.space03);
   style.ItemInnerSpacing =
       ImVec2(metrics.spacing.space03, metrics.spacing.space02);

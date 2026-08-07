@@ -562,7 +562,7 @@ public:
       return;
     }
 
-    ImGui::PushFont(nullptr, Scale(21.0f));
+    ImGui::PushFont(nullptr, metrics.typography.body_font_height);
     ImGui::PushID(segmented.id.value.c_str());
     std::vector<ToolbarSegmentInteraction> interactions;
     const float equal_width =

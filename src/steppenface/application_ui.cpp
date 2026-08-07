@@ -4,6 +4,7 @@
 #include "fancy_ui/components/checkbox.hpp"
 #include "fancy_ui/components/data_display.hpp"
 #include "fancy_ui/components/feedback.hpp"
+#include "fancy_ui/components/hierarchy.hpp"
 #include "fancy_ui/components/navigation.hpp"
 #include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/shell/application.hpp"
@@ -22,6 +23,7 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -95,6 +97,33 @@ bool MatchesQuery(const TreeRowView &row, const std::string &query) {
   };
   return contains_case_insensitive(row.label) ||
          contains_case_insensitive(row.secondary_label);
+}
+
+std::size_t ExplorerSubtreeEnd(const std::vector<TreeRowView> &rows,
+                               const std::size_t index) {
+  std::size_t end = index + 1;
+  while (end < rows.size() && rows[end].depth > rows[index].depth) {
+    ++end;
+  }
+  return end;
+}
+
+bool ExplorerSubtreeMatches(const std::vector<TreeRowView> &rows,
+                            const std::size_t index, const std::string &query) {
+  if (!rows[index].visible) {
+    return false;
+  }
+  const std::size_t end = ExplorerSubtreeEnd(rows, index);
+  for (std::size_t descendant = index; descendant < end; ++descendant) {
+    if (rows[descendant].visible && MatchesQuery(rows[descendant], query)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+FontHandle NativeFontHandle(ImFont *font) {
+  return {.value = reinterpret_cast<std::uintptr_t>(font)};
 }
 
 } // namespace
@@ -630,6 +659,61 @@ public:
     ImGui::PopStyleVar();
   }
 
+  void DrawExplorerNode(const ApplicationView &view, const std::string &query,
+                        const std::size_t index, HierarchyTree &tree) {
+    const std::vector<TreeRowView> &rows = view.explorer.rows;
+    if (!ExplorerSubtreeMatches(rows, index, query)) {
+      return;
+    }
+
+    const TreeRowView &row = rows[index];
+    const std::size_t subtree_end = ExplorerSubtreeEnd(rows, index);
+    const bool expandable = row.expandable || subtree_end > index + 1;
+    auto [expansion, inserted] =
+        session.explorer_expanded_rows.try_emplace(row.id.value, row.expanded);
+    static_cast<void>(inserted);
+    const bool expanded =
+        expandable && (query.empty() ? expansion->second : true);
+    std::string tooltip = row.label;
+    if (!row.secondary_label.empty()) {
+      tooltip += " · ";
+      tooltip += row.secondary_label;
+    }
+    const HierarchyRowResult result = HierarchyRow(
+        tree, {
+                  .id = row.id.value,
+                  .label = row.label,
+                  .metadata = row.secondary_label,
+                  .tooltip = tooltip,
+                  .expandable = expandable,
+                  .expanded = expanded,
+                  .selected = row.selected,
+                  .leading_icon = row.icon.empty() ? IconPainter{}
+                                                   : assets.Painter(row.icon),
+              });
+    if (result.expansion_changed && query.empty()) {
+      expansion->second = result.expanded;
+    }
+    if (result.activated) {
+      intents.emplace_back(ChangeSelection{
+          .revision = view.revision,
+          .entity = row.id,
+          .additive = result.additive,
+          .range = result.range,
+      });
+    }
+
+    if (!expandable || !result.expanded) {
+      return;
+    }
+    std::size_t child = index + 1;
+    while (child < subtree_end) {
+      DrawExplorerNode(view, query, child, tree);
+      child = ExplorerSubtreeEnd(rows, child);
+    }
+    tree.Pop();
+  }
+
   void DrawExplorer(const ApplicationView &view) {
     if (assets.bold_font() != nullptr) {
       ImGui::PushFont(assets.bold_font());
@@ -659,26 +743,11 @@ public:
       ImGui::NewLine();
     }
 
-    for (const TreeRowView &row : view.explorer.rows) {
-      if (!row.visible || !MatchesQuery(row, query)) {
-        continue;
-      }
-      ImGui::Indent(static_cast<float>(row.depth) * 14.0f);
-      std::string label = row.label;
-      if (!row.secondary_label.empty()) {
-        label += "  " + row.secondary_label;
-      }
-      if (ImGui::Selectable((label + "##" + row.id.value).c_str(), row.selected,
-                            ImGuiSelectableFlags_AllowDoubleClick)) {
-        const ImGuiIO &io = ImGui::GetIO();
-        intents.emplace_back(ChangeSelection{
-            .revision = view.revision,
-            .entity = row.id,
-            .additive = io.KeyCtrl,
-            .range = io.KeyShift,
-        });
-      }
-      ImGui::Unindent(static_cast<float>(row.depth) * 14.0f);
+    HierarchyTree tree({.section_font = NativeFontHandle(assets.bold_font())});
+    std::size_t root = 0;
+    while (root < view.explorer.rows.size()) {
+      DrawExplorerNode(view, query, root, tree);
+      root = ExplorerSubtreeEnd(view.explorer.rows, root);
     }
   }
 

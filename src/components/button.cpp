@@ -1,5 +1,6 @@
 #include "fancy_ui/components/button.hpp"
 
+#include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/theme.hpp"
 #include "internal/component_internal.hpp"
 
@@ -10,7 +11,7 @@
 namespace fancy_ui {
 
 ButtonResult Button(const ButtonSpec &spec) {
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   const std::string id = detail::Owned(spec.id);
   const std::string label =
       detail::Owned(spec.availability.busy ? std::string(spec.label) + "..."

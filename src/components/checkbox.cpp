@@ -1,5 +1,6 @@
 #include "fancy_ui/components/checkbox.hpp"
 
+#include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/theme.hpp"
 #include "internal/component_internal.hpp"
 
@@ -19,7 +20,7 @@ ImVec4 ToImVec4(const ColorRgba color) {
 } // namespace
 
 CheckboxResult Checkbox(const CheckboxSpec &spec) {
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   const std::string id = detail::Owned(spec.id);
   const std::string label = detail::Owned(spec.label);
   const bool disabled = !spec.availability.enabled || spec.availability.busy;

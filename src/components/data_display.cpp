@@ -1,5 +1,6 @@
 #include "fancy_ui/components/data_display.hpp"
 
+#include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/theme.hpp"
 #include "internal/component_internal.hpp"
 
@@ -72,14 +73,14 @@ std::string Ellipsize(const std::string &text, const float width) {
 } // namespace
 
 void StatusText(const StatusTextSpec &spec) {
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   const std::string label = detail::Owned(spec.label);
   ImGui::TextColored(detail::StatusColor(spec.status), "%s", label.c_str());
   ImGui::PopFont();
 }
 
 void EmptyState(const EmptyStateSpec &spec) {
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   const std::string id = detail::Owned(spec.id);
   const std::string title = detail::Owned(spec.title);
   const std::string message = detail::Owned(spec.message);
@@ -126,7 +127,7 @@ void EmptyState(const EmptyStateSpec &spec) {
 }
 
 InteractionResult ValueDisplay(const ValueDisplaySpec &spec) {
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   const std::string id = detail::Owned(spec.id);
   const std::string label = detail::Owned(spec.label);
   const std::string complete_value =

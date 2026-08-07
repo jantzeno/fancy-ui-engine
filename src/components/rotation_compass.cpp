@@ -1,5 +1,6 @@
 #include "fancy_ui/components/rotation_compass.hpp"
 
+#include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/theme.hpp"
 #include "internal/component_internal.hpp"
 
@@ -59,7 +60,7 @@ std::string FormatRotationDegrees(const double degrees) {
 }
 
 RotationCompassResult RotationCompass(const RotationCompassSpec &spec) {
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   const std::string id = detail::Owned(spec.id);
   int count = ClampRotationCount(spec.count);
   const bool disabled = !spec.availability.enabled || spec.availability.busy;

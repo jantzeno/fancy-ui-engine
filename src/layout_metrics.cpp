@@ -42,6 +42,13 @@ constexpr LayoutMetrics kLogicalMetrics{
             .row_height = 32.0f,
             .panel_header_height = 56.0f,
         },
+    .typography =
+        {
+            .body_font_size = 16.0f,
+            // Dear ImGui uses the full Noto Sans vertical metrics as its font
+            // height; desktop and CSS sizes use the 1000-unit em.
+            .body_font_height = 16.0f * 1362.0f / 1000.0f,
+        },
     .menu =
         {
             .popup_padding_horizontal = 10.0f,
@@ -134,6 +141,9 @@ LayoutMetrics ResolveLayoutMetrics(const float requested_scale) {
   resolve(metrics.geometry.control_height);
   resolve(metrics.geometry.row_height);
   resolve(metrics.geometry.panel_header_height);
+
+  resolve(metrics.typography.body_font_size);
+  resolve(metrics.typography.body_font_height);
 
   resolve(metrics.menu.popup_padding_horizontal);
   resolve(metrics.menu.popup_padding_vertical);

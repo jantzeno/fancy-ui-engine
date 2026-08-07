@@ -35,6 +35,7 @@ struct SessionState {
   float inspector_width = 320.0f;
   float operation_tray_height = 160.0f;
   std::unordered_map<Destination, std::string> explorer_queries;
+  std::unordered_map<std::string, bool> explorer_expanded_rows;
   std::unordered_map<std::string, bool> collapsed_sections;
   UiId model_grid_target{.value = "all"};
 

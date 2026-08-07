@@ -54,7 +54,7 @@ float ColorPickerPopupWidth(const ColorPickerPopupSpec &spec) {
 } // namespace
 
 NumericInputResult NumericInput(const NumericInputSpec &spec) {
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   const std::string id = detail::Owned(spec.id);
   std::string format = detail::Owned(spec.format);
   if (!spec.unit.empty()) {
@@ -95,7 +95,7 @@ NumericInputResult NumericInput(const NumericInputSpec &spec) {
 }
 
 TextInputResult TextInput(const TextInputSpec &spec) {
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   const std::string id = detail::Owned(spec.id);
   const std::size_t capacity = std::clamp<std::size_t>(spec.capacity, 2, 4096);
   std::vector<char> buffer(capacity, '\0');
@@ -130,7 +130,7 @@ TextInputResult TextInput(const TextInputSpec &spec) {
 }
 
 SelectResult Select(const SelectSpec &spec) {
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   const std::string id = detail::Owned(spec.id);
   const std::size_t selected =
       spec.options.empty()
@@ -180,7 +180,7 @@ SelectResult Select(const SelectSpec &spec) {
 }
 
 DurationResult Duration(const DurationSpec &spec) {
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   const std::string id = detail::Owned(spec.id);
   int hours = std::clamp(spec.hours, 0, 23);
   int minutes = std::clamp(spec.minutes, 0, 59);
@@ -241,7 +241,7 @@ DurationResult Duration(const DurationSpec &spec) {
 }
 
 VisibilityToggleResult VisibilityToggle(const VisibilityToggleSpec &spec) {
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   ImGui::PushID(detail::Owned(spec.id).c_str());
   const detail::FieldLayout layout = detail::BeginFieldLayout(spec.label);
   const std::string state_label = spec.state == ToggleState::On    ? "Visible"
@@ -371,7 +371,7 @@ ColorPickerPopupResult ColorPickerPopup(const ColorPickerPopupSpec &spec,
 
 ColorSwatchResult ColorSwatch(const ColorSwatchSpec &spec,
                               ColorPickerState &state) {
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   ImGui::PushID(detail::Owned(spec.id).c_str());
   const detail::FieldLayout layout = detail::BeginFieldLayout(spec.label);
   detail::BeginAvailability(spec.availability);

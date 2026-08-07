@@ -164,6 +164,8 @@ TEST_CASE("layout metrics expose the normative shell and panel geometry") {
 
   REQUIRE(metrics.geometry.progress_height == 6.0f);
   REQUIRE(metrics.geometry.row_height == 32.0f);
+  REQUIRE(metrics.typography.body_font_size == 16.0f);
+  REQUIRE(metrics.typography.body_font_height == Catch::Approx(21.792f));
   REQUIRE(metrics.explorer.tree_indent == 16.0f);
   REQUIRE(metrics.inspector.label_width == 112.0f);
   REQUIRE(metrics.inspector.stack_breakpoint == 288.0f);
@@ -183,6 +185,8 @@ TEST_CASE("resolved layout metrics clamp scale and round once") {
   REQUIRE(fractional.geometry.focus_ring == 3.0f);
   REQUIRE(fractional.shell.explorer_width == 320.0f);
   REQUIRE(fractional.geometry.row_height == 40.0f);
+  REQUIRE(fractional.typography.body_font_size == 20.0f);
+  REQUIRE(fractional.typography.body_font_height == 27.0f);
   REQUIRE(fractional.explorer.tree_indent == 20.0f);
   REQUIRE(maximum.shell.inspector_width == 640.0f);
 }
@@ -1126,9 +1130,17 @@ TEST_CASE("the complete source UI asset bundle loads and rasterizes") {
   for (const float scale : std::array{1.0f, 1.25f, 1.5f, 2.0f}) {
     ImGui::CreateContext();
     fancy_ui::steppenface::AssetLoadReport report;
+    float effective_body_font_height = 0.0f;
+    float frame_height = 0.0f;
+    float control_height = 0.0f;
     {
       fancy_ui::steppenface::ApplicationUi ui;
       report = ui.Initialize(asset_root, scale);
+      const fancy_ui::LayoutMetrics metrics = fancy_ui::CurrentLayoutMetrics();
+      effective_body_font_height = ImGui::GetIO().FontDefault->LegacySize;
+      frame_height =
+          effective_body_font_height + ImGui::GetStyle().FramePadding.y * 2.0f;
+      control_height = metrics.geometry.control_height;
     }
     ImGui::DestroyContext();
 
@@ -1138,5 +1150,8 @@ TEST_CASE("the complete source UI asset bundle loads and rasterizes") {
     }
     REQUIRE(report.ok());
     REQUIRE_FALSE(report.used_fallback_font);
+    REQUIRE(effective_body_font_height ==
+            std::round(16.0f * scale * 1362.0f / 1000.0f));
+    REQUIRE(frame_height == Catch::Approx(control_height));
   }
 }

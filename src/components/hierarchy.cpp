@@ -263,23 +263,25 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
   ImFont *font = section_root && tree.section_font_
                      ? reinterpret_cast<ImFont *>(tree.section_font_.value)
                      : ImGui::GetFont();
-  const float label_font_size = Scale(section_root ? 17.0f : 16.0f);
-  const float metadata_font_size = Scale(14.0f);
+  const float font_size = metrics.typography.body_font_height;
   const ImVec2 label_size = font->CalcTextSizeA(
-      label_font_size, std::numeric_limits<float>::max(), 0.0f, label.c_str());
+      font_size, std::numeric_limits<float>::max(), 0.0f, label.c_str());
   const float text_y = std::floor(center_y - label_size.y * 0.5f);
   draw_list->PushClipRect(
       ImVec2(text_x, minimum.y),
       ImVec2(maximum.x - trailing_width - Scale(4.0f), maximum.y), true);
-  draw_list->AddText(font, label_font_size, ImVec2(text_x, text_y),
+  draw_list->AddText(font, font_size, ImVec2(text_x, text_y),
                      ImGui::GetColorU32(ToImVec4(label_color)), label.c_str());
   if (!metadata.empty()) {
     const ColorRgba metadata_color =
         disabled ? palette.text_disabled : palette.text_secondary;
     const float metadata_x = text_x + label_size.x + metrics.spacing.space03;
+    ImFont *metadata_font = ImGui::GetFont();
+    const ImVec2 metadata_size = metadata_font->CalcTextSizeA(
+        font_size, std::numeric_limits<float>::max(), 0.0f, metadata.c_str());
     draw_list->AddText(
-        ImGui::GetFont(), metadata_font_size,
-        ImVec2(metadata_x, std::floor(center_y - ImGui::GetFontSize() * 0.5f)),
+        metadata_font, font_size,
+        ImVec2(metadata_x, std::floor(center_y - metadata_size.y * 0.5f)),
         ImGui::GetColorU32(ToImVec4(metadata_color)), metadata.c_str());
   }
   draw_list->PopClipRect();
@@ -483,7 +485,7 @@ InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
   ImFont *font = section_root && tree.section_font_
                      ? reinterpret_cast<ImFont *>(tree.section_font_.value)
                      : ImGui::GetFont();
-  const float font_size = Scale(section_root ? 17.0f : 16.0f);
+  const float font_size = metrics.typography.body_font_height;
   const ImVec2 label_size = font->CalcTextSizeA(
       font_size, std::numeric_limits<float>::max(), 0.0f, label.c_str());
   const ImVec2 metadata_size = font->CalcTextSizeA(

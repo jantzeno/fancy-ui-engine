@@ -603,6 +603,50 @@ TEST_CASE("workspace switching restores each workspace's last destination") {
   REQUIRE(session.active_destination == Destination::CanvasGrain);
 }
 
+TEST_CASE(
+    "explorer filtering retains ancestors and reveals matching children") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(1280.0f, 720.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  ImFontConfig font_config;
+  font_config.SizePixels = 16.0f;
+  io.Fonts->AddFontDefault(&font_config);
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+
+  ApplicationUi ui;
+  SessionState session;
+  session.explorer_queries[Destination::Model] = "needle";
+  session.explorer_expanded_rows["assembly"] = false;
+  ui.SetSession(std::move(session));
+
+  ApplicationView view;
+  view.active_destination = Destination::Model;
+  view.explorer.rows = {
+      {
+          .id = {.value = "assembly"},
+          .label = "Assembly",
+          .expandable = true,
+      },
+      {
+          .id = {.value = "matching-child"},
+          .label = "Needle bracket",
+          .depth = 1,
+      },
+  };
+
+  ImGui::NewFrame();
+  static_cast<void>(ui.Draw(view, {}));
+  ImGui::Render();
+
+  REQUIRE_FALSE(ui.session().explorer_expanded_rows.at("assembly"));
+  REQUIRE(ui.session().explorer_expanded_rows.contains("matching-child"));
+  ImGui::DestroyContext();
+}
+
 TEST_CASE("application bar reserves forty logical pixels") {
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();

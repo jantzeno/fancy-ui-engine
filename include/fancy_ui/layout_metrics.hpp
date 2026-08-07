@@ -42,6 +42,11 @@ struct LayoutMetrics {
     float panel_header_height;
   } geometry;
 
+  struct Typography {
+    float body_font_size;
+    float body_font_height;
+  } typography;
+
   struct Menu {
     float popup_padding_horizontal;
     float popup_padding_vertical;
