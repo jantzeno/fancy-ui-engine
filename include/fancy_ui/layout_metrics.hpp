@@ -100,6 +100,7 @@ struct LayoutMetrics {
     float minimum_width;
     float minimum_height;
     float inset;
+    float title_bar_height;
   } settings;
 };
 

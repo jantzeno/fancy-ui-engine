@@ -73,7 +73,23 @@ TEST_CASE("gallery screenshots use state-sheet-specific logical extents") {
   REQUIRE(operations.width == 1280);
   REQUIRE(operations.height == 1440);
   REQUIRE(status.width == 1280);
-  REQUIRE(status.height == 1440);
+  REQUIRE(status.height == 1024);
+}
+
+TEST_CASE("gallery capture slugs seed representative transient states") {
+  GalleryState state;
+  REQUIRE(
+      SeedGalleryCaptureState(state, "settings-machines-origin-confirmation"));
+  REQUIRE(state.active_tab == GalleryTab::Settings);
+  REQUIRE(state.settings.active_section == SettingsSection::Machines);
+  REQUIRE(state.settings.machine_editor.has_value());
+  REQUIRE(
+      state.settings.machine_editor->errors.contains("origin_confirmation"));
+
+  REQUIRE(SeedGalleryCaptureState(state, "hierarchy-actions"));
+  REQUIRE(state.active_tab == GalleryTab::Components);
+  REQUIRE(state.request_reference_tree_actions);
+  REQUIRE_FALSE(SeedGalleryCaptureState(state, "unknown"));
 }
 
 TEST_CASE("hierarchy studies share four independent expandable roots") {

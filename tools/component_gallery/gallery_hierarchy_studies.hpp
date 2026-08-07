@@ -1,5 +1,7 @@
 #pragma once
 
+#include "fancy_ui/component_types.hpp"
+
 #include <array>
 #include <cstddef>
 #include <string_view>
@@ -16,10 +18,10 @@ struct HierarchyStudyNode {
   std::string_view secondary_label;
   std::string_view icon;
   int parent = -1;
-  bool warning = false;
+  SemanticStatus status = SemanticStatus::Neutral;
 };
 
-inline constexpr std::array<HierarchyStudyNode, 17> kHierarchyStudyNodes{{
+inline constexpr std::array<HierarchyStudyNode, 20> kHierarchyStudyNodes{{
     {.id = "step",
      .label = "STEP",
      .secondary_label = "2 parts",
@@ -55,7 +57,7 @@ inline constexpr std::array<HierarchyStudyNode, 17> kHierarchyStudyNodes{{
      .secondary_label = "Open",
      .icon = "path",
      .parent = 5,
-     .warning = true},
+     .status = SemanticStatus::Warning},
     {.id = "dxf",
      .label = "DXF",
      .secondary_label = "3 entities",
@@ -75,7 +77,7 @@ inline constexpr std::array<HierarchyStudyNode, 17> kHierarchyStudyNodes{{
      .secondary_label = "R 18.0 mm",
      .icon = "arc",
      .parent = 9,
-     .warning = true},
+     .status = SemanticStatus::Warning},
     {.id = "dxf-circle-2",
      .label = "Circle 2",
      .secondary_label = "24.0 mm dia.",
@@ -83,32 +85,51 @@ inline constexpr std::array<HierarchyStudyNode, 17> kHierarchyStudyNodes{{
      .parent = 9},
     {.id = "canvas-issues",
      .label = "Canvas Issues",
-     .secondary_label = "3 issues",
+     .secondary_label = "10 issues",
      .icon = "alert",
-     .warning = true},
-    {.id = "canvas-repairable",
-     .label = "Repairable",
-     .secondary_label = "2",
-     .icon = "information",
-     .parent = 13},
-    {.id = "canvas-open-contours",
-     .label = "Open contours",
-     .secondary_label = "2 paths",
-     .icon = "path",
-     .parent = 14,
-     .warning = true},
-    {.id = "canvas-overlaps",
-     .label = "Overlaps",
-     .secondary_label = "1 pair",
+     .status = SemanticStatus::Warning},
+    {.id = "canvas-invalid",
+     .label = "Invalid",
+     .secondary_label = "1",
      .icon = "alert",
      .parent = 13,
-     .warning = true},
+     .status = SemanticStatus::Failure},
+    {.id = "canvas-self-intersection",
+     .label = "Self-intersection",
+     .secondary_label = "1",
+     .icon = "path",
+     .parent = 14,
+     .status = SemanticStatus::Failure},
+    {.id = "canvas-repairable",
+     .label = "Repairable",
+     .secondary_label = "5",
+     .icon = "information",
+     .parent = 13,
+     .status = SemanticStatus::Information},
+    {.id = "canvas-open-contours",
+     .label = "Open contours",
+     .secondary_label = "5 paths",
+     .icon = "path",
+     .parent = 16,
+     .status = SemanticStatus::Information},
+    {.id = "canvas-warnings",
+     .label = "Warnings",
+     .secondary_label = "4",
+     .icon = "alert",
+     .parent = 13,
+     .status = SemanticStatus::Warning},
+    {.id = "canvas-ambiguous-cleanup",
+     .label = "Ambiguous cleanup",
+     .secondary_label = "4",
+     .icon = "alert",
+     .parent = 18,
+     .status = SemanticStatus::Warning},
 }};
 
 struct HierarchyStudyState {
   std::array<bool, kHierarchyStudyNodes.size()> expanded{
-      true, true,  false, false, true, true, false, false, true,
-      true, false, false, false, true, true, false, false,
+      true,  true,  false, false, true, true,  false, false, true, true,
+      false, false, false, true,  true, false, true,  false, true, false,
   };
   std::size_t selected = 6;
 };

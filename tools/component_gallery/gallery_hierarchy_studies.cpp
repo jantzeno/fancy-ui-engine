@@ -16,68 +16,25 @@ namespace fancy_ui::gallery {
 
 namespace {
 
-enum class HierarchyStudyStyle {
-  SectionedOutliner,
-  DepthGuides,
-  ScopedBranchRails,
-};
-
 struct HierarchyStudyDefinition {
-  HierarchyStudyStyle style;
   const char *title;
   const char *description;
 };
 
-constexpr std::array kStudyDefinitions{
-    HierarchyStudyDefinition{
-        .style = HierarchyStudyStyle::SectionedOutliner,
-        .title = "Sectioned outliner",
-        .description = "Strong roots, native indentation, no connector lines.",
-    },
-    HierarchyStudyDefinition{
-        .style = HierarchyStudyStyle::DepthGuides,
-        .title = "Depth guides",
-        .description = "Quiet vertical guides show nesting without elbows.",
-    },
-    HierarchyStudyDefinition{
-        .style = HierarchyStudyStyle::ScopedBranchRails,
-        .title = "Scoped branch rails",
-        .description = "Native branches terminate at the final visible node.",
-    },
+constexpr HierarchyStudyDefinition kApprovedStudy{
+    .title = "Sectioned outliner · approved",
+    .description = "Strong roots, native indentation, and no connector lines.",
 };
 
 ImVec4 ToImVec4(const ColorRgba color) {
   return ImVec4(color.red, color.green, color.blue, color.alpha);
 }
 
-void DrawDepthGuides(const ImVec2 minimum, const ImVec2 maximum,
-                     const ImVec2 root_cursor, const int depth,
-                     const LayoutMetrics &metrics) {
-  if (depth <= 0) {
-    return;
-  }
-  ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  const ImGuiStyle &style = ImGui::GetStyle();
-  const ImU32 color = ImGui::GetColorU32(ToImVec4(CurrentPalette().border));
-  for (int level = 0; level < depth; ++level) {
-    const float x =
-        std::floor(root_cursor.x +
-                   static_cast<float>(level) * metrics.explorer.tree_indent +
-                   ImGui::GetFontSize() * 0.5f + style.FramePadding.x) +
-        0.5f;
-    draw_list->AddLine(ImVec2(x, minimum.y), ImVec2(x, maximum.y), color,
-                       metrics.explorer.tree_connector_thickness);
-  }
-}
-
 void DrawStudyNode(detail::UiAssetAtlas &assets, HierarchyStudyState &state,
-                   const HierarchyStudyStyle study_style,
-                   const std::size_t index, const int depth,
-                   const ImVec2 root_cursor) {
+                   const std::size_t index, const int depth) {
   const HierarchyStudyNode &node = kHierarchyStudyNodes[index];
   const bool has_children = HierarchyStudyHasChildren(index);
-  const bool section_root =
-      study_style == HierarchyStudyStyle::SectionedOutliner && depth == 0;
+  const bool section_root = depth == 0;
   const LayoutMetrics metrics = CurrentLayoutMetrics();
   const SemanticPalette &palette = CurrentPalette();
   const float row_height = metrics.geometry.row_height;
@@ -105,11 +62,7 @@ void DrawStudyNode(detail::UiAssetAtlas &assets, HierarchyStudyState &state,
   } else {
     ImGui::SetNextItemOpen(state.expanded[index], ImGuiCond_Always);
   }
-  if (study_style == HierarchyStudyStyle::ScopedBranchRails) {
-    flags |= ImGuiTreeNodeFlags_DrawLinesToNodes;
-  } else {
-    flags |= ImGuiTreeNodeFlags_DrawLinesNone;
-  }
+  flags |= ImGuiTreeNodeFlags_DrawLinesNone;
 
   const std::string native_id = "##" + std::string(node.id);
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
@@ -134,9 +87,6 @@ void DrawStudyNode(detail::UiAssetAtlas &assets, HierarchyStudyState &state,
     state.selected = index;
   }
 
-  if (study_style == HierarchyStudyStyle::DepthGuides) {
-    DrawDepthGuides(minimum, maximum, root_cursor, depth, metrics);
-  }
   if (state.selected == index) {
     ImGui::GetWindowDrawList()->AddRectFilled(
         minimum, ImVec2(minimum.x + Scale(3.0f), maximum.y),
@@ -148,14 +98,19 @@ void DrawStudyNode(detail::UiAssetAtlas &assets, HierarchyStudyState &state,
   const float center_y = (minimum.y + maximum.y) * 0.5f;
   float text_x = node_cursor.x + ImGui::GetTreeNodeToLabelSpacing();
   const float icon_size = metrics.geometry.icon;
-  const ColorRgba icon_color =
-      node.warning ? palette.warning : palette.text_secondary;
   static_cast<void>(assets.DrawIcon(
       node.icon, steppenface::UiIconSize::Small16,
       {.minimum = {.x = text_x, .y = center_y - icon_size * 0.5f},
        .maximum = {.x = text_x + icon_size, .y = center_y + icon_size * 0.5f}},
-      icon_color));
+      palette.text_secondary));
   text_x += icon_size + metrics.spacing.space03;
+  if (node.status != SemanticStatus::Neutral) {
+    const float dot_size = Scale(8.0f);
+    draw_list->AddCircleFilled(
+        ImVec2(text_x + dot_size * 0.5f, center_y), dot_size * 0.5f,
+        ImGui::GetColorU32(detail::StatusColor(node.status)));
+    text_x += dot_size + metrics.spacing.space03;
+  }
 
   ImFont *label_font = section_root && assets.bold_font() != nullptr
                            ? assets.bold_font()
@@ -164,9 +119,7 @@ void DrawStudyNode(detail::UiAssetAtlas &assets, HierarchyStudyState &state,
   const ImVec2 label_size = label_font->CalcTextSizeA(
       label_font_size, maximum.x - text_x, 0.0f, node.label.data(),
       node.label.data() + node.label.size());
-  const float warning_width =
-      node.warning ? metrics.geometry.compact_target : metrics.spacing.space02;
-  const float clip_maximum_x = maximum.x - warning_width;
+  const float clip_maximum_x = maximum.x - metrics.spacing.space02;
   draw_list->PushClipRect(ImVec2(text_x, minimum.y),
                           ImVec2(clip_maximum_x, maximum.y), true);
   draw_list->AddText(label_font, label_font_size,
@@ -184,27 +137,13 @@ void DrawStudyNode(detail::UiAssetAtlas &assets, HierarchyStudyState &state,
   }
   draw_list->PopClipRect();
 
-  if (node.warning) {
-    const float status_size = metrics.geometry.icon;
-    static_cast<void>(assets.DrawIcon(
-        "alert", steppenface::UiIconSize::Small16,
-        {.minimum = {.x = maximum.x - metrics.geometry.compact_target +
-                          metrics.spacing.space02,
-                     .y = center_y - status_size * 0.5f},
-         .maximum = {.x = maximum.x - metrics.geometry.compact_target +
-                          metrics.spacing.space02 + status_size,
-                     .y = center_y + status_size * 0.5f}},
-        palette.warning));
-  }
-
   if (has_children && native_open) {
     // ponytail: this fixed gallery study has 17 rows; add child ranges only if
     // it becomes runtime data.
     for (std::size_t child = 0; child < kHierarchyStudyNodes.size(); ++child) {
       if (kHierarchyStudyNodes[child].parent == static_cast<int>(index) &&
           HierarchyStudyIsVisible(child, state)) {
-        DrawStudyNode(assets, state, study_style, child, depth + 1,
-                      root_cursor);
+        DrawStudyNode(assets, state, child, depth + 1);
       }
     }
     ImGui::TreePop();
@@ -214,14 +153,12 @@ void DrawStudyNode(detail::UiAssetAtlas &assets, HierarchyStudyState &state,
 void DrawStudyCard(detail::UiAssetAtlas &assets, HierarchyStudyState &state,
                    const HierarchyStudyDefinition &study) {
   const SemanticPalette &palette = CurrentPalette();
-  ImGui::TableNextColumn();
-  ImGui::PushID(static_cast<int>(study.style));
   ImGui::PushStyleColor(ImGuiCol_ChildBg, ToImVec4(palette.surface));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                       ImVec2(Scale(12.0f), Scale(12.0f)));
   ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
   if (ImGui::BeginChild(
-          "##hierarchy-study-card", ImVec2(Scale(380.0f), Scale(650.0f)),
+          "##hierarchy-study-card", ImVec2(Scale(640.0f), Scale(720.0f)),
           ImGuiChildFlags_Borders,
           ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar)) {
     if (assets.bold_font() != nullptr) {
@@ -231,12 +168,11 @@ void DrawStudyCard(detail::UiAssetAtlas &assets, HierarchyStudyState &state,
     if (assets.bold_font() != nullptr) {
       ImGui::PopFont();
     }
-    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + Scale(350.0f));
-    ImGui::TextDisabled("%s", study.description);
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + Scale(610.0f));
+    detail::DrawSecondaryText(study.description);
     ImGui::PopTextWrapPos();
     ImGui::Spacing();
 
-    const ImVec2 root_cursor = ImGui::GetCursorScreenPos();
     const ImGuiStyle &imgui_style = ImGui::GetStyle();
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                         ImVec2(imgui_style.ItemSpacing.x, 0.0f));
@@ -247,14 +183,13 @@ void DrawStudyCard(detail::UiAssetAtlas &assets, HierarchyStudyState &state,
       if (index != 0) {
         ImGui::Dummy(ImVec2(0.0f, Scale(4.0f)));
       }
-      DrawStudyNode(assets, state, study.style, index, 0, root_cursor);
+      DrawStudyNode(assets, state, index, 0);
     }
     ImGui::PopStyleVar();
   }
   ImGui::EndChild();
   ImGui::PopStyleVar(2);
   ImGui::PopStyleColor();
-  ImGui::PopID();
 }
 
 } // namespace
@@ -262,29 +197,11 @@ void DrawStudyCard(detail::UiAssetAtlas &assets, HierarchyStudyState &state,
 void DrawHierarchyStudies(detail::UiAssetAtlas &assets,
                           HierarchyStudyState &state) {
   ImGui::PushFont(nullptr, Scale(21.0f));
-  ImGui::TextDisabled(
-      "The same STEP, SVG, DXF, and Canvas Issues data rendered three ways.");
+  detail::DrawSecondaryText(
+      "Approved hierarchy treatment for STEP, SVG, DXF, and Canvas Issues.");
   ImGui::PopFont();
   ImGui::Spacing();
-
-  const float table_width = Scale(3.0f * 380.0f + 2.0f * 8.0f);
-  if (ImGui::BeginChild("##hierarchy-studies-scroll", ImVec2(0.0f, 0.0f), false,
-                        ImGuiWindowFlags_HorizontalScrollbar)) {
-    if (ImGui::BeginTable("##hierarchy-studies", 3,
-                          ImGuiTableFlags_SizingFixedFit |
-                              ImGuiTableFlags_NoClip,
-                          ImVec2(table_width, 0.0f))) {
-      for (int column = 0; column < 3; ++column) {
-        ImGui::TableSetupColumn("study", ImGuiTableColumnFlags_WidthFixed,
-                                Scale(380.0f));
-      }
-      for (const HierarchyStudyDefinition &study : kStudyDefinitions) {
-        DrawStudyCard(assets, state, study);
-      }
-      ImGui::EndTable();
-    }
-  }
-  ImGui::EndChild();
+  DrawStudyCard(assets, state, kApprovedStudy);
 }
 
 } // namespace fancy_ui::gallery

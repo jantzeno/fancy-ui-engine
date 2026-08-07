@@ -221,6 +221,19 @@ void ShowTooltip(const std::string_view text) {
   ImGui::PopStyleVar();
 }
 
+void DrawSecondaryText(const std::string_view text) {
+  const ColorRgba color = CurrentPalette().text_secondary;
+  ImGui::TextColored(ToImVec4(color), "%.*s", static_cast<int>(text.size()),
+                     text.data());
+}
+
+void DrawSecondaryTextWrapped(const std::string_view text) {
+  ImGui::PushStyleColor(ImGuiCol_Text,
+                        ToImVec4(CurrentPalette().text_secondary));
+  ImGui::TextWrapped("%.*s", static_cast<int>(text.size()), text.data());
+  ImGui::PopStyleColor();
+}
+
 float ResolveButtonVerticalPadding(const float requested_height,
                                    const float text_height,
                                    const float default_padding) {

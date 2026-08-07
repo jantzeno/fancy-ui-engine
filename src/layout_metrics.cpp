@@ -101,6 +101,7 @@ constexpr LayoutMetrics kLogicalMetrics{
             .minimum_width = 720.0f,
             .minimum_height = 480.0f,
             .inset = 16.0f,
+            .title_bar_height = 48.0f,
         },
 };
 
@@ -194,6 +195,7 @@ LayoutMetrics ResolveLayoutMetrics(const float requested_scale) {
   resolve(metrics.settings.minimum_width);
   resolve(metrics.settings.minimum_height);
   resolve(metrics.settings.inset);
+  resolve(metrics.settings.title_bar_height);
   return metrics;
 }
 

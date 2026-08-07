@@ -38,8 +38,9 @@ GalleryScreenshotLogicalExtent(const GalleryTab tab) {
     return {.width = 1280, .height = 720};
   case GalleryTab::Settings:
   case GalleryTab::Operations:
-  case GalleryTab::Status:
     return {.width = 1280, .height = 1440};
+  case GalleryTab::Status:
+    return {.width = 1280, .height = 1024};
   }
   return {};
 }
@@ -75,10 +76,10 @@ inline constexpr float kStatusBarHeight = 24.0f;
 inline constexpr float kStatusFactLabelGap = 8.0f;
 inline constexpr float kStatusFactGroupGap = 16.0f;
 inline constexpr float kStatusFactCellPadding = 8.0f;
-inline constexpr float kStatusZoomCommandHeight = 32.0f;
-inline constexpr float kStatusZoomCommandSpacing = 4.0f;
+inline constexpr float kStatusZoomCommandHeight = 24.0f;
+inline constexpr float kStatusZoomCommandSpacing = 0.0f;
 inline constexpr float kStatusZoomPanelPadding = 8.0f;
-inline constexpr float kStatusZoomPanelItemSpacing = 8.0f;
+inline constexpr float kStatusZoomPanelItemSpacing = 4.0f;
 inline constexpr float kStatusZoomMinimumPercent = 10.0f;
 inline constexpr float kStatusZoomMaximumPercent = 1600.0f;
 

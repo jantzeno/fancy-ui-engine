@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <format>
 #include <functional>
 #include <limits>
 #include <optional>
@@ -119,17 +120,17 @@ void DrawAvailability(GalleryState &state) {
       .availability = {.busy = true},
       .size = {.x = 134.0f, .y = 32.0f},
   }));
-  ImGui::TextDisabled(
-      "%s", invalid.activated ? "Invalid control activated; validation remains."
-                              : "Disabled - select an eligible object");
+  detail::DrawSecondaryText(
+      invalid.activated ? "Invalid control activated; validation remains."
+                        : "Disabled · select an eligible object");
 }
 
 void DrawWorkspaceSwitcher(detail::ApplicationChrome &chrome,
                            GalleryState &state) {
   using steppenface::WorkspaceKind;
   const bool model = state.component_workspace == WorkspaceKind::Model3d;
-  ImGui::TextDisabled("%s · selected", model ? "3D" : "Canvas");
-  ImGui::TextDisabled("%s · rest", model ? "Canvas" : "3D");
+  detail::DrawSecondaryText(model ? "3D · selected" : "Canvas · selected");
+  detail::DrawSecondaryText(model ? "Canvas · rest" : "3D · rest");
   chrome.DrawWorkspaceSwitcher({.active_workspace = state.component_workspace},
                                {.activate_workspace =
                                     [&state](const WorkspaceKind workspace) {
@@ -142,8 +143,8 @@ void DrawSelectionScope(detail::ApplicationChrome &chrome,
                         GalleryState &state) {
   using steppenface::SelectionScope;
   const bool canvas = state.component_selection_scope == SelectionScope::Canvas;
-  ImGui::TextDisabled("%s · selected", canvas ? "Canvas" : "Object");
-  ImGui::TextDisabled("%s · hover", canvas ? "Object" : "Canvas");
+  detail::DrawSecondaryText(canvas ? "Canvas · selected" : "Object · selected");
+  detail::DrawSecondaryText(canvas ? "Object · hover" : "Canvas · hover");
   const steppenface::ToolbarSegmentedView segmented{
       .id = {.value = "component.selection-scope"},
       .choices =
@@ -180,8 +181,8 @@ void DrawSelectionScope(detail::ApplicationChrome &chrome,
 
 void DrawSelectionTool(detail::ApplicationChrome &chrome, GalleryState &state) {
   using steppenface::SelectionTool;
-  ImGui::TextDisabled("Pointer · selected");
-  ImGui::TextDisabled("Rectangle · pressed · Oval · disabled");
+  detail::DrawSecondaryText("Pointer · selected");
+  detail::DrawSecondaryText("Rectangle · pressed · Oval · disabled");
   const steppenface::ToolbarSegmentedView segmented{
       .id = {.value = "component.selection-tool"},
       .choices =
@@ -283,14 +284,14 @@ void DrawSlider(GalleryState &state) {
   if (ImGui::BeginTable("##slider-scale", 3,
                         ImGuiTableFlags_SizingStretchSame)) {
     ImGui::TableNextColumn();
-    ImGui::TextDisabled("0%%");
+    detail::DrawSecondaryText("0%");
     ImGui::TableNextColumn();
-    ImGui::TextDisabled("Exact value");
+    detail::DrawSecondaryText("Exact value");
     ImGui::TableNextColumn();
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
                          ImGui::GetContentRegionAvail().x -
                          ImGui::CalcTextSize("100%").x);
-    ImGui::TextDisabled("100%%");
+    detail::DrawSecondaryText("100%");
     ImGui::EndTable();
   }
 }
@@ -298,12 +299,13 @@ void DrawSlider(GalleryState &state) {
 void DrawCompass(GalleryState &state, const bool inherited) {
   const RotationCompassResult result = RotationCompass({
       .id = inherited ? "inherited" : "local",
-      .label = inherited ? "Allowed rotations" : "Rotations",
+      .label = "Rotations",
       .count = state.rotations,
       .inherited = inherited,
       .availability =
           inherited ? Availability{.enabled = false,
-                                   .reason = "Inherited from bed settings"}
+                                   .reason = "Enable Rotation override to "
+                                             "change search rotations."}
                     : Availability{},
   });
   if (result.changed) {
@@ -350,8 +352,7 @@ void DrawCheckboxes(GalleryState &state) {
   }));
   ImGui::Indent(Scale(24.0f));
   ImGui::PushTextWrapPos();
-  ImGui::TextDisabled("%.*s", static_cast<int>(unavailable_reason.size()),
-                      unavailable_reason.data());
+  detail::DrawSecondaryTextWrapped(unavailable_reason);
   ImGui::PopTextWrapPos();
   ImGui::Unindent(Scale(24.0f));
 }
@@ -481,14 +482,14 @@ void DrawTreeColumnHeaders() {
                                   CurrentPalette().text_secondary.alpha)),
         label.data(), label.data() + label.size());
   };
-  const float visibility_center =
-      maximum.x - metrics.explorer.labeled_audit_visibility_column_width * 0.5f;
   const float action_center =
-      maximum.x - metrics.explorer.labeled_audit_visibility_column_width -
-      metrics.explorer.labeled_audit_action_column_width * 0.5f;
+      maximum.x - metrics.explorer.labeled_audit_action_column_width * 0.5f;
+  const float visibility_center =
+      maximum.x - metrics.explorer.labeled_audit_action_column_width -
+      metrics.explorer.labeled_audit_visibility_column_width * 0.5f;
   const float color_center =
-      maximum.x - metrics.explorer.labeled_audit_visibility_column_width -
-      metrics.explorer.labeled_audit_action_column_width -
+      maximum.x - metrics.explorer.labeled_audit_action_column_width -
+      metrics.explorer.labeled_audit_visibility_column_width -
       metrics.explorer.labeled_audit_color_column_width * 0.5f;
   draw_label("Hierarchy",
              minimum.x + metrics.spacing.space03 +
@@ -498,8 +499,8 @@ void DrawTreeColumnHeaders() {
                          .x *
                      0.5f);
   draw_label("Color", color_center);
-  draw_label("Act", action_center);
   draw_label("Visibility", visibility_center);
+  draw_label("Act", action_center);
 }
 
 void DrawTreeRows(detail::UiAssetAtlas &assets, GalleryState &state,
@@ -703,6 +704,10 @@ void DrawTreeRows(detail::UiAssetAtlas &assets, GalleryState &state,
     state.reference_tree_feedback = "Color edit cancelled.";
   }
 
+  if (state.request_reference_tree_actions) {
+    ImGui::OpenPopup("##reference-tree-actions");
+    state.request_reference_tree_actions = false;
+  }
   if (ImGui::BeginPopup("##reference-tree-actions")) {
     const int row = std::clamp(state.reference_tree_action_row, 0, 2);
     ImGui::TextUnformatted(
@@ -720,7 +725,7 @@ void DrawTreeRows(detail::UiAssetAtlas &assets, GalleryState &state,
     }
     ImGui::EndPopup();
   }
-  ImGui::TextDisabled("%s", state.reference_tree_feedback.c_str());
+  detail::DrawSecondaryText(state.reference_tree_feedback);
 }
 
 void DrawHierarchyInteractionDemo(detail::UiAssetAtlas &assets,
@@ -884,7 +889,7 @@ void DrawHierarchyInteractionDemo(detail::UiAssetAtlas &assets,
     ImGui::EndPopup();
   }
   ImGui::Spacing();
-  ImGui::TextDisabled("%s", state.tree_feedback.c_str());
+  detail::DrawSecondaryText(state.tree_feedback);
 }
 
 void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
@@ -904,6 +909,48 @@ void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
   ImGui::PopFont();
   if (labels.changed) {
     state.show_issue_labels = labels.state == ToggleState::On;
+  }
+
+  const ToggleState invalid_visibility =
+      AggregateVisibility(state.invalid_issue_visibility);
+  {
+    InformationTree tree;
+    const InformationTreeRowResult invalid = InformationTreeRow(
+        tree, {
+                  .id = "invalid",
+                  .label = "Invalid",
+                  .value = "1",
+                  .expandable = true,
+                  .expanded = state.invalid_issues_expanded,
+                  .status = SemanticStatus::Failure,
+                  .visibility = invalid_visibility,
+                  .visible_icon = visible,
+                  .hidden_icon = hidden,
+                  .visibility_tooltip = "Show or hide all invalid issues",
+              });
+    if (invalid.expansion_changed) {
+      state.invalid_issues_expanded = invalid.expanded;
+    }
+    if (invalid.visibility_changed) {
+      state.invalid_issue_visibility.fill(invalid.visibility);
+    }
+    if (invalid.expanded) {
+      const InformationTreeRowResult self_intersection = InformationTreeRow(
+          tree, {
+                    .id = "self-intersection",
+                    .label = "Self-intersection",
+                    .value = "1",
+                    .status = SemanticStatus::Failure,
+                    .visibility = state.invalid_issue_visibility[0],
+                    .visible_icon = visible,
+                    .hidden_icon = hidden,
+                    .visibility_tooltip = "Show or hide self-intersections",
+                });
+      if (self_intersection.visibility_changed) {
+        state.invalid_issue_visibility[0] = self_intersection.visibility;
+      }
+      tree.Pop();
+    }
   }
 
   const ToggleState repairable_visibility =
@@ -961,6 +1008,48 @@ void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
       tree.Pop();
     }
   }
+
+  const ToggleState warning_visibility =
+      AggregateVisibility(state.warning_issue_visibility);
+  {
+    InformationTree tree;
+    const InformationTreeRowResult warnings = InformationTreeRow(
+        tree, {
+                  .id = "warnings",
+                  .label = "Warnings",
+                  .value = "4",
+                  .expandable = true,
+                  .expanded = state.warning_issues_expanded,
+                  .status = SemanticStatus::Warning,
+                  .visibility = warning_visibility,
+                  .visible_icon = visible,
+                  .hidden_icon = hidden,
+                  .visibility_tooltip = "Show or hide all warnings",
+              });
+    if (warnings.expansion_changed) {
+      state.warning_issues_expanded = warnings.expanded;
+    }
+    if (warnings.visibility_changed) {
+      state.warning_issue_visibility.fill(warnings.visibility);
+    }
+    if (warnings.expanded) {
+      const InformationTreeRowResult ambiguous_cleanup = InformationTreeRow(
+          tree, {
+                    .id = "ambiguous-cleanup",
+                    .label = "Ambiguous cleanup",
+                    .value = "4",
+                    .status = SemanticStatus::Warning,
+                    .visibility = state.warning_issue_visibility[0],
+                    .visible_icon = visible,
+                    .hidden_icon = hidden,
+                    .visibility_tooltip = "Show or hide ambiguous cleanup",
+                });
+      if (ambiguous_cleanup.visibility_changed) {
+        state.warning_issue_visibility[0] = ambiguous_cleanup.visibility;
+      }
+      tree.Pop();
+    }
+  }
 }
 
 void DrawStatusTypes(detail::UiAssetAtlas &assets) {
@@ -1008,7 +1097,7 @@ void DrawProgress() {
       .value = std::nullopt,
       .status = SemanticStatus::Busy,
   });
-  ImGui::TextDisabled("Preparing geometry...");
+  detail::DrawSecondaryText("Preparing geometry...");
 }
 
 void DrawOperation(detail::UiAssetAtlas &assets) {
@@ -1163,7 +1252,8 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
     ImGui::PopFont();
   }
   ImGui::SameLine();
-  ImGui::TextDisabled("- Fancy UI - %.0f%%", state.scale * 100.0f);
+  detail::DrawSecondaryText(
+      std::format("- Fancy UI - {:.0f}%", state.scale * 100.0f));
   ImGui::SameLine(ImGui::GetWindowWidth() - Scale(184.0f));
   if (Button({
                  .id = "theme-light",
@@ -1187,7 +1277,7 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
     state.settings.system_theme = ResolvedTheme::Dark;
   }
   ImGui::PushFont(nullptr, Scale(21.0f));
-  ImGui::TextDisabled(
+  detail::DrawSecondaryText(
       "Canonical light/dark parity; pointer and keyboard states remain live.");
   ImGui::PopFont();
   ImGui::Spacing();
@@ -1231,7 +1321,7 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
     tab("Components", GalleryTab::Components, [&assets, &state] {
       detail::ApplicationChrome chrome(assets);
       ImGui::PushFont(nullptr, Scale(21.0f));
-      ImGui::TextDisabled(
+      detail::DrawSecondaryText(
           "Shared controls, hierarchy rows, semantic feedback, and values.");
       ImGui::PopFont();
       ImGui::Spacing();
@@ -1262,7 +1352,7 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
                       [&state] { DrawSlider(state); });
           GalleryCard("compass", "Compass", assets.bold_font(),
                       [&state] { DrawCompass(state, false); });
-          GalleryCard("compass-inherited", "Compass inherited",
+          GalleryCard("compass-inherited", "Compass · inherited",
                       assets.bold_font(),
                       [&state] { DrawCompass(state, true); });
           GalleryCard("checkboxes", "Checkboxes", assets.bold_font(),

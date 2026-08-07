@@ -30,6 +30,7 @@ namespace {
 struct HostOptions {
   fancy_ui::gallery::GalleryState gallery;
   std::filesystem::path screenshot;
+  std::string capture_state;
   bool valid = true;
 };
 
@@ -51,6 +52,8 @@ HostOptions ParseOptions(const int argc, char **argv) {
           std::clamp(std::strtof(argv[++index], nullptr), 0.75f, 2.0f);
     } else if (argument == "--screenshot" && index + 1 < argc) {
       options.screenshot = argv[++index];
+    } else if (argument == "--state" && index + 1 < argc) {
+      options.capture_state = argv[++index];
     } else if (argument == "--tab" && index + 1 < argc) {
       const std::string_view value(argv[++index]);
       const std::optional<fancy_ui::gallery::GalleryTab> tab =
@@ -64,6 +67,13 @@ HostOptions ParseOptions(const int argc, char **argv) {
         fancy_ui::gallery::ActivateGalleryTab(options.gallery, *tab);
       }
     }
+  }
+  if (!options.capture_state.empty() &&
+      !fancy_ui::gallery::SeedGalleryCaptureState(options.gallery,
+                                                  options.capture_state)) {
+    std::cerr << "Unknown gallery capture state: " << options.capture_state
+              << '\n';
+    options.valid = false;
   }
   return options;
 }

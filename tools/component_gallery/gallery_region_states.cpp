@@ -37,6 +37,7 @@ struct OperationAction {
 struct OperationDetailEntry {
   std::string_view label;
   std::string_view value;
+  SemanticStatus status = SemanticStatus::Neutral;
 };
 
 struct OperationDetailSection {
@@ -104,18 +105,6 @@ ColorRgba FromImVec4(const ImVec4 color) {
 bool Contains(const ImVec2 minimum, const ImVec2 maximum, const ImVec2 point) {
   return point.x >= minimum.x && point.x <= maximum.x && point.y >= minimum.y &&
          point.y <= maximum.y;
-}
-
-void DrawSecondaryText(const std::string_view text) {
-  ImGui::TextColored(ToImVec4(CurrentPalette().text_secondary), "%.*s",
-                     static_cast<int>(text.size()), text.data());
-}
-
-void DrawSecondaryTextWrapped(const std::string_view text) {
-  ImGui::PushStyleColor(ImGuiCol_Text,
-                        ToImVec4(CurrentPalette().text_secondary));
-  ImGui::TextWrapped("%.*s", static_cast<int>(text.size()), text.data());
-  ImGui::PopStyleColor();
 }
 
 PhasePresentation PresentationForPhase(const OperationPhase phase) {
@@ -240,14 +229,16 @@ const std::array<OperationSample, kOperationSampleCount> &OperationSamples() {
               {
                   {"Generated files",
                    {},
-                   {{"", "Bed-1.svg · 48 KB"}, {"", "Bed-2.svg · 31 KB"}}},
+                   {{"", "Bed-1.svg · 48 KB", SemanticStatus::Success},
+                    {"", "Bed-2.svg · 31 KB", SemanticStatus::Success}}},
                   {"Counts",
                    {{"Beds", "2"}, {"Objects", "4"}, {"Paths", "205"}},
                    {}},
                   {"Warnings and log",
                    {},
-                   {{"", "BED_UNUSED_EXCLUSION · Bed 2"},
-                    {"", "Completed in 0.8 s"}}},
+                   {{"", "BED_UNUSED_EXCLUSION · Bed 2",
+                     SemanticStatus::Warning},
+                    {"", "Completed in 0.8 s", SemanticStatus::Success}}},
               },
       },
       {
@@ -263,14 +254,17 @@ const std::array<OperationSample, kOperationSampleCount> &OperationSamples() {
           .sections =
               {
                   {"Failure",
-                   {{"Code", "GRAIN_CONFLICT"}, {"Bed", "Bed 2"}},
+                   {{"Code", "GRAIN_CONFLICT", SemanticStatus::Failure},
+                    {"Bed", "Bed 2", SemanticStatus::Failure}},
                    {}},
                   {"Conflicting objects",
                    {},
-                   {{"", "Lettering artwork"}, {"", "Bracket plate"}}},
+                   {{"", "Lettering artwork", SemanticStatus::Failure},
+                    {"", "Bracket plate", SemanticStatus::Failure}}},
                   {"Recovery",
                    {},
-                   {{"", "Review locked grain directions and retry."}}},
+                   {{"", "Review locked grain directions and retry.",
+                     SemanticStatus::Warning}}},
               },
       },
       {
@@ -288,20 +282,25 @@ const std::array<OperationSample, kOperationSampleCount> &OperationSamples() {
               {
                   {"Generated files",
                    {},
-                   {{"", "Front-housing-outline-final-repaired.svg · 1.2 MB"},
-                    {"", "Rear-housing-production-ready-with-registration-"
-                         "marks.svg "
-                         "· 986 KB"}}},
+                   {{"", "Front-housing-outline-final-repaired.svg · 1.2 MB",
+                     SemanticStatus::Success},
+                    {"",
+                     "Rear-housing-production-ready-with-registration-"
+                     "marks.svg "
+                     "· 986 KB",
+                     SemanticStatus::Success}}},
                   {"Warnings",
                    {},
                    {{"",
                      "BED_UNUSED_EXCLUSION · Bed 2 · Rear fixture exclusion "
-                     "zone"}}},
+                     "zone",
+                     SemanticStatus::Warning}}},
                   {"Log",
                    {},
                    {{"",
                      "Completed all output writes and verified generated file "
-                     "checksums."}}},
+                     "checksums.",
+                     SemanticStatus::Success}}},
               },
       },
   }};
@@ -612,9 +611,16 @@ void DrawTrayResizeHandle(OperationPresentationState &state) {
 }
 
 void DrawDetailEntry(const OperationDetailEntry &entry, const bool row_layout) {
+  const bool toned = entry.status != SemanticStatus::Neutral;
   if (row_layout) {
-    ImGui::TextUnformatted(entry.label.data(),
-                           entry.label.data() + entry.label.size());
+    if (toned) {
+      ImGui::TextColored(detail::StatusColor(entry.status), "%.*s",
+                         static_cast<int>(entry.label.size()),
+                         entry.label.data());
+    } else {
+      ImGui::TextUnformatted(entry.label.data(),
+                             entry.label.data() + entry.label.size());
+    }
     ImGui::SameLine();
     const float value_width =
         ImGui::CalcTextSize(entry.value.data(),
@@ -625,8 +631,14 @@ void DrawDetailEntry(const OperationDetailEntry &entry, const bool row_layout) {
     ImGui::SetCursorPosX(
         std::max(ImGui::GetCursorPosX(), cell_end - value_width));
   }
-  ImGui::TextUnformatted(entry.value.data(),
-                         entry.value.data() + entry.value.size());
+  if (!row_layout && toned) {
+    ImGui::TextColored(detail::StatusColor(entry.status), "%.*s",
+                       static_cast<int>(entry.value.size()),
+                       entry.value.data());
+  } else {
+    ImGui::TextUnformatted(entry.value.data(),
+                           entry.value.data() + entry.value.size());
+  }
   if (ImGui::IsItemHovered()) {
     detail::ShowTooltip(entry.value);
   }
@@ -710,7 +722,7 @@ void DrawOperationCard(detail::UiAssetAtlas &assets,
     }
     DrawOperationStrip(assets, sample, state);
     if (!state.feedback.empty()) {
-      DrawSecondaryText(state.feedback);
+      detail::DrawSecondaryText(state.feedback);
     }
   }
   ImGui::EndChild();
@@ -923,7 +935,7 @@ StatusBarResult DrawStatusBar(detail::UiAssetAtlas &assets,
 }
 
 ImVec2 ZoomPanelSize(const StatusSample &sample) {
-  const float width = std::min(Scale(280.0f), ImGui::GetContentRegionAvail().x);
+  const float width = std::min(Scale(420.0f), ImGui::GetContentRegionAvail().x);
   const float padding = Scale(kStatusZoomPanelPadding);
   const float spacing = Scale(kStatusZoomPanelItemSpacing);
   const float command_spacing = Scale(kStatusZoomCommandSpacing);
@@ -933,7 +945,6 @@ ImVec2 ZoomPanelSize(const StatusSample &sample) {
       padding * 2.0f + command_height * 3.0f + command_spacing * 2.0f;
   height += spacing + text_height;
   height += spacing + ImGui::GetFrameHeight();
-  height += spacing + text_height;
   if (!sample.can_fit_selection) {
     const float wrap_width = std::max(Scale(64.0f), width - padding * 2.0f);
     const ImVec2 reason_size =
@@ -949,11 +960,11 @@ ImVec2 ZoomPanelSize(const StatusSample &sample) {
 
 void DrawZoomPanel(const StatusSample &sample,
                    StatusZoomPresentationState &zoom, const ImVec2 panel_size,
-                   ImVec2 &panel_minimum, ImVec2 &panel_maximum) {
+                   const ImVec2 panel_position, ImVec2 &panel_minimum,
+                   ImVec2 &panel_maximum) {
   const float width = panel_size.x;
   const float height = panel_size.y;
-  ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
-                       ImGui::GetContentRegionAvail().x - width);
+  ImGui::SetCursorScreenPos(panel_position);
   panel_minimum = ImGui::GetCursorScreenPos();
   ImGui::PushStyleColor(ImGuiCol_ChildBg,
                         ToImVec4(CurrentPalette().surface_raised));
@@ -997,7 +1008,7 @@ void DrawZoomPanel(const StatusSample &sample,
             sample.selection_disabled_reason);
     ImGui::PopStyleVar(2);
     ImGui::EndGroup();
-    DrawSecondaryText("Zoom");
+    detail::DrawSecondaryText("Zoom · 10–1600%");
     ImGui::SameLine();
     ImGui::Text("%.0f%%", zoom.percent);
     float slider_position = StatusZoomSliderPositionFromPercent(zoom.percent);
@@ -1009,13 +1020,9 @@ void DrawZoomPanel(const StatusSample &sample,
       zoom.feedback = "Zoom adjusted";
     }
     detail::DrawFocusRing(detail::CaptureInteraction(), true);
-    DrawSecondaryText("10%");
-    ImGui::SameLine(ImGui::GetContentRegionMax().x -
-                    ImGui::CalcTextSize("1600%").x);
-    DrawSecondaryText("1600%");
     if (!sample.can_fit_selection) {
       ImGui::Separator();
-      DrawSecondaryTextWrapped(sample.selection_disabled_reason);
+      detail::DrawSecondaryTextWrapped(sample.selection_disabled_reason);
     }
   }
   ImGui::EndChild();
@@ -1029,16 +1036,9 @@ void DrawStatusCard(detail::UiAssetAtlas &assets, const StatusSample &sample,
                     const std::size_t sample_index) {
   ImGui::PushID(static_cast<int>(sample_index));
   const bool has_zoom = sample.workspace == StatusWorkspace::Canvas;
-  const ImVec2 zoom_panel_size =
-      has_zoom && zoom.open ? ZoomPanelSize(sample) : ImVec2{};
-  float content_height = Scale(kGalleryStateHeadingHeight + kStatusBarHeight);
-  if (sample_index == 6) {
-    content_height += Scale(kOperationStripHeight);
-  }
-  content_height += zoom_panel_size.y;
-  const float card_height =
-      std::max(Scale(sample.card_height),
-               content_height + ImGui::GetStyle().ChildBorderSize * 2.0f);
+  ImVec2 zoom_panel_size = has_zoom ? ZoomPanelSize(sample) : ImVec2{};
+  const float card_height = Scale(
+      sample_index == 1 || sample_index == 2 ? 192.0f : sample.card_height);
   ImGui::PushStyleColor(ImGuiCol_ChildBg, ToImVec4(CurrentPalette().surface));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
@@ -1046,13 +1046,16 @@ void DrawStatusCard(detail::UiAssetAtlas &assets, const StatusSample &sample,
   if (ImGui::BeginChild(
           "##status-card", ImVec2(0.0f, card_height), ImGuiChildFlags_Borders,
           ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar)) {
+    const ImVec2 card_minimum = ImGui::GetWindowPos();
+    const ImVec2 card_maximum(card_minimum.x + ImGui::GetWindowWidth(),
+                              card_minimum.y + ImGui::GetWindowHeight());
     DrawStateCardHeading(sample.title, assets.bold_font());
-    ImVec2 panel_minimum{};
-    ImVec2 panel_maximum{};
-    if (has_zoom && zoom.open) {
-      DrawZoomPanel(sample, zoom, zoom_panel_size, panel_minimum,
-                    panel_maximum);
-    }
+    const float border = ImGui::GetStyle().ChildBorderSize;
+    const float operation_height =
+        sample_index == 6 ? Scale(kOperationStripHeight) : 0.0f;
+    ImGui::SetCursorScreenPos(ImVec2(
+        card_minimum.x + border,
+        card_maximum.y - border - Scale(kStatusBarHeight) - operation_height));
     if (sample_index == 6) {
       OperationSample background{
           .id = "background-operation",
@@ -1072,6 +1075,21 @@ void DrawStatusCard(detail::UiAssetAtlas &assets, const StatusSample &sample,
     const StatusBarResult bar = DrawStatusBar(assets, sample, zoom);
     if (bar.zoom_activated) {
       zoom.open = !zoom.open;
+    }
+    ImVec2 panel_minimum{};
+    ImVec2 panel_maximum{};
+    if (has_zoom && zoom.open) {
+      const float inset = Scale(4.0f);
+      zoom_panel_size.y =
+          std::min(zoom_panel_size.y, card_height - inset * 2.0f);
+      const float panel_x = std::clamp(
+          bar.zoom_maximum.x - zoom_panel_size.x, card_minimum.x + inset,
+          card_maximum.x - inset - zoom_panel_size.x);
+      const float panel_y = std::clamp(
+          bar.zoom_minimum.y - inset - zoom_panel_size.y,
+          card_minimum.y + inset, card_maximum.y - inset - zoom_panel_size.y);
+      DrawZoomPanel(sample, zoom, zoom_panel_size, ImVec2(panel_x, panel_y),
+                    panel_minimum, panel_maximum);
     }
     if (zoom.open && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
       zoom.open = false;
@@ -1095,7 +1113,7 @@ void DrawStatusCard(detail::UiAssetAtlas &assets, const StatusSample &sample,
 
 void DrawOperationStateGallery(detail::UiAssetAtlas &assets,
                                GalleryState &state) {
-  DrawSecondaryText(
+  detail::DrawSecondaryText(
       "Disclosure, progress, runtime actions, diagnostics, overflow, and "
       "160–240 px resize behavior.");
   ImGui::Spacing();
@@ -1119,7 +1137,7 @@ void DrawOperationStateGallery(detail::UiAssetAtlas &assets,
 
 void DrawStatusBarStateGallery(detail::UiAssetAtlas &assets,
                                GalleryState &state) {
-  DrawSecondaryText(
+  detail::DrawSecondaryText(
       "Document, tool, editing context, typed selection, view facts, Canvas "
       "zoom, overflow, and operation independence.");
   ImGui::Spacing();
@@ -1151,7 +1169,8 @@ void DrawStatusBarStateGallery(detail::UiAssetAtlas &assets,
           ImGui::EndChild();
           ImGui::PopStyleColor();
           ImGui::SameLine();
-          DrawSecondaryText("24 px target · 16/20 text · visible focus");
+          detail::DrawSecondaryText(
+              "24 px target · 16/20 text · visible focus");
         }
         ImGui::EndChild();
         ImGui::PopStyleVar();

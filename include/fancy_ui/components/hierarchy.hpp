@@ -88,7 +88,7 @@ private:
 /**
  * Draws one full-width hierarchy row with independent inline actions.
  *
- * Inline color, overflow, and visibility targets suppress row activation so
+ * Inline color, visibility, and overflow targets suppress row activation so
  * one pointer gesture has exactly one owner. ImGui derives indentation and
  * connector lines from the order of HierarchyRow() and HierarchyTree::Pop().
  */

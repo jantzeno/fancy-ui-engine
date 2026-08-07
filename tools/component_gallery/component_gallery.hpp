@@ -337,6 +337,7 @@ struct GalleryState {
   ColorPickerState reference_tree_color_picker;
   int reference_tree_color_row = 1;
   int reference_tree_action_row = -1;
+  bool request_reference_tree_actions = false;
   std::string reference_tree_feedback = "Select a row or use an inline action.";
 
   bool assembly_expanded = true;
@@ -354,9 +355,13 @@ struct GalleryState {
   std::string tree_feedback = "Select a row or use an inline action.";
 
   bool show_issue_labels = true;
+  bool invalid_issues_expanded = true;
   bool repairable_expanded = true;
+  bool warning_issues_expanded = true;
+  std::array<ToggleState, 1> invalid_issue_visibility{ToggleState::On};
   std::array<ToggleState, 2> issue_visibility{ToggleState::On,
                                               ToggleState::Off};
+  std::array<ToggleState, 1> warning_issue_visibility{ToggleState::On};
 
   ColorRgba preview_picker_color{
       .red = 0.64f,
@@ -395,6 +400,69 @@ inline void LeaveShellPreview(GalleryState &state) {
                          ? GalleryTab::Components
                          : state.shell_return_tab;
   state.focus_active_tab = true;
+}
+
+[[nodiscard]] inline bool SeedGalleryCaptureState(GalleryState &state,
+                                                  const std::string_view slug) {
+  const auto settings = [&state](const SettingsSection section) {
+    ActivateGalleryTab(state, GalleryTab::Settings);
+    state.settings.active_section = section;
+    state.settings.window_open = true;
+    state.settings.request_window_focus = true;
+  };
+  if (slug == "settings-general") {
+    settings(SettingsSection::General);
+  } else if (slug == "settings-appearance") {
+    settings(SettingsSection::Appearance);
+  } else if (slug == "settings-machines-profiles") {
+    settings(SettingsSection::Machines);
+  } else if (slug == "settings-machines-bed-area") {
+    settings(SettingsSection::Machines);
+    state.settings.active_machine_tab = MachineSettingsTab::BedArea;
+  } else if (slug == "settings-machines-information") {
+    settings(SettingsSection::Machines);
+    static_cast<void>(BeginEditMachine(state.settings, "router-4x8"));
+  } else if (slug == "settings-machines-new") {
+    settings(SettingsSection::Machines);
+    BeginNewMachine(state.settings);
+  } else if (slug == "settings-machines-preset-browser") {
+    settings(SettingsSection::Machines);
+    BeginNewMachine(state.settings);
+    static_cast<void>(OpenMachinePresetPicker(state.settings));
+  } else if (slug == "settings-machines-origin-confirmation") {
+    settings(SettingsSection::Machines);
+    BeginNewMachine(state.settings);
+    static_cast<void>(OpenMachinePresetPicker(state.settings));
+    static_cast<void>(
+        ApplyMachinePreset(state.settings, "creality-falcon-cr-5w-10w"));
+    state.settings.request_machine_confirmation_scroll = true;
+  } else if (slug == "settings-license") {
+    settings(SettingsSection::License);
+  } else if (slug == "settings-legal") {
+    settings(SettingsSection::Legal);
+  } else if (slug == "settings-remove-dialog") {
+    settings(SettingsSection::Machines);
+    state.settings.draft.machines.selected_id = "laser-900";
+    state.settings.remove_confirmation_open = true;
+  } else if (slug == "settings-discard-dialog") {
+    settings(SettingsSection::General);
+    state.settings.draft.general.diagnostics_enabled = true;
+    RefreshSettingsDerivedState(state.settings);
+    state.settings.discard_confirmation_open = true;
+  } else if (slug == "hierarchy-actions") {
+    ActivateGalleryTab(state, GalleryTab::Components);
+    state.reference_tree_action_row = 1;
+    state.request_reference_tree_actions = true;
+  } else if (slug == "shell-canvas-toolbar") {
+    ActivateGalleryTab(state, GalleryTab::Shell);
+    state.shell.active_workspace = steppenface::WorkspaceKind::Canvas;
+  } else if (slug == "shell-model-toolbar") {
+    ActivateGalleryTab(state, GalleryTab::Shell);
+    state.shell.active_workspace = steppenface::WorkspaceKind::Model3d;
+  } else {
+    return false;
+  }
+  return true;
 }
 
 void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state);

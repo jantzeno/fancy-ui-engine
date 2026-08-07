@@ -38,6 +38,17 @@ enum class MachineOrigin {
   TopRight,
 };
 
+enum class MachineSettingsTab {
+  Profiles,
+  BedArea,
+  Information,
+};
+
+enum class MachineEditorMode {
+  New,
+  Edit,
+};
+
 enum class LicenseStatus {
   Inactive,
   Error,
@@ -83,6 +94,31 @@ struct MachineProfile {
   [[nodiscard]] bool operator==(const MachineProfile &) const = default;
 };
 
+struct MachinePreset {
+  std::string_view id;
+  std::string_view manufacturer;
+  std::string_view model;
+  std::string_view variant;
+  double bed_width_mm;
+  double bed_height_mm;
+  MachineOrigin origin;
+  bool requires_origin_confirmation;
+};
+
+struct MachineEditorState {
+  MachineEditorMode mode = MachineEditorMode::New;
+  std::optional<std::string> source_id;
+  MachineProfile baseline;
+  MachineProfile draft;
+  std::map<std::string, std::string> errors;
+  bool dirty = false;
+  bool preset_picker_open = false;
+  std::string preset_manufacturer = "Creality";
+  std::optional<std::string> applied_preset_id;
+  bool origin_confirmation_required = false;
+  bool origin_confirmed = true;
+};
+
 struct MachineSettings {
   std::string selected_id;
   std::vector<MachineProfile> profiles;
@@ -110,6 +146,8 @@ struct LicenseState {
 
 struct SettingsGalleryState {
   SettingsSection active_section = SettingsSection::General;
+  MachineSettingsTab active_machine_tab = MachineSettingsTab::Profiles;
+  std::optional<MachineEditorState> machine_editor;
   SettingsPreferences applied;
   SettingsPreferences draft;
   std::map<std::string, std::string> errors;
@@ -117,6 +155,8 @@ struct SettingsGalleryState {
   bool dirty = false;
   bool window_open = true;
   bool discard_confirmation_open = false;
+  bool remove_confirmation_open = false;
+  bool request_machine_confirmation_scroll = false;
   bool request_window_focus = true;
   ResolvedTheme system_theme = ResolvedTheme::Dark;
 };
@@ -175,6 +215,60 @@ struct UsableBedSize {
   };
 }
 
+inline constexpr std::array kMachinePresets{
+    MachinePreset{
+        .id = "creality-falcon-cr-5w-10w",
+        .manufacturer = "Creality",
+        .model = "Falcon CR",
+        .variant = "5W/10W",
+        .bed_width_mm = 400.0,
+        .bed_height_mm = 415.0,
+        .origin = MachineOrigin::BottomLeft,
+        .requires_origin_confirmation = true,
+    },
+    MachinePreset{
+        .id = "creality-falcon2-pro-60w",
+        .manufacturer = "Creality",
+        .model = "Falcon2 Pro",
+        .variant = "60W",
+        .bed_width_mm = 400.0,
+        .bed_height_mm = 400.0,
+        .origin = MachineOrigin::BottomLeft,
+        .requires_origin_confirmation = true,
+    },
+    MachinePreset{
+        .id = "glowforge-aura-standard",
+        .manufacturer = "Glowforge",
+        .model = "Aura",
+        .variant = "Standard",
+        .bed_width_mm = 304.8,
+        .bed_height_mm = 304.8,
+        .origin = MachineOrigin::TopLeft,
+        .requires_origin_confirmation = true,
+    },
+    MachinePreset{
+        .id = "omtech-polar-desktop-co2",
+        .manufacturer = "OMTech",
+        .model = "Polar",
+        .variant = "Desktop CO2",
+        .bed_width_mm = 510.0,
+        .bed_height_mm = 300.0,
+        .origin = MachineOrigin::TopRight,
+        .requires_origin_confirmation = false,
+    },
+};
+
+[[nodiscard]] inline MachineProfile
+MachineProfileFromPreset(const MachinePreset &preset) {
+  return {
+      .name =
+          std::string(preset.manufacturer) + " " + std::string(preset.model),
+      .bed_width_mm = preset.bed_width_mm,
+      .bed_height_mm = preset.bed_height_mm,
+      .origin = preset.origin,
+  };
+}
+
 [[nodiscard]] inline std::string TrimmedLower(std::string value) {
   const auto first =
       std::find_if_not(value.begin(), value.end(), [](const unsigned char c) {
@@ -195,6 +289,47 @@ struct UsableBedSize {
 }
 
 [[nodiscard]] inline std::map<std::string, std::string>
+ValidateMachineProfile(const MachineProfile &profile) {
+  std::map<std::string, std::string> errors;
+  if (TrimmedLower(profile.name).empty()) {
+    errors["name"] = "Enter a machine name.";
+  }
+  if (!(profile.bed_width_mm > 0.0)) {
+    errors["bed_width_mm"] = "Bed width must be greater than zero.";
+  }
+  if (!(profile.bed_height_mm > 0.0)) {
+    errors["bed_height_mm"] = "Bed height must be greater than zero.";
+  }
+  const std::array edge_values{
+      std::pair{"top", profile.edge_insets_mm.top},
+      std::pair{"right", profile.edge_insets_mm.right},
+      std::pair{"bottom", profile.edge_insets_mm.bottom},
+      std::pair{"left", profile.edge_insets_mm.left},
+  };
+  for (const auto &[edge, value] : edge_values) {
+    if (!(value >= 0.0)) {
+      errors["edge_insets_mm." + std::string(edge)] =
+          "Edge inset cannot be negative.";
+    }
+  }
+  const UsableBedSize usable = UsableSize(profile);
+  if (!(usable.width_mm > 0.0)) {
+    errors["usable_width"] =
+        "Left and right insets must leave a usable bed width.";
+  }
+  if (!(usable.height_mm > 0.0)) {
+    errors["usable_height"] =
+        "Top and bottom insets must leave a usable bed height.";
+  }
+  if (profile.material_thickness_mm.has_value() &&
+      !(*profile.material_thickness_mm > 0.0)) {
+    errors["material_thickness_mm"] =
+        "Material thickness must be blank or greater than zero.";
+  }
+  return errors;
+}
+
+[[nodiscard]] inline std::map<std::string, std::string>
 ValidateSettings(const SettingsPreferences &settings) {
   std::map<std::string, std::string> errors;
   if (TrimmedLower(settings.general.default_open_directory).empty()) {
@@ -211,43 +346,11 @@ ValidateSettings(const SettingsPreferences &settings) {
   for (const MachineProfile &profile : settings.machines.profiles) {
     const std::string prefix = "machines." + profile.id + ".";
     const std::string name = TrimmedLower(profile.name);
-    if (name.empty()) {
-      errors[prefix + "name"] = "Enter a machine name.";
-    } else if (++names[name] > 1) {
+    for (const auto &[field, message] : ValidateMachineProfile(profile)) {
+      errors[prefix + field] = message;
+    }
+    if (!name.empty() && ++names[name] > 1) {
       errors[prefix + "name"] = "Machine names must be unique.";
-    }
-    if (!(profile.bed_width_mm > 0.0)) {
-      errors[prefix + "bed_width_mm"] = "Bed width must be greater than zero.";
-    }
-    if (!(profile.bed_height_mm > 0.0)) {
-      errors[prefix + "bed_height_mm"] =
-          "Bed height must be greater than zero.";
-    }
-    const std::array edge_values{
-        std::pair{"top", profile.edge_insets_mm.top},
-        std::pair{"right", profile.edge_insets_mm.right},
-        std::pair{"bottom", profile.edge_insets_mm.bottom},
-        std::pair{"left", profile.edge_insets_mm.left},
-    };
-    for (const auto &[edge, value] : edge_values) {
-      if (!(value >= 0.0)) {
-        errors[prefix + "edge_insets_mm." + edge] =
-            "Edge inset cannot be negative.";
-      }
-    }
-    const UsableBedSize usable = UsableSize(profile);
-    if (!(usable.width_mm > 0.0)) {
-      errors[prefix + "usable_width"] =
-          "Left and right insets must leave a usable bed width.";
-    }
-    if (!(usable.height_mm > 0.0)) {
-      errors[prefix + "usable_height"] =
-          "Top and bottom insets must leave a usable bed height.";
-    }
-    if (profile.material_thickness_mm.has_value() &&
-        !(*profile.material_thickness_mm > 0.0)) {
-      errors[prefix + "material_thickness_mm"] =
-          "Material thickness must be blank or greater than zero.";
     }
     default_count += profile.is_default ? 1U : 0U;
   }
@@ -257,9 +360,35 @@ ValidateSettings(const SettingsPreferences &settings) {
   return errors;
 }
 
+[[nodiscard]] inline std::map<std::string, std::string>
+ValidateMachineEditor(const MachineEditorState &editor,
+                      const std::vector<MachineProfile> &profiles) {
+  auto errors = ValidateMachineProfile(editor.draft);
+  const std::string name = TrimmedLower(editor.draft.name);
+  if (!name.empty() &&
+      std::ranges::any_of(profiles,
+                          [&editor, &name](const MachineProfile &item) {
+                            return item.id != editor.source_id.value_or("") &&
+                                   TrimmedLower(item.name) == name;
+                          })) {
+    errors["name"] = "Machine names must be unique.";
+  }
+  if (editor.origin_confirmation_required && !editor.origin_confirmed) {
+    errors["origin_confirmation"] =
+        "Confirm the suggested origin or choose another corner.";
+  }
+  return errors;
+}
+
 inline void RefreshSettingsDerivedState(SettingsGalleryState &state) {
   state.dirty = state.applied != state.draft;
   state.errors = ValidateSettings(state.draft);
+  if (state.machine_editor.has_value()) {
+    state.machine_editor->dirty =
+        state.machine_editor->baseline != state.machine_editor->draft;
+    state.machine_editor->errors = ValidateMachineEditor(
+        *state.machine_editor, state.draft.machines.profiles);
+  }
 }
 
 [[nodiscard]] inline SettingsGalleryState DefaultSettingsGalleryState(
@@ -319,20 +448,152 @@ NextMachineId(const std::vector<MachineProfile> &profiles) {
   return "machine-" + std::to_string(index);
 }
 
-inline void AddMachine(SettingsGalleryState &state) {
-  const std::string id = NextMachineId(state.draft.machines.profiles);
-  state.draft.machines.profiles.push_back({
-      .id = id,
-      .name =
-          "Machine " + std::to_string(state.draft.machines.profiles.size() + 1),
-      .bed_width_mm = 1000.0,
-      .bed_height_mm = 600.0,
-  });
-  state.draft.machines.selected_id = id;
+inline void BeginNewMachine(SettingsGalleryState &state) {
+  MachineProfile draft;
+  state.machine_editor = MachineEditorState{
+      .mode = MachineEditorMode::New,
+      .baseline = draft,
+      .draft = draft,
+  };
+  state.active_machine_tab = MachineSettingsTab::Information;
   RefreshSettingsDerivedState(state);
 }
 
+[[nodiscard]] inline bool BeginEditMachine(SettingsGalleryState &state,
+                                           const std::string_view id) {
+  const auto found =
+      std::ranges::find(state.draft.machines.profiles, id, &MachineProfile::id);
+  if (found == state.draft.machines.profiles.end()) {
+    return false;
+  }
+  state.machine_editor = MachineEditorState{
+      .mode = MachineEditorMode::Edit,
+      .source_id = found->id,
+      .baseline = *found,
+      .draft = *found,
+      .preset_manufacturer = {},
+  };
+  state.active_machine_tab = MachineSettingsTab::Information;
+  RefreshSettingsDerivedState(state);
+  return true;
+}
+
+inline void CancelMachineEditor(SettingsGalleryState &state) {
+  state.machine_editor.reset();
+  state.active_machine_tab = MachineSettingsTab::Profiles;
+  RefreshSettingsDerivedState(state);
+}
+
+[[nodiscard]] inline bool OpenMachinePresetPicker(SettingsGalleryState &state) {
+  if (!state.machine_editor.has_value() ||
+      state.machine_editor->mode != MachineEditorMode::New) {
+    return false;
+  }
+  state.machine_editor->preset_picker_open = true;
+  return true;
+}
+
+inline void CloseMachinePresetPicker(SettingsGalleryState &state) {
+  if (state.machine_editor.has_value()) {
+    state.machine_editor->preset_picker_open = false;
+  }
+}
+
+[[nodiscard]] inline bool
+SelectMachinePresetManufacturer(SettingsGalleryState &state,
+                                const std::string_view manufacturer) {
+  if (!state.machine_editor.has_value() ||
+      state.machine_editor->mode != MachineEditorMode::New ||
+      !std::ranges::any_of(kMachinePresets,
+                           [manufacturer](const MachinePreset &preset) {
+                             return preset.manufacturer == manufacturer;
+                           })) {
+    return false;
+  }
+  state.machine_editor->preset_manufacturer = manufacturer;
+  return true;
+}
+
+[[nodiscard]] inline bool ApplyMachinePreset(SettingsGalleryState &state,
+                                             const std::string_view id) {
+  if (!state.machine_editor.has_value() ||
+      state.machine_editor->mode != MachineEditorMode::New ||
+      !state.machine_editor->preset_picker_open) {
+    return false;
+  }
+  const auto found = std::ranges::find(kMachinePresets, id, &MachinePreset::id);
+  if (found == kMachinePresets.end()) {
+    return false;
+  }
+  MachineEditorState &editor = *state.machine_editor;
+  editor.draft = MachineProfileFromPreset(*found);
+  editor.preset_picker_open = false;
+  editor.preset_manufacturer = found->manufacturer;
+  editor.applied_preset_id = std::string(found->id);
+  editor.origin_confirmation_required = found->requires_origin_confirmation;
+  editor.origin_confirmed = !found->requires_origin_confirmation;
+  RefreshSettingsDerivedState(state);
+  return true;
+}
+
+inline void SetMachineEditorOrigin(SettingsGalleryState &state,
+                                   const MachineOrigin origin) {
+  if (!state.machine_editor.has_value()) {
+    return;
+  }
+  state.machine_editor->draft.origin = origin;
+  state.machine_editor->origin_confirmed = true;
+  RefreshSettingsDerivedState(state);
+}
+
+inline void ConfirmMachinePresetOrigin(SettingsGalleryState &state) {
+  if (!state.machine_editor.has_value() ||
+      !state.machine_editor->origin_confirmation_required) {
+    return;
+  }
+  state.machine_editor->origin_confirmed = true;
+  RefreshSettingsDerivedState(state);
+}
+
+[[nodiscard]] inline bool SaveMachineEditor(SettingsGalleryState &state) {
+  if (!state.machine_editor.has_value()) {
+    return false;
+  }
+  RefreshSettingsDerivedState(state);
+  if (!state.machine_editor->errors.empty()) {
+    return false;
+  }
+  const MachineEditorState editor = *state.machine_editor;
+  MachineProfile saved = editor.draft;
+  if (editor.mode == MachineEditorMode::New) {
+    saved.id = NextMachineId(state.draft.machines.profiles);
+    state.draft.machines.profiles.push_back(saved);
+  } else {
+    const auto found =
+        std::ranges::find(state.draft.machines.profiles,
+                          editor.source_id.value_or(""), &MachineProfile::id);
+    if (found == state.draft.machines.profiles.end()) {
+      return false;
+    }
+    saved.id = found->id;
+    *found = saved;
+  }
+  if (saved.is_default) {
+    for (MachineProfile &profile : state.draft.machines.profiles) {
+      profile.is_default = profile.id == saved.id;
+    }
+  }
+  state.draft.machines.selected_id = saved.id;
+  state.machine_editor.reset();
+  state.active_machine_tab = MachineSettingsTab::Profiles;
+  RefreshSettingsDerivedState(state);
+  return true;
+}
+
 inline void DuplicateSelectedMachine(SettingsGalleryState &state) {
+  if (state.machine_editor.has_value()) {
+    return;
+  }
   const MachineProfile *source = SelectedMachine(state);
   if (source == nullptr) {
     return;
@@ -356,8 +617,8 @@ inline void SetSelectedMachineDefault(SettingsGalleryState &state) {
 [[nodiscard]] inline bool
 CanRemoveSelectedMachine(const SettingsGalleryState &state) {
   const MachineProfile *profile = SelectedMachine(state);
-  return profile != nullptr && !profile->is_default &&
-         state.draft.machines.profiles.size() > 1;
+  return !state.machine_editor.has_value() && profile != nullptr &&
+         !profile->is_default && state.draft.machines.profiles.size() > 1;
 }
 
 inline bool RemoveSelectedMachine(SettingsGalleryState &state) {
@@ -376,7 +637,7 @@ inline bool RemoveSelectedMachine(SettingsGalleryState &state) {
 
 [[nodiscard]] inline bool ApplySettings(SettingsGalleryState &state) {
   RefreshSettingsDerivedState(state);
-  if (!state.errors.empty()) {
+  if (state.machine_editor.has_value() || !state.errors.empty()) {
     return false;
   }
   state.applied = state.draft;
@@ -386,6 +647,8 @@ inline bool RemoveSelectedMachine(SettingsGalleryState &state) {
 
 inline void DiscardSettings(SettingsGalleryState &state) {
   state.draft = state.applied;
+  state.machine_editor.reset();
+  state.active_machine_tab = MachineSettingsTab::Profiles;
   RefreshSettingsDerivedState(state);
 }
 

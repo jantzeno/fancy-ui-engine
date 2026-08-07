@@ -81,6 +81,48 @@ TEST_CASE("machine profiles derive usable size and enforce lifecycle rules") {
   REQUIRE(state.draft.machines.profiles.size() == 2);
 }
 
+TEST_CASE("new machines stay local until a confirmed preset is saved") {
+  SettingsGalleryState state = DefaultSettingsGalleryState();
+  BeginNewMachine(state);
+
+  REQUIRE(state.machine_editor.has_value());
+  REQUIRE(state.active_machine_tab == MachineSettingsTab::Information);
+  REQUIRE(state.draft.machines.profiles.size() == 2);
+  REQUIRE(OpenMachinePresetPicker(state));
+  REQUIRE(SelectMachinePresetManufacturer(state, "Glowforge"));
+  REQUIRE(ApplyMachinePreset(state, "glowforge-aura-standard"));
+  REQUIRE(state.machine_editor->draft.name == "Glowforge Aura");
+  REQUIRE(state.machine_editor->errors.contains("origin_confirmation"));
+  REQUIRE_FALSE(SaveMachineEditor(state));
+
+  ConfirmMachinePresetOrigin(state);
+  REQUIRE(SaveMachineEditor(state));
+  REQUIRE_FALSE(state.machine_editor.has_value());
+  REQUIRE(state.active_machine_tab == MachineSettingsTab::Profiles);
+  REQUIRE(state.draft.machines.profiles.size() == 3);
+  REQUIRE(SelectedMachine(state)->id == "machine-3");
+  REQUIRE(SelectedMachine(state)->origin == MachineOrigin::TopLeft);
+  REQUIRE(state.dirty);
+}
+
+TEST_CASE("machine edits survive tab changes and block global actions") {
+  SettingsGalleryState state = DefaultSettingsGalleryState();
+  REQUIRE(BeginEditMachine(state, "laser-900"));
+  state.machine_editor->draft.name = "Workshop laser";
+  state.active_machine_tab = MachineSettingsTab::BedArea;
+  RefreshSettingsDerivedState(state);
+
+  REQUIRE(state.machine_editor->dirty);
+  REQUIRE_FALSE(ApplySettings(state));
+  DuplicateSelectedMachine(state);
+  REQUIRE(state.draft.machines.profiles.size() == 2);
+
+  CancelMachineEditor(state);
+  REQUIRE_FALSE(state.machine_editor.has_value());
+  REQUIRE(state.active_machine_tab == MachineSettingsTab::Profiles);
+  REQUIRE(state.draft.machines.profiles[1].name == "900 mm Laser");
+}
+
 TEST_CASE(
     "machine validation reports unique names and impossible usable beds") {
   SettingsGalleryState state = DefaultSettingsGalleryState();

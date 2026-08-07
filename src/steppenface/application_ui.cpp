@@ -709,7 +709,7 @@ public:
   void DrawModelSurface(const ApplicationView &view,
                         const SurfaceBindings &surfaces) {
     if (surfaces.model == nullptr) {
-      ImGui::TextDisabled("%s", view.workspace.empty_message.c_str());
+      detail::DrawSecondaryText(view.workspace.empty_message);
       return;
     }
 
@@ -752,7 +752,8 @@ public:
                                            ImVec2(1.0f, 0.0f));
     } else {
       ImGui::GetWindowDrawList()->AddText(
-          minimum, ImGui::GetColorU32(ImGuiCol_TextDisabled),
+          minimum,
+          ImGui::GetColorU32(ToImVec4(CurrentPalette().text_secondary)),
           view.workspace.empty_message.c_str());
     }
     if (frame.selection_marquee.has_value()) {
@@ -777,7 +778,7 @@ public:
   void DrawCanvasSurface(const ApplicationView &view,
                          const SurfaceBindings &surfaces) {
     if (surfaces.canvas == nullptr || !surfaces.canvas->valid()) {
-      ImGui::TextDisabled("%s", view.workspace.empty_message.c_str());
+      detail::DrawSecondaryText(view.workspace.empty_message);
       return;
     }
     im2d::DrawCanvas(*surfaces.canvas->state_);
@@ -860,7 +861,7 @@ public:
     }
     ImGui::EndDisabled();
     if (!field.help.empty()) {
-      ImGui::TextDisabled("%s", field.help.c_str());
+      detail::DrawSecondaryText(field.help);
     }
     if (!field.availability.enabled &&
         ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&

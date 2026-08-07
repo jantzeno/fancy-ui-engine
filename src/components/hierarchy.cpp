@@ -89,25 +89,6 @@ InlineTargetResult IconTarget(const char *id, const ImVec2 position,
   return target;
 }
 
-void DrawTreeConnector(ImDrawList *draw_list, const int depth,
-                       const ImVec2 node_cursor, const ImVec2 minimum,
-                       const ImVec2 maximum, const float row_height,
-                       const LayoutMetrics &metrics, const ColorRgba color) {
-  if (depth <= 0) {
-    return;
-  }
-  const float elbow_x =
-      node_cursor.x - metrics.explorer.tree_indent + metrics.spacing.space02;
-  const float center_y = (minimum.y + maximum.y) * 0.5f;
-  const float start_y =
-      minimum.y - row_height * 0.5f - metrics.spacing.condensed;
-  const ImU32 native_color = ImGui::GetColorU32(ToImVec4(color));
-  draw_list->AddLine(ImVec2(elbow_x, start_y), ImVec2(elbow_x, center_y),
-                     native_color, metrics.explorer.tree_connector_thickness);
-  draw_list->AddLine(ImVec2(elbow_x, center_y), ImVec2(node_cursor.x, center_y),
-                     native_color, metrics.explorer.tree_connector_thickness);
-}
-
 } // namespace
 
 ToggleState
@@ -173,8 +154,6 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
                                : metrics.explorer.detailed_tree_row_height;
   const float vertical_padding =
       std::max((row_height - ImGui::GetFontSize()) * 0.5f, 0.0f);
-  const int depth = tree.open_nodes_;
-
   const ImVec2 node_cursor = ImGui::GetCursorScreenPos();
   const std::string native_id = "##" + id;
   ImGuiTreeNodeFlags flags =
@@ -251,9 +230,6 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
       .focused = interaction.focused,
   });
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  DrawTreeConnector(draw_list, depth, node_cursor, minimum, maximum, row_height,
-                    metrics,
-                    disabled ? palette.text_disabled : palette.text_secondary);
   if (spec.selected) {
     draw_list->AddRectFilled(minimum,
                              ImVec2(minimum.x + Scale(3.0f), maximum.y),
@@ -277,14 +253,20 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
             .maximum = {.x = text_x + icon_size,
                         .y = center_y + icon_size * 0.5f},
         },
-        disabled ? palette.text_disabled : StatusForeground(spec.status));
+        disabled ? palette.text_disabled : palette.text_secondary);
     text_x += metrics.geometry.icon + metrics.spacing.space03;
   }
 
-  const ColorRgba label_color = disabled ? palette.text_disabled
-                                : spec.status == SemanticStatus::Neutral
-                                    ? colors.text
-                                    : StatusForeground(spec.status);
+  if (spec.status != SemanticStatus::Neutral) {
+    const float dot_size = Scale(8.0f);
+    draw_list->AddCircleFilled(
+        ImVec2(text_x + dot_size * 0.5f, center_y), dot_size * 0.5f,
+        ImGui::GetColorU32(ToImVec4(disabled ? palette.text_disabled
+                                             : StatusForeground(spec.status))));
+    text_x += dot_size + metrics.spacing.space03;
+  }
+
+  const ColorRgba label_color = disabled ? palette.text_disabled : colors.text;
   ImFont *font = ImGui::GetFont();
   const float label_font_size = Scale(21.0f);
   const float secondary_font_size = Scale(16.0f);
@@ -304,10 +286,8 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
   draw_list->AddText(font, label_font_size, ImVec2(text_x, text_y),
                      ImGui::GetColorU32(ToImVec4(label_color)), label.c_str());
   if (!secondary_label.empty()) {
-    const ColorRgba secondary_color = disabled ? palette.text_disabled
-                                      : spec.status == SemanticStatus::Neutral
-                                          ? palette.text_secondary
-                                          : StatusForeground(spec.status);
+    const ColorRgba secondary_color =
+        disabled ? palette.text_disabled : palette.text_secondary;
     draw_list->AddText(
         font, secondary_font_size,
         ImVec2(text_x, text_y + label_size.y + metrics.spacing.space01),
@@ -343,18 +323,6 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
     trailing_x += color_width;
   }
 
-  bool action_activated = false;
-  if (spec.action_icon) {
-    action_activated =
-        IconTarget("##action",
-                   ImVec2(trailing_x + Scale(2.0f), center_y - Scale(12.0f)),
-                   spec.action_icon,
-                   disabled ? palette.text_disabled : palette.text_secondary,
-                   spec.action_tooltip, spec.availability)
-            .activated;
-    trailing_x += action_width;
-  }
-
   bool visibility_changed = false;
   ToggleState visibility = spec.visibility.value_or(ToggleState::Off);
   if (spec.visibility.has_value()) {
@@ -385,6 +353,18 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
     if (visibility_changed) {
       visibility = NextVisibilityState(visibility);
     }
+    trailing_x += visibility_width;
+  }
+
+  bool action_activated = false;
+  if (spec.action_icon) {
+    action_activated =
+        IconTarget("##action",
+                   ImVec2(trailing_x + Scale(2.0f), center_y - Scale(12.0f)),
+                   spec.action_icon,
+                   disabled ? palette.text_disabled : palette.text_secondary,
+                   spec.action_tooltip, spec.availability)
+            .activated;
   }
 
   ImGui::PopID();
@@ -458,7 +438,6 @@ InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
   const bool disabled = !spec.availability.enabled || spec.availability.busy;
   const LayoutMetrics metrics = CurrentLayoutMetrics();
   const SemanticPalette &palette = CurrentPalette();
-  const int depth = tree.open_nodes_;
   const float visibility_width =
       spec.visibility.has_value()
           ? metrics.explorer.audit_visibility_column_width
@@ -484,10 +463,8 @@ InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
     ImGui::SetNextItemOpen(spec.expanded, ImGuiCond_Always);
   }
 
-  const ColorRgba foreground = disabled ? palette.text_disabled
-                               : spec.status == SemanticStatus::Neutral
-                                   ? palette.text_primary
-                                   : StatusForeground(spec.status);
+  const ColorRgba foreground =
+      disabled ? palette.text_disabled : palette.text_primary;
   const std::string native_id = "##" + id;
   detail::BeginAvailability(spec.availability);
   ImGui::SetNextItemAllowOverlap();
@@ -507,9 +484,6 @@ InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
   draw_list->AddRect(minimum, maximum,
                      ImGui::GetColorU32(ToImVec4(palette.border)), 0.0f, 0,
                      metrics.geometry.border);
-  DrawTreeConnector(draw_list, depth, node_cursor, minimum, maximum,
-                    metrics.inspector.information_row_minimum_height, metrics,
-                    disabled ? palette.text_disabled : palette.text_secondary);
   detail::DrawFocusRing(interaction);
 
   ImFont *font = ImGui::GetFont();
@@ -520,7 +494,16 @@ InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
       font_size, std::numeric_limits<float>::max(), 0.0f, value.c_str());
   const float text_y =
       std::floor((minimum.y + maximum.y - label_size.y) * 0.5f);
-  const float label_x = node_cursor.x + ImGui::GetTreeNodeToLabelSpacing();
+  float label_x = node_cursor.x + ImGui::GetTreeNodeToLabelSpacing();
+  if (spec.status != SemanticStatus::Neutral) {
+    const float dot_size = Scale(8.0f);
+    draw_list->AddCircleFilled(
+        ImVec2(label_x + dot_size * 0.5f, (minimum.y + maximum.y) * 0.5f),
+        dot_size * 0.5f,
+        ImGui::GetColorU32(ToImVec4(disabled ? palette.text_disabled
+                                             : StatusForeground(spec.status))));
+    label_x += dot_size + metrics.spacing.space03;
+  }
   const float value_x =
       maximum.x - visibility_width - metrics.spacing.space03 - value_size.x;
   draw_list->PushClipRect(

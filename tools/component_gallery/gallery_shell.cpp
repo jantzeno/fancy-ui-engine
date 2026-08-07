@@ -2,6 +2,7 @@
 
 #include "fancy_ui/fancy_ui.hpp"
 #include "internal/application_chrome.hpp"
+#include "internal/component_internal.hpp"
 #include "internal/ui_asset_atlas.hpp"
 
 #include <imgui.h>
@@ -704,7 +705,7 @@ void DrawGalleryToolbarField(ShellGalleryState &state, const FieldView &field) {
                                          }));
   }
   if (!field.help.empty()) {
-    ImGui::TextDisabled("%s", field.help.c_str());
+    detail::DrawSecondaryText(field.help);
   }
   ImGui::PopID();
 }
@@ -800,7 +801,7 @@ void DrawExplorer(detail::UiAssetAtlas &assets, GalleryState &state) {
              })
           .activated;
   ImGui::SameLine();
-  ImGui::TextDisabled("Esc");
+  detail::DrawSecondaryText("Esc");
   if (!feedback.empty()) {
     const float feedback_width =
         ImGui::CalcTextSize(feedback.data(), feedback.data() + feedback.size())
@@ -809,8 +810,7 @@ void DrawExplorer(detail::UiAssetAtlas &assets, GalleryState &state) {
         ImGui::GetCursorPosX() +
         std::max(0.0f,
                  (ImGui::GetContentRegionAvail().x - feedback_width) * 0.5f));
-    ImGui::TextDisabled("%.*s", static_cast<int>(feedback.size()),
-                        feedback.data());
+    detail::DrawSecondaryText(feedback);
   }
   return return_requested;
 }
@@ -966,7 +966,7 @@ void DrawInspector(detail::UiAssetAtlas &assets, GalleryState &state) {
               .activated) {
         shell.feedback = "Component inspection requested.";
       }
-      ImGui::TextDisabled("%s", shell.feedback.c_str());
+      detail::DrawSecondaryText(shell.feedback);
     }
     EndSection(feedback);
   }

@@ -76,8 +76,12 @@ TEST_CASE("operation and destructive control colors meet contrast targets") {
     const fancy_ui::SemanticPalette palette = fancy_ui::PaletteFor(theme);
 
     REQUIRE(ContrastRatio(palette.text_primary, palette.surface_muted) >= 7.0f);
-    REQUIRE(ContrastRatio(palette.text_secondary, palette.surface_muted) >=
-            4.5f);
+    REQUIRE(palette.text_secondary != palette.text_disabled);
+    for (const fancy_ui::ColorRgba surface :
+         {palette.application_surface, palette.canvas, palette.surface,
+          palette.surface_muted, palette.surface_raised}) {
+      REQUIRE(ContrastRatio(palette.text_secondary, surface) >= 4.5f);
+    }
     for (const fancy_ui::ColorRgba background :
          {palette.information_background, palette.success_background,
           palette.warning_background, palette.failure_background}) {
@@ -173,6 +177,7 @@ TEST_CASE("layout metrics expose the normative shell and panel geometry") {
   REQUIRE(metrics.inspector.stack_breakpoint == 288.0f);
   REQUIRE(metrics.menu.popup_width == 264.0f);
   REQUIRE(metrics.menu.font_size == 18.0f);
+  REQUIRE(metrics.settings.title_bar_height == 48.0f);
 }
 
 TEST_CASE("resolved layout metrics clamp scale and round once") {
@@ -813,16 +818,16 @@ TEST_CASE("hierarchy inline targets do not activate the selectable row") {
   REQUIRE_FALSE(color.activated);
   REQUIRE(color.color_activated);
 
-  const fancy_ui::HierarchyRowResult action =
-      click(ImVec2(row_maximum.x - fancy_ui::Scale(42.0f), center_y));
-  REQUIRE_FALSE(action.activated);
-  REQUIRE(action.action_activated);
-
   const fancy_ui::HierarchyRowResult visibility =
-      click(ImVec2(row_maximum.x - fancy_ui::Scale(14.0f), center_y));
+      click(ImVec2(row_maximum.x - fancy_ui::Scale(42.0f), center_y));
   REQUIRE_FALSE(visibility.activated);
   REQUIRE(visibility.visibility_changed);
   REQUIRE(visibility.visibility == fancy_ui::ToggleState::Off);
+
+  const fancy_ui::HierarchyRowResult action =
+      click(ImVec2(row_maximum.x - fancy_ui::Scale(14.0f), center_y));
+  REQUIRE_FALSE(action.activated);
+  REQUIRE(action.action_activated);
   ImGui::DestroyContext();
 }
 
