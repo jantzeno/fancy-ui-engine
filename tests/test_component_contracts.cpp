@@ -1080,9 +1080,14 @@ TEST_CASE("UI icon manifest has unique size variants backed by SVG masters") {
     }
   }
 
-  for (const char *semantic_id : {"model", "bed", "objects", "grain", "search",
-                                  "compact", "diagnostics"}) {
+  for (const char *semantic_id :
+       {"model", "bed", "objects", "grain", "search", "compact", "diagnostics",
+        "svg", "dxf", "path", "line", "arc", "circle", "select-children"}) {
     REQUIRE(rail_icons.contains(semantic_id));
+  }
+  for (const char *semantic_id :
+       {"svg", "dxf", "path", "line", "arc", "circle", "select-children"}) {
+    REQUIRE(small_icons.contains(semantic_id));
   }
   for (const char *semantic_id : {"information",
                                   "success",

@@ -13,13 +13,14 @@ namespace fancy_ui::gallery {
 
 enum class GalleryTab : std::uint8_t {
   Components,
+  Hierarchies,
   Shell,
   Settings,
   Operations,
   Status,
 };
 
-inline constexpr int kGalleryTabCount = 5;
+inline constexpr int kGalleryTabCount = 6;
 
 struct GalleryCaptureExtent {
   int width = 1280;
@@ -31,6 +32,8 @@ GalleryScreenshotLogicalExtent(const GalleryTab tab) {
   switch (tab) {
   case GalleryTab::Components:
     return {.width = 1280, .height = 1540};
+  case GalleryTab::Hierarchies:
+    return {.width = 1280, .height = 900};
   case GalleryTab::Shell:
     return {.width = 1280, .height = 720};
   case GalleryTab::Settings:
@@ -176,6 +179,9 @@ StatusZoomSliderPositionFromPercent(const float percent) {
 ParseGalleryTab(const std::string_view value) {
   if (value == "components") {
     return GalleryTab::Components;
+  }
+  if (value == "hierarchies") {
+    return GalleryTab::Hierarchies;
   }
   if (value == "shell") {
     return GalleryTab::Shell;

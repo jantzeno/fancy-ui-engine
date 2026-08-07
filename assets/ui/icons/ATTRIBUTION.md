@@ -9,9 +9,10 @@ and are licensed under the MIT License:
   Pulse, Search, Stack, Sync, Triangle Down, Unlock, and X Circle.
 - Fit All and Focus Selected are Octicon-derived application variants.
 
-Bed, Compact, Grain Direction, and the six application-layout controls are
-original SteppenFace icons drawn to the same Octicon construction rules. Each
-activity size is an independent master rather than a scaled copy.
+Bed, Compact, Grain Direction, SVG Data, DXF Data, Path Data, Line, Arc,
+Circle, Select Children, and the six application-layout controls are original
+SteppenFace icons drawn to the same Octicon construction rules. Each 16 px and
+24 px size is an independent master rather than a scaled copy.
 
 The SVG paths remain source assets so the runtime can rasterize them at the
 effective UI scale and tint their monochrome alpha masks with semantic theme

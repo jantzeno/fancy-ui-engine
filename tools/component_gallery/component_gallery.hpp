@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gallery_hierarchy_studies.hpp"
 #include "gallery_settings_model.hpp"
 #include "gallery_state_model.hpp"
 
@@ -376,6 +377,7 @@ struct GalleryState {
       operation_states = DefaultOperationPresentationStates();
   std::array<StatusZoomPresentationState, kStatusSampleCount>
       status_zoom_states = DefaultStatusZoomPresentationStates();
+  HierarchyStudyState hierarchy_study;
   ShellGalleryState shell;
   SettingsGalleryState settings = DefaultSettingsGalleryState();
 };

@@ -1296,6 +1296,9 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
       }
       ImGui::EndChild();
     });
+    tab("Hierarchy studies", GalleryTab::Hierarchies, [&assets, &state] {
+      DrawHierarchyStudies(assets, state.hierarchy_study);
+    });
     tab("Application shell", GalleryTab::Shell, [] {});
     tab("Settings", GalleryTab::Settings,
         [&assets, &state] { DrawSettingsGallery(assets, state); });
