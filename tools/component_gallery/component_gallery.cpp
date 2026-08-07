@@ -33,7 +33,9 @@ void Heading(const char *title, ImFont *font) {
 
 void GalleryCard(const char *id, const char *title, ImFont *heading_font,
                  const std::function<void()> &draw,
-                 const bool scrollable = false, const bool wide = false) {
+                 const bool scrollable = false, const bool wide = false,
+                 const float logical_height = 220.0f,
+                 const float logical_width = 0.0f) {
   ImGui::TableNextColumn();
   ImGui::PushID(id);
   ImGui::PushStyleColor(
@@ -43,8 +45,10 @@ void GalleryCard(const char *id, const char *title, ImFont *heading_font,
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                       ImVec2(Scale(12.0f), Scale(8.0f)));
   ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
-  const float width = wide ? 2.0f * Scale(302.0f) + Scale(8.0f) : Scale(302.0f);
-  if (ImGui::BeginChild("##card", ImVec2(width, Scale(220.0f)),
+  const float default_width = wide ? 2.0f * 302.0f + 8.0f : 302.0f;
+  const float width =
+      Scale(logical_width > 0.0f ? logical_width : default_width);
+  if (ImGui::BeginChild("##card", ImVec2(width, Scale(logical_height)),
                         ImGuiChildFlags_Borders,
                         scrollable ? ImGuiWindowFlags_NoSavedSettings
                                    : ImGuiWindowFlags_NoScrollbar)) {
@@ -451,281 +455,280 @@ void ApplySelection(std::array<bool, Size> &selection, int &anchor,
   anchor = index;
 }
 
-void DrawTreeColumnHeaders() {
-  const LayoutMetrics metrics = CurrentLayoutMetrics();
-  const float height = metrics.explorer.audit_columns_height;
-  const ImVec2 minimum = ImGui::GetCursorScreenPos();
-  ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x, height));
-  const ImVec2 maximum = ImGui::GetItemRectMax();
-  ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  draw_list->AddLine(ImVec2(minimum.x, maximum.y), maximum,
-                     ImGui::GetColorU32(ImVec4(CurrentPalette().border.red,
-                                               CurrentPalette().border.green,
-                                               CurrentPalette().border.blue,
-                                               CurrentPalette().border.alpha)),
-                     metrics.geometry.border);
-
-  ImFont *font = ImGui::GetFont();
-  const float font_size = Scale(21.0f);
-  const auto draw_label = [&](const std::string_view label,
-                              const float center_x) {
-    const ImVec2 size =
-        font->CalcTextSizeA(font_size, std::numeric_limits<float>::max(), 0.0f,
-                            label.data(), label.data() + label.size());
-    draw_list->AddText(
-        font, font_size,
-        ImVec2(center_x - size.x * 0.5f,
-               minimum.y + std::floor((height - size.y) * 0.5f)),
-        ImGui::GetColorU32(ImVec4(CurrentPalette().text_secondary.red,
-                                  CurrentPalette().text_secondary.green,
-                                  CurrentPalette().text_secondary.blue,
-                                  CurrentPalette().text_secondary.alpha)),
-        label.data(), label.data() + label.size());
-  };
-  const float action_center =
-      maximum.x - metrics.explorer.labeled_audit_action_column_width * 0.5f;
-  const float visibility_center =
-      maximum.x - metrics.explorer.labeled_audit_action_column_width -
-      metrics.explorer.labeled_audit_visibility_column_width * 0.5f;
-  const float color_center =
-      maximum.x - metrics.explorer.labeled_audit_action_column_width -
-      metrics.explorer.labeled_audit_visibility_column_width -
-      metrics.explorer.labeled_audit_color_column_width * 0.5f;
-  draw_label("Hierarchy",
-             minimum.x + metrics.spacing.space03 +
-                 font->CalcTextSizeA(font_size,
-                                     std::numeric_limits<float>::max(), 0.0f,
-                                     "Hierarchy")
-                         .x *
-                     0.5f);
-  draw_label("Color", color_center);
-  draw_label("Visibility", visibility_center);
-  draw_label("Act", action_center);
+FontHandle NativeFontHandle(ImFont *font) {
+  return FontHandle{.value = reinterpret_cast<std::uintptr_t>(font)};
 }
 
-void DrawTreeRows(detail::UiAssetAtlas &assets, GalleryState &state,
-                  const bool show_metadata) {
-  static constexpr std::array<std::string_view, 3> labels{
-      "Bed 1",
-      "Frame plate",
-      "Path 184",
-  };
-  static constexpr std::array<std::string_view, 3> metadata{
-      "6 objects",
-      "Selected",
-      "Invalid",
-  };
-  const std::array<std::string, 3> tooltips{
-      std::string(labels[0]) + " — " + std::string(metadata[0]),
-      std::string(labels[1]) + " — " + std::string(metadata[1]),
-      std::string(labels[2]) + " — " + std::string(metadata[2]),
-  };
-  const IconPainter visible = assets.Painter("visibility");
-  const IconPainter hidden = assets.Painter("visibility-off");
-  const IconPainter more = assets.Painter("more");
-  const int restore_color_row =
-      state.reference_tree_color_picker.restore_focus
-          ? std::clamp(state.reference_tree_color_row, 0, 2)
-          : -1;
+struct HierarchyFixtureRow {
+  std::string_view id;
+  std::string_view label;
+  std::string_view metadata;
+  std::string_view icon;
+  int depth = 0;
+  SemanticStatus status = SemanticStatus::Neutral;
+};
+
+constexpr std::array<HierarchyFixtureRow, 7> kStepHierarchy{{
+    {.id = "assembly",
+     .label = "Assembly.step",
+     .metadata = "2 parts",
+     .icon = "file"},
+    {.id = "part-001",
+     .label = "Part_001.step",
+     .metadata = "3 bodies",
+     .icon = "model",
+     .depth = 1},
+    {.id = "body-1",
+     .label = "Body_1",
+     .metadata = "Solid",
+     .icon = "model",
+     .depth = 2,
+     .status = SemanticStatus::Success},
+    {.id = "body-2",
+     .label = "Body_2",
+     .metadata = "Solid",
+     .icon = "model",
+     .depth = 2},
+    {.id = "body-3",
+     .label = "Body_3",
+     .metadata = "Solid",
+     .icon = "model",
+     .depth = 2,
+     .status = SemanticStatus::Warning},
+    {.id = "bracket",
+     .label = "Bracket.step",
+     .metadata = "1 body",
+     .icon = "model",
+     .depth = 1},
+    {.id = "bracket-body",
+     .label = "Body_1",
+     .metadata = "Solid",
+     .icon = "model",
+     .depth = 2,
+     .status = SemanticStatus::Success},
+}};
+
+constexpr std::array<HierarchyFixtureRow, 7> kSvgHierarchy{{
+    {.id = "drawing",
+     .label = "Drawing.svg",
+     .metadata = "2 layers",
+     .icon = "svg"},
+    {.id = "layer-1",
+     .label = "Layer_1",
+     .metadata = "2 paths",
+     .icon = "objects",
+     .depth = 1},
+    {.id = "group-3",
+     .label = "Group 3",
+     .metadata = "2 paths",
+     .icon = "folder",
+     .depth = 2},
+    {.id = "path-184",
+     .label = "Path 184",
+     .metadata = "Closed",
+     .icon = "path",
+     .depth = 3,
+     .status = SemanticStatus::Success},
+    {.id = "path-185",
+     .label = "Path 185",
+     .metadata = "Open",
+     .icon = "path",
+     .depth = 3,
+     .status = SemanticStatus::Warning},
+    {.id = "layer-2",
+     .label = "Labels",
+     .metadata = "1 text",
+     .icon = "objects",
+     .depth = 1},
+    {.id = "title-text",
+     .label = "Title text",
+     .metadata = "Text",
+     .icon = "typography",
+     .depth = 2},
+}};
+
+constexpr std::array<HierarchyFixtureRow, 7> kDxfHierarchy{{
+    {.id = "cutout",
+     .label = "Cutout.dxf",
+     .metadata = "2 layers",
+     .icon = "dxf"},
+    {.id = "cut-layer",
+     .label = "CUT",
+     .metadata = "3 entities",
+     .icon = "objects",
+     .depth = 1},
+    {.id = "entities",
+     .label = "Entities",
+     .metadata = "Geometry",
+     .icon = "folder",
+     .depth = 2},
+    {.id = "line-12",
+     .label = "Line 12",
+     .metadata = "42.0 mm",
+     .icon = "line",
+     .depth = 3,
+     .status = SemanticStatus::Success},
+    {.id = "arc-4",
+     .label = "Arc 4",
+     .metadata = "R 18.0 mm",
+     .icon = "arc",
+     .depth = 3,
+     .status = SemanticStatus::Warning},
+    {.id = "circle-2",
+     .label = "Circle 2",
+     .metadata = "Ø 8.0 mm",
+     .icon = "circle",
+     .depth = 3},
+    {.id = "layer-0",
+     .label = "Layer 0",
+     .metadata = "Default",
+     .icon = "objects",
+     .depth = 1},
+}};
+
+std::size_t SubtreeEnd(const std::span<const HierarchyFixtureRow> rows,
+                       const std::size_t index) {
+  std::size_t end = index + 1;
+  while (end < rows.size() && rows[end].depth > rows[index].depth) {
+    ++end;
+  }
+  return end;
+}
+
+ToggleState HierarchyVisibility(const HierarchyCardState &state,
+                                const std::size_t first,
+                                const std::size_t last) {
+  ToggleState visibility = state.visibility[first];
+  for (std::size_t index = first + 1; index < last; ++index) {
+    if (state.visibility[index] != visibility) {
+      return ToggleState::Mixed;
+    }
+  }
+  return visibility;
+}
+
+void DrawHierarchyFixtureNode(detail::UiAssetAtlas &assets,
+                              HierarchyCardState &state,
+                              const std::span<const HierarchyFixtureRow> rows,
+                              const std::size_t index, HierarchyTree &tree,
+                              bool &request_color_picker) {
+  const HierarchyFixtureRow &row = rows[index];
+  const std::size_t subtree_end = SubtreeEnd(rows, index);
+  const bool expandable = subtree_end > index + 1;
+  const ToggleState visibility = HierarchyVisibility(state, index, subtree_end);
+  const bool request_color_focus = state.color_picker.restore_focus &&
+                                   state.color_row == static_cast<int>(index);
+  const HierarchyRowResult result =
+      HierarchyRow(tree, {
+                             .id = row.id,
+                             .label = row.label,
+                             .metadata = row.metadata,
+                             .expandable = expandable,
+                             .expanded = expandable && state.expanded[index],
+                             .selected = state.selected[index],
+                             .status = row.status,
+                             .leading_icon = assets.Painter(row.icon),
+                             .color = state.colors[index],
+                             .color_tooltip = "Edit row color",
+                             .request_color_focus = request_color_focus,
+                             .action_icon = assets.Painter("more"),
+                             .action_tooltip = "Row actions",
+                             .visibility = visibility,
+                             .visible_icon = assets.Painter("visibility"),
+                             .hidden_icon = assets.Painter("visibility-off"),
+                             .visibility_tooltip = "Show or hide row",
+                         });
+  if (request_color_focus) {
+    state.color_picker.restore_focus = false;
+  }
+  if (result.expansion_changed) {
+    state.expanded[index] = result.expanded;
+  }
+  if (result.activated) {
+    ApplySelection(state.selected, state.selection_anchor,
+                   static_cast<int>(index), result.additive, result.range);
+  }
+  if (result.visibility_changed) {
+    for (std::size_t descendant = index; descendant < subtree_end;
+         ++descendant) {
+      state.visibility[descendant] = result.visibility;
+    }
+  }
+  if (result.color_activated) {
+    state.color_row = static_cast<int>(index);
+    request_color_picker = true;
+  }
+  if (result.action_activated) {
+    state.action_row = static_cast<int>(index);
+    ImGui::OpenPopup("##hierarchy-actions");
+  }
+
+  if (!expandable || !result.expanded) {
+    return;
+  }
+  std::size_t child = index + 1;
+  while (child < subtree_end) {
+    DrawHierarchyFixtureNode(assets, state, rows, child, tree,
+                             request_color_picker);
+    child = SubtreeEnd(rows, child);
+  }
+  tree.Pop();
+}
+
+void DrawCanonicalHierarchy(detail::UiAssetAtlas &assets,
+                            HierarchyCardState &state,
+                            const std::span<const HierarchyFixtureRow> rows,
+                            const std::string_view label) {
+  ImGui::PushFont(nullptr, Scale(16.0f));
+  ImGui::TextColored(ImVec4(CurrentPalette().text_secondary.red,
+                            CurrentPalette().text_secondary.green,
+                            CurrentPalette().text_secondary.blue,
+                            CurrentPalette().text_secondary.alpha),
+                     "%.*s HIERARCHY", static_cast<int>(label.size()),
+                     label.data());
+  ImGui::PopFont();
+
   bool request_color_picker = false;
-  const ToggleState bed_visibility =
-      AggregateVisibility(state.reference_tree_visibility);
-
-  DrawTreeColumnHeaders();
   {
-    HierarchyTree tree;
-    HierarchyRowResult bed;
-    {
-      const detail::ScopedInteractionPreview preview(
-          detail::InteractionPreview::Hovered);
-      bed = HierarchyRow(
-          tree, {
-                    .id = "reference-bed",
-                    .label = labels[0],
-                    .secondary_label =
-                        show_metadata ? metadata[0] : std::string_view{},
-                    .tooltip = tooltips[0],
-                    .expandable = true,
-                    .expanded = state.reference_bed_expanded,
-                    .selected = state.reference_tree_selected[0],
-                    .color = state.reference_tree_colors[0],
-                    .color_tooltip = "Edit Bed 1 color",
-                    .request_color_focus = restore_color_row == 0,
-                    .action_icon = more,
-                    .action_tooltip = "Bed 1 actions",
-                    .visibility = bed_visibility,
-                    .visible_icon = visible,
-                    .hidden_icon = hidden,
-                    .visibility_tooltip = "Show or hide all objects in Bed 1",
-                });
-    }
-    if (bed.expansion_changed) {
-      state.reference_bed_expanded = bed.expanded;
-    }
-    if (bed.activated) {
-      ApplySelection(state.reference_tree_selected,
-                     state.reference_tree_selection_anchor, 0, bed.additive,
-                     bed.range);
-      state.reference_tree_feedback = "Selected: Bed 1 · 6 objects";
-    }
-    if (bed.visibility_changed) {
-      state.reference_tree_visibility.fill(bed.visibility);
-      state.reference_tree_feedback = bed.visibility == ToggleState::On
-                                          ? "Bed 1 objects are visible."
-                                          : "Bed 1 objects are hidden.";
-    }
-    if (bed.color_activated) {
-      state.reference_tree_color_row = 0;
-      request_color_picker = true;
-    }
-    if (bed.action_activated) {
-      state.reference_tree_action_row = 0;
-      ImGui::OpenPopup("##reference-tree-actions");
-    }
-
-    if (bed.expanded) {
-      const HierarchyRowResult frame = HierarchyRow(
-          tree, {
-                    .id = "reference-frame",
-                    .label = labels[1],
-                    .secondary_label =
-                        show_metadata ? metadata[1] : std::string_view{},
-                    .tooltip = tooltips[1],
-                    .expandable = true,
-                    .expanded = state.reference_frame_expanded,
-                    .selected = state.reference_tree_selected[1],
-                    .color = state.reference_tree_colors[1],
-                    .color_tooltip = "Edit Frame plate color",
-                    .request_color_focus = restore_color_row == 1,
-                    .action_icon = more,
-                    .action_tooltip = "Frame plate actions",
-                    .visibility = state.reference_tree_visibility[0],
-                    .visible_icon = visible,
-                    .hidden_icon = hidden,
-                    .visibility_tooltip = "Show or hide Frame plate",
-                });
-      if (frame.expansion_changed) {
-        state.reference_frame_expanded = frame.expanded;
-      }
-      if (frame.activated) {
-        ApplySelection(state.reference_tree_selected,
-                       state.reference_tree_selection_anchor, 1, frame.additive,
-                       frame.range);
-        state.reference_tree_feedback = "Selected: Frame plate";
-      }
-      if (frame.visibility_changed) {
-        state.reference_tree_visibility[0] = frame.visibility;
-        state.reference_tree_feedback = frame.visibility == ToggleState::On
-                                            ? "Frame plate is visible."
-                                            : "Frame plate is hidden.";
-      }
-      if (frame.color_activated) {
-        state.reference_tree_color_row = 1;
-        request_color_picker = true;
-      }
-      if (frame.action_activated) {
-        state.reference_tree_action_row = 1;
-        ImGui::OpenPopup("##reference-tree-actions");
-      }
-
-      if (frame.expanded) {
-        HierarchyRowResult path;
-        {
-          const detail::ScopedInteractionPreview preview(
-              detail::InteractionPreview::Focused);
-          path = HierarchyRow(
-              tree, {
-                        .id = "reference-path",
-                        .label = labels[2],
-                        .secondary_label =
-                            show_metadata ? metadata[2] : std::string_view{},
-                        .tooltip = tooltips[2],
-                        .selected = state.reference_tree_selected[2],
-                        .status = SemanticStatus::Failure,
-                        .color = state.reference_tree_colors[2],
-                        .color_tooltip = "Edit Path 184 color",
-                        .request_color_focus = restore_color_row == 2,
-                        .action_icon = more,
-                        .action_tooltip = "Path 184 actions",
-                        .visibility = state.reference_tree_visibility[1],
-                        .visible_icon = visible,
-                        .hidden_icon = hidden,
-                        .visibility_tooltip = "Show or hide Path 184",
-                    });
-        }
-        if (path.activated) {
-          ApplySelection(state.reference_tree_selected,
-                         state.reference_tree_selection_anchor, 2,
-                         path.additive, path.range);
-          state.reference_tree_feedback = "Selected: Path 184 · Invalid";
-        }
-        if (path.visibility_changed) {
-          state.reference_tree_visibility[1] = path.visibility;
-          state.reference_tree_feedback = path.visibility == ToggleState::On
-                                              ? "Path 184 is visible."
-                                              : "Path 184 is hidden.";
-        }
-        if (path.color_activated) {
-          state.reference_tree_color_row = 2;
-          request_color_picker = true;
-        }
-        if (path.action_activated) {
-          state.reference_tree_action_row = 2;
-          ImGui::OpenPopup("##reference-tree-actions");
-        }
-        tree.Pop();
-      }
-      tree.Pop();
+    HierarchyTree tree({.section_font = NativeFontHandle(assets.bold_font())});
+    std::size_t root = 0;
+    while (root < rows.size()) {
+      DrawHierarchyFixtureNode(assets, state, rows, root, tree,
+                               request_color_picker);
+      root = SubtreeEnd(rows, root);
     }
   }
-  if (restore_color_row >= 0) {
-    state.reference_tree_color_picker.restore_focus = false;
-  }
 
-  const int color_row = std::clamp(state.reference_tree_color_row, 0, 2);
+  const int color_row =
+      std::clamp(state.color_row, 0, static_cast<int>(rows.size()) - 1);
   const std::string picker_title =
-      std::string(labels[static_cast<std::size_t>(color_row)]) + " color";
+      std::string(rows[static_cast<std::size_t>(color_row)].label) + " color";
   const ColorPickerPopupResult color = ColorPickerPopup(
       {
-          .id = "reference-tree-color",
+          .id = "hierarchy-color",
           .title = picker_title,
-          .value =
-              state.reference_tree_colors[static_cast<std::size_t>(color_row)],
+          .value = state.colors[static_cast<std::size_t>(color_row)],
           .request_open = request_color_picker,
       },
-      state.reference_tree_color_picker);
+      state.color_picker);
   if (color.changed) {
-    state.reference_tree_colors[static_cast<std::size_t>(color_row)] =
-        color.value;
-    state.reference_tree_feedback =
-        "Updated " + std::string(labels[static_cast<std::size_t>(color_row)]) +
-        " color.";
-  } else if (color.cancelled) {
-    state.reference_tree_feedback = "Color edit cancelled.";
+    state.colors[static_cast<std::size_t>(color_row)] = color.value;
   }
 
-  if (state.request_reference_tree_actions) {
-    ImGui::OpenPopup("##reference-tree-actions");
-    state.request_reference_tree_actions = false;
+  if (state.request_actions) {
+    ImGui::OpenPopup("##hierarchy-actions");
+    state.request_actions = false;
   }
-  if (ImGui::BeginPopup("##reference-tree-actions")) {
-    const int row = std::clamp(state.reference_tree_action_row, 0, 2);
+  if (ImGui::BeginPopup("##hierarchy-actions")) {
+    const int action_row =
+        std::clamp(state.action_row, 0, static_cast<int>(rows.size()) - 1);
     ImGui::TextUnformatted(
-        std::string(labels[static_cast<std::size_t>(row)]).c_str());
+        std::string(rows[static_cast<std::size_t>(action_row)].label).c_str());
     ImGui::Separator();
-    if (ImGui::MenuItem("Frame in view")) {
-      state.reference_tree_feedback =
-          "Frame requested: " +
-          std::string(labels[static_cast<std::size_t>(row)]);
-    }
-    if (ImGui::MenuItem("Inspect properties")) {
-      state.reference_tree_feedback =
-          "Inspection scope: " +
-          std::string(labels[static_cast<std::size_t>(row)]);
-    }
+    static_cast<void>(ImGui::MenuItem("Frame in view"));
+    static_cast<void>(ImGui::MenuItem("Inspect properties"));
     ImGui::EndPopup();
   }
-  detail::DrawSecondaryText(state.reference_tree_feedback);
 }
 
 void DrawHierarchyInteractionDemo(detail::UiAssetAtlas &assets,
@@ -743,17 +746,18 @@ void DrawHierarchyInteractionDemo(detail::UiAssetAtlas &assets,
       AggregateVisibility(state.tree_visibility);
 
   {
-    HierarchyTree tree;
+    HierarchyTree tree({.section_font = NativeFontHandle(assets.bold_font())});
     const HierarchyRowResult assembly = HierarchyRow(
         tree, {
                   .id = "assembly",
                   .label = labels[0],
-                  .secondary_label = assembly_visibility == ToggleState::Mixed
-                                         ? "Assembly · mixed visibility"
-                                         : "Assembly · 2 descendants",
+                  .metadata = assembly_visibility == ToggleState::Mixed
+                                  ? "Assembly · mixed visibility"
+                                  : "Assembly · 2 descendants",
                   .expandable = true,
                   .expanded = state.assembly_expanded,
                   .selected = state.tree_selected[0],
+                  .leading_icon = assets.Painter("file"),
                   .action_icon = more,
                   .action_tooltip = "Front housing actions",
                   .visibility = assembly_visibility,
@@ -786,10 +790,11 @@ void DrawHierarchyInteractionDemo(detail::UiAssetAtlas &assets,
           tree, {
                     .id = "part",
                     .label = labels[1],
-                    .secondary_label = "Part 4 · 1 path",
+                    .metadata = "Part 4 · 1 path",
                     .expandable = true,
                     .expanded = state.part_expanded,
                     .selected = state.tree_selected[1],
+                    .leading_icon = assets.Painter("model"),
                     .color = state.part_color,
                     .color_tooltip = "Edit Face plate color",
                     .request_color_focus = request_color_focus,
@@ -828,8 +833,9 @@ void DrawHierarchyInteractionDemo(detail::UiAssetAtlas &assets,
             tree, {
                       .id = "path",
                       .label = labels[2],
-                      .secondary_label = "Path 184 · closed contour",
+                      .metadata = "Path 184 · closed contour",
                       .selected = state.tree_selected[2],
+                      .leading_icon = assets.Painter("path"),
                       .action_icon = more,
                       .action_tooltip = "Outer contour actions",
                       .visibility = state.tree_visibility[1],
@@ -914,12 +920,13 @@ void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
   const ToggleState invalid_visibility =
       AggregateVisibility(state.invalid_issue_visibility);
   {
-    InformationTree tree;
+    InformationTree tree(
+        {.section_font = NativeFontHandle(assets.bold_font())});
     const InformationTreeRowResult invalid = InformationTreeRow(
         tree, {
                   .id = "invalid",
                   .label = "Invalid",
-                  .value = "1",
+                  .metadata = "1",
                   .expandable = true,
                   .expanded = state.invalid_issues_expanded,
                   .status = SemanticStatus::Failure,
@@ -939,7 +946,7 @@ void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
           tree, {
                     .id = "self-intersection",
                     .label = "Self-intersection",
-                    .value = "1",
+                    .metadata = "1",
                     .status = SemanticStatus::Failure,
                     .visibility = state.invalid_issue_visibility[0],
                     .visible_icon = visible,
@@ -956,12 +963,13 @@ void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
   const ToggleState repairable_visibility =
       AggregateVisibility(state.issue_visibility);
   {
-    InformationTree tree;
+    InformationTree tree(
+        {.section_font = NativeFontHandle(assets.bold_font())});
     const InformationTreeRowResult repairable = InformationTreeRow(
         tree, {
                   .id = "repairable",
                   .label = "Repairable",
-                  .value = "5",
+                  .metadata = "5",
                   .expandable = true,
                   .expanded = state.repairable_expanded,
                   .status = SemanticStatus::Information,
@@ -981,7 +989,7 @@ void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
           tree, {
                     .id = "open-contours",
                     .label = "Open contours",
-                    .value = "4",
+                    .metadata = "4",
                     .status = SemanticStatus::Information,
                     .visibility = state.issue_visibility[0],
                     .visible_icon = visible,
@@ -995,7 +1003,7 @@ void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
           tree, {
                     .id = "orphan-hole",
                     .label = "Orphan hole",
-                    .value = "1",
+                    .metadata = "1",
                     .status = SemanticStatus::Information,
                     .visibility = state.issue_visibility[1],
                     .visible_icon = visible,
@@ -1012,12 +1020,13 @@ void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
   const ToggleState warning_visibility =
       AggregateVisibility(state.warning_issue_visibility);
   {
-    InformationTree tree;
+    InformationTree tree(
+        {.section_font = NativeFontHandle(assets.bold_font())});
     const InformationTreeRowResult warnings = InformationTreeRow(
         tree, {
                   .id = "warnings",
                   .label = "Warnings",
-                  .value = "4",
+                  .metadata = "4",
                   .expandable = true,
                   .expanded = state.warning_issues_expanded,
                   .status = SemanticStatus::Warning,
@@ -1037,7 +1046,7 @@ void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
           tree, {
                     .id = "ambiguous-cleanup",
                     .label = "Ambiguous cleanup",
-                    .value = "4",
+                    .metadata = "4",
                     .status = SemanticStatus::Warning,
                     .visibility = state.warning_issue_visibility[0],
                     .visible_icon = visible,
@@ -1362,16 +1371,30 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
           GalleryCard("enabled-locked", "Enabled & locked", assets.bold_font(),
                       [&assets, &state] { DrawEnabledLocked(assets, state); });
           GalleryCard(
-              "tree-rows", "Tree rows", assets.bold_font(),
-              [&assets, &state] { DrawTreeRows(assets, state, true); }, false,
-              true);
+              "hierarchy-step", "STEP", assets.bold_font(),
+              [&assets, &state] {
+                DrawCanonicalHierarchy(assets, state.hierarchy_cards[0],
+                                       kStepHierarchy, "STEP");
+              },
+              false, true, 448.0f, 604.0f);
           GalleryCard(
-              "tree-rows-compact", "Tree rows · compact", assets.bold_font(),
-              [&assets, &state] { DrawTreeRows(assets, state, false); }, false,
-              true);
+              "hierarchy-svg", "SVG", assets.bold_font(),
+              [&assets, &state] {
+                DrawCanonicalHierarchy(assets, state.hierarchy_cards[1],
+                                       kSvgHierarchy, "SVG");
+              },
+              false, true, 448.0f, 604.0f);
           GalleryCard(
-              "issue-hierarchy", "Issue hierarchy", assets.bold_font(),
-              [&assets, &state] { DrawIssueHierarchy(assets, state); }, true);
+              "hierarchy-dxf", "DXF", assets.bold_font(),
+              [&assets, &state] {
+                DrawCanonicalHierarchy(assets, state.hierarchy_cards[2],
+                                       kDxfHierarchy, "DXF");
+              },
+              false, true, 448.0f, 604.0f);
+          GalleryCard(
+              "hierarchy-canvas-issues", "Canvas Issues", assets.bold_font(),
+              [&assets, &state] { DrawIssueHierarchy(assets, state); }, false,
+              true, 448.0f, 604.0f);
           GalleryCard("status-types", "Status types", assets.bold_font(),
                       [&assets] { DrawStatusTypes(assets); });
           GalleryCard("operation", "Operation", assets.bold_font(),
@@ -1385,9 +1408,6 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
         }
       }
       ImGui::EndChild();
-    });
-    tab("Hierarchy studies", GalleryTab::Hierarchies, [&assets, &state] {
-      DrawHierarchyStudies(assets, state.hierarchy_study);
     });
     tab("Application shell", GalleryTab::Shell, [] {});
     tab("Settings", GalleryTab::Settings,

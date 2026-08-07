@@ -42,12 +42,11 @@ xmake run fancy_ui_component_gallery --theme dark --scale 1
 `--theme` accepts `light` or `dark`. `--scale` accepts values from `0.75` to
 `2`, with `1`, `1.25`, `1.5`, and `2` as the standard review modes. Larger
 layouts scroll instead of omitting component groups. `--tab` accepts
-`components`, `hierarchies`, `shell`, `settings`, `operations`, or `status`.
+`components`, `shell`, `settings`, `operations`, or `status`.
 The interactive gallery exposes the state sheets as keyboard-navigable tabs.
-The Hierarchy studies tab compares sectioned roots, vertical depth guides, and
-native scoped branch rails against the same STEP, SVG, DXF, and Canvas Issues
-data. Activating Application shell replaces the gallery chrome with a
-full-canvas preview in the same native window.
+The Components tab includes the canonical STEP, SVG, DXF, and Canvas Issues
+sectioned outliners. Activating Application shell replaces the gallery chrome
+with a full-canvas preview in the same native window.
 
 For deterministic review artifacts, pass a PNG destination. The gallery
 renders a few frames so the font and SVG atlas is installed before capture:
@@ -63,12 +62,11 @@ The forced hover, pressed, and focus examples are private to the gallery.
 Public components always report actual Dear ImGui pointer and keyboard input.
 The gallery's value controls retain their example state. Color swatches open a
 transactional picker (Apply or Enter commits; Cancel or Escape rolls back),
-with full Current/Original and compact layouts shown side by side. Tree rows
-use readable 40 px detailed rows or 32 px compact rows with explicit elbow
-connectors, and own
-expansion and Ctrl/Shift selection separately from inline color, action, and
-visibility targets. Issue groups aggregate descendant visibility without
-coupling it to issue selection or review navigation. The operation page covers
+with full Current/Original and compact layouts shown side by side. Sectioned
+outliners use 32 px rows and own expansion and Ctrl/Shift selection separately
+from inline color, visibility, and action targets. Issue groups aggregate
+descendant visibility without coupling it to issue selection or review
+navigation. The operation page covers
 preview, running, paused, stopping, finalizing, completed, failed, and overflow
 states with live disclosure and 160–240 px tray resizing. The status page
 covers Canvas and 3D facts, long and narrow content, operation independence,
@@ -86,8 +84,8 @@ to the tab that opened the preview. An unclaimed Escape does the same; an open
 menu, popup, text edit, or active control consumes the first Escape instead.
 
 Shell screenshots use the canonical 1280 × 720 logical canvas, scaled by
-`--scale`. Hierarchy studies use 1280 × 900, Components use 1280 × 1540, and
-Settings, Operations, and Status use 1280 × 1440.
+`--scale`. Components use 1280 × 2240, Settings and Operations use 1280 ×
+1440, and Status uses 1280 × 1024.
 
 The Settings page opens one modeless 880 × 560 System Settings window with
 General, Appearance, Machines, License, and Legal navigation. General,

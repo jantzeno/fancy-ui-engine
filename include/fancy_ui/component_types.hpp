@@ -32,6 +32,13 @@ struct TextureHandle {
   [[nodiscard]] bool operator==(const TextureHandle &) const = default;
 };
 
+struct FontHandle {
+  std::uintptr_t value = 0;
+
+  [[nodiscard]] explicit operator bool() const { return value != 0; }
+  [[nodiscard]] bool operator==(const FontHandle &) const = default;
+};
+
 /**
  * Describes whether a prepared command can be invoked by a component.
  *

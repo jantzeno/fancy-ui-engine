@@ -72,17 +72,6 @@ struct LayoutMetrics {
     float search_height;
     float summary_minimum_height;
     float tree_indent;
-    float detailed_tree_row_height;
-    float tree_connector_thickness;
-    float audit_tools_height;
-    float audit_columns_height;
-    float audit_color_column_width;
-    float audit_action_column_width;
-    float audit_visibility_column_width;
-    float labeled_audit_breakpoint;
-    float labeled_audit_color_column_width;
-    float labeled_audit_action_column_width;
-    float labeled_audit_visibility_column_width;
   } explorer;
 
   struct Inspector {

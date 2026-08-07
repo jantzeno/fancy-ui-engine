@@ -14,13 +14,13 @@ using namespace fancy_ui::gallery;
 
 TEST_CASE("gallery tab names select deterministic state sheets") {
   REQUIRE(ParseGalleryTab("components") == GalleryTab::Components);
-  REQUIRE(ParseGalleryTab("hierarchies") == GalleryTab::Hierarchies);
+  REQUIRE_FALSE(ParseGalleryTab("hierarchies"));
   REQUIRE(ParseGalleryTab("shell") == GalleryTab::Shell);
   REQUIRE(ParseGalleryTab("settings") == GalleryTab::Settings);
   REQUIRE(ParseGalleryTab("operations") == GalleryTab::Operations);
   REQUIRE(ParseGalleryTab("status") == GalleryTab::Status);
   REQUIRE_FALSE(ParseGalleryTab("operation"));
-  REQUIRE(kGalleryTabCount == 6);
+  REQUIRE(kGalleryTabCount == 5);
 }
 
 TEST_CASE("shell preview returns to the tab that opened it") {
@@ -53,8 +53,6 @@ TEST_CASE("gallery screenshots use state-sheet-specific logical extents") {
       GalleryScreenshotLogicalExtent(GalleryTab::Components);
   const GalleryCaptureExtent shell =
       GalleryScreenshotLogicalExtent(GalleryTab::Shell);
-  const GalleryCaptureExtent hierarchies =
-      GalleryScreenshotLogicalExtent(GalleryTab::Hierarchies);
   const GalleryCaptureExtent settings =
       GalleryScreenshotLogicalExtent(GalleryTab::Settings);
   const GalleryCaptureExtent operations =
@@ -63,11 +61,9 @@ TEST_CASE("gallery screenshots use state-sheet-specific logical extents") {
       GalleryScreenshotLogicalExtent(GalleryTab::Status);
 
   REQUIRE(components.width == 1280);
-  REQUIRE(components.height == 1540);
+  REQUIRE(components.height == 2240);
   REQUIRE(shell.width == 1280);
   REQUIRE(shell.height == 720);
-  REQUIRE(hierarchies.width == 1280);
-  REQUIRE(hierarchies.height == 900);
   REQUIRE(settings.width == 1280);
   REQUIRE(settings.height == 1440);
   REQUIRE(operations.width == 1280);
@@ -88,36 +84,9 @@ TEST_CASE("gallery capture slugs seed representative transient states") {
 
   REQUIRE(SeedGalleryCaptureState(state, "hierarchy-actions"));
   REQUIRE(state.active_tab == GalleryTab::Components);
-  REQUIRE(state.request_reference_tree_actions);
+  REQUIRE(state.hierarchy_cards[0].action_row == 1);
+  REQUIRE(state.hierarchy_cards[0].request_actions);
   REQUIRE_FALSE(SeedGalleryCaptureState(state, "unknown"));
-}
-
-TEST_CASE("hierarchy studies share four independent expandable roots") {
-  const HierarchyStudyState defaults;
-  std::array<std::string_view, 4> roots{};
-  std::size_t root_count = 0;
-  for (std::size_t index = 0; index < kHierarchyStudyNodes.size(); ++index) {
-    if (kHierarchyStudyNodes[index].parent == -1) {
-      roots[root_count++] = kHierarchyStudyNodes[index].label;
-    }
-  }
-
-  constexpr std::array<std::string_view, 4> expected_roots{"STEP", "SVG", "DXF",
-                                                           "Canvas Issues"};
-  REQUIRE(root_count == roots.size());
-  REQUIRE(roots == expected_roots);
-  REQUIRE(HierarchyStudyHasChildren(0));
-  REQUIRE_FALSE(HierarchyStudyHasChildren(2));
-  REQUIRE(HierarchyStudyDepth(2) == 2);
-  REQUIRE(HierarchyStudyDepth(13) == 0);
-  REQUIRE(HierarchyStudyIsVisible(2, defaults));
-
-  HierarchyStudyState collapsed = defaults;
-  collapsed.expanded[0] = false;
-  REQUIRE_FALSE(HierarchyStudyIsVisible(1, collapsed));
-  REQUIRE_FALSE(HierarchyStudyIsVisible(2, collapsed));
-  REQUIRE(HierarchyStudyIsVisible(4, collapsed));
-  REQUIRE(HierarchyStudyIsVisible(13, collapsed));
 }
 
 TEST_CASE("operation phases choose canonical default tray disclosure") {

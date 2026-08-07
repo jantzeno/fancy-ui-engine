@@ -163,16 +163,8 @@ TEST_CASE("layout metrics expose the normative shell and panel geometry") {
   REQUIRE(metrics.shell.status_bar_height == 24.0f);
 
   REQUIRE(metrics.geometry.progress_height == 6.0f);
-  REQUIRE(metrics.explorer.detailed_tree_row_height == 40.0f);
-  REQUIRE(metrics.explorer.tree_connector_thickness == 2.0f);
-  REQUIRE(metrics.explorer.audit_columns_height == 28.0f);
-  REQUIRE(metrics.explorer.audit_color_column_width == 38.0f);
-  REQUIRE(metrics.explorer.audit_action_column_width == 28.0f);
-  REQUIRE(metrics.explorer.audit_visibility_column_width == 28.0f);
-  REQUIRE(metrics.explorer.labeled_audit_breakpoint == 480.0f);
-  REQUIRE(metrics.explorer.labeled_audit_color_column_width == 64.0f);
-  REQUIRE(metrics.explorer.labeled_audit_action_column_width == 48.0f);
-  REQUIRE(metrics.explorer.labeled_audit_visibility_column_width == 104.0f);
+  REQUIRE(metrics.geometry.row_height == 32.0f);
+  REQUIRE(metrics.explorer.tree_indent == 16.0f);
   REQUIRE(metrics.inspector.label_width == 112.0f);
   REQUIRE(metrics.inspector.stack_breakpoint == 288.0f);
   REQUIRE(metrics.menu.popup_width == 264.0f);
@@ -190,9 +182,8 @@ TEST_CASE("resolved layout metrics clamp scale and round once") {
   REQUIRE(fractional.spacing.condensed == 1.0f);
   REQUIRE(fractional.geometry.focus_ring == 3.0f);
   REQUIRE(fractional.shell.explorer_width == 320.0f);
-  REQUIRE(fractional.explorer.detailed_tree_row_height == 50.0f);
-  REQUIRE(fractional.explorer.audit_color_column_width == 48.0f);
-  REQUIRE(fractional.explorer.labeled_audit_visibility_column_width == 130.0f);
+  REQUIRE(fractional.geometry.row_height == 40.0f);
+  REQUIRE(fractional.explorer.tree_indent == 20.0f);
   REQUIRE(maximum.shell.inspector_width == 640.0f);
 }
 
@@ -751,15 +742,14 @@ TEST_CASE("hierarchy inline targets do not activate the selectable row") {
     row_minimum = ImGui::GetCursorScreenPos();
     row_maximum = ImVec2(
         row_minimum.x + ImGui::GetContentRegionAvail().x,
-        row_minimum.y +
-            fancy_ui::CurrentLayoutMetrics().explorer.detailed_tree_row_height);
+        row_minimum.y + fancy_ui::CurrentLayoutMetrics().geometry.row_height);
     {
       fancy_ui::HierarchyTree tree;
       result = fancy_ui::HierarchyRow(
           tree, {
                     .id = "part",
                     .label = "Face plate",
-                    .secondary_label = "Part 4",
+                    .metadata = "Part 4",
                     .expandable = true,
                     .expanded = true,
                     .color =
@@ -814,25 +804,24 @@ TEST_CASE("hierarchy inline targets do not activate the selectable row") {
   REQUIRE(expander.expansion_changed);
 
   const fancy_ui::HierarchyRowResult color =
-      click(ImVec2(row_maximum.x - fancy_ui::Scale(72.0f), center_y));
+      click(ImVec2(row_maximum.x - fancy_ui::Scale(60.0f), center_y));
   REQUIRE_FALSE(color.activated);
   REQUIRE(color.color_activated);
 
   const fancy_ui::HierarchyRowResult visibility =
-      click(ImVec2(row_maximum.x - fancy_ui::Scale(42.0f), center_y));
+      click(ImVec2(row_maximum.x - fancy_ui::Scale(36.0f), center_y));
   REQUIRE_FALSE(visibility.activated);
   REQUIRE(visibility.visibility_changed);
   REQUIRE(visibility.visibility == fancy_ui::ToggleState::Off);
 
   const fancy_ui::HierarchyRowResult action =
-      click(ImVec2(row_maximum.x - fancy_ui::Scale(14.0f), center_y));
+      click(ImVec2(row_maximum.x - fancy_ui::Scale(12.0f), center_y));
   REQUIRE_FALSE(action.activated);
   REQUIRE(action.action_activated);
   ImGui::DestroyContext();
 }
 
-TEST_CASE(
-    "hierarchy trees size detailed and compact rows from shared metrics") {
+TEST_CASE("sectioned hierarchy roots and children use contiguous 32 px rows") {
   const auto verify_scale = [](const float scale) {
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
@@ -849,8 +838,8 @@ TEST_CASE(
     ImVec2 parent_maximum;
     ImVec2 child_minimum;
     ImVec2 child_maximum;
-    ImVec2 compact_minimum;
-    ImVec2 compact_maximum;
+    ImVec2 next_root_minimum;
+    ImVec2 next_root_maximum;
     float scoped_spacing = 0.0f;
     float restored_spacing = 0.0f;
     bool parent_expanded = false;
@@ -867,19 +856,18 @@ TEST_CASE(
           fancy_ui::HierarchyRow(tree, {
                                            .id = "parent",
                                            .label = "Parent",
-                                           .secondary_label = "3 items",
+                                           .metadata = "3 items",
                                            .expandable = true,
                                            .expanded = true,
                                        });
       parent_expanded = parent.expanded;
       parent_minimum = ImGui::GetItemRectMin();
       parent_maximum = ImGui::GetItemRectMax();
-      static_cast<void>(
-          fancy_ui::HierarchyRow(tree, {
-                                           .id = "child",
-                                           .label = "Child",
-                                           .secondary_label = "Ready",
-                                       }));
+      static_cast<void>(fancy_ui::HierarchyRow(tree, {
+                                                         .id = "child",
+                                                         .label = "Child",
+                                                         .metadata = "Ready",
+                                                     }));
       child_minimum = ImGui::GetItemRectMin();
       child_maximum = ImGui::GetItemRectMax();
       tree.Pop();
@@ -887,11 +875,11 @@ TEST_CASE(
     {
       fancy_ui::HierarchyTree tree;
       static_cast<void>(fancy_ui::HierarchyRow(tree, {
-                                                         .id = "compact",
-                                                         .label = "Compact",
+                                                         .id = "next-root",
+                                                         .label = "Next root",
                                                      }));
-      compact_minimum = ImGui::GetItemRectMin();
-      compact_maximum = ImGui::GetItemRectMax();
+      next_root_minimum = ImGui::GetItemRectMin();
+      next_root_maximum = ImGui::GetItemRectMax();
     }
     restored_spacing = ImGui::GetStyle().ItemSpacing.y;
     ImGui::End();
@@ -900,13 +888,13 @@ TEST_CASE(
 
     REQUIRE(parent_expanded);
     REQUIRE(parent_maximum.y - parent_minimum.y ==
-            Catch::Approx(40.0f * scale));
-    REQUIRE(child_maximum.y - child_minimum.y == Catch::Approx(40.0f * scale));
-    REQUIRE(compact_maximum.y - compact_minimum.y ==
             Catch::Approx(32.0f * scale));
-    REQUIRE(child_minimum.y - parent_maximum.y == Catch::Approx(1.0f * scale));
+    REQUIRE(child_maximum.y - child_minimum.y == Catch::Approx(32.0f * scale));
+    REQUIRE(next_root_maximum.y - next_root_minimum.y ==
+            Catch::Approx(32.0f * scale));
+    REQUIRE(child_minimum.y - parent_maximum.y == Catch::Approx(0.0f));
     REQUIRE(child_minimum.x == Catch::Approx(parent_minimum.x));
-    REQUIRE(scoped_spacing == Catch::Approx(1.0f * scale));
+    REQUIRE(scoped_spacing == Catch::Approx(0.0f));
     REQUIRE(restored_spacing == Catch::Approx(8.0f * scale));
   };
 
@@ -949,7 +937,7 @@ TEST_CASE("information tree rows expose disclosure and aggregate visibility") {
           tree, {
                     .id = "repairable",
                     .label = "Repairable",
-                    .value = "5",
+                    .metadata = "5",
                     .expandable = true,
                     .expanded = true,
                     .status = fancy_ui::SemanticStatus::Information,
@@ -969,22 +957,35 @@ TEST_CASE("information tree rows expose disclosure and aggregate visibility") {
   REQUIRE(result.expanded);
   REQUIRE_FALSE(result.visibility_changed);
 
-  const ImVec2 visibility_target(row_maximum.x - fancy_ui::Scale(14.0f),
+  const auto click = [&](const ImVec2 point) {
+    io.AddMousePosEvent(point.x, point.y);
+    draw();
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+    draw();
+    fancy_ui::InformationTreeRowResult clicked = result;
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+    draw();
+    clicked.expansion_changed |= result.expansion_changed;
+    clicked.visibility_changed |= result.visibility_changed;
+    if (result.visibility_changed) {
+      clicked.visibility = result.visibility;
+    }
+    return clicked;
+  };
+
+  const fancy_ui::InformationTreeRowResult disclosure =
+      click(ImVec2(row_minimum.x + fancy_ui::Scale(20.0f),
+                   (row_minimum.y + row_maximum.y) * 0.5f));
+  REQUIRE(disclosure.expansion_changed);
+  REQUIRE_FALSE(disclosure.visibility_changed);
+
+  const ImVec2 visibility_target(row_maximum.x - fancy_ui::Scale(24.0f),
                                  (row_minimum.y + row_maximum.y) * 0.5f);
-  io.AddMousePosEvent(visibility_target.x, visibility_target.y);
-  draw();
-  io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
-  draw();
-  fancy_ui::InformationTreeRowResult clicked = result;
-  io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
-  draw();
-  clicked.visibility_changed |= result.visibility_changed;
-  if (result.visibility_changed) {
-    clicked.visibility = result.visibility;
-  }
+  const fancy_ui::InformationTreeRowResult clicked = click(visibility_target);
 
   REQUIRE(clicked.visibility_changed);
   REQUIRE(clicked.visibility == fancy_ui::ToggleState::On);
+  REQUIRE_FALSE(clicked.expansion_changed);
   ImGui::DestroyContext();
 }
 

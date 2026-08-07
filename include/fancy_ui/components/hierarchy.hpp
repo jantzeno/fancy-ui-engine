@@ -8,6 +8,10 @@
 
 namespace fancy_ui {
 
+struct HierarchyTreeStyle {
+  FontHandle section_font;
+};
+
 /**
  * Resolves descendant visibility for a parent hierarchy row.
  *
@@ -28,7 +32,7 @@ AggregateVisibility(std::span<const ToggleState> descendants);
 struct HierarchyRowSpec {
   std::string_view id;
   std::string_view label;
-  std::string_view secondary_label;
+  std::string_view metadata;
   std::string_view tooltip;
   bool expandable = false;
   bool expanded = false;
@@ -68,7 +72,7 @@ struct HierarchyRowResult : InteractionResult {
  */
 class HierarchyTree {
 public:
-  HierarchyTree();
+  explicit HierarchyTree(HierarchyTreeStyle style = {});
   ~HierarchyTree();
 
   HierarchyTree(const HierarchyTree &) = delete;
@@ -83,6 +87,7 @@ private:
                                          const HierarchyRowSpec &spec);
 
   int open_nodes_ = 0;
+  FontHandle section_font_;
 };
 
 /**
@@ -90,7 +95,7 @@ private:
  *
  * Inline color, visibility, and overflow targets suppress row activation so
  * one pointer gesture has exactly one owner. ImGui derives indentation and
- * connector lines from the order of HierarchyRow() and HierarchyTree::Pop().
+ * section roots from the order of HierarchyRow() and HierarchyTree::Pop().
  */
 [[nodiscard]] HierarchyRowResult HierarchyRow(HierarchyTree &tree,
                                               const HierarchyRowSpec &spec);
@@ -98,7 +103,7 @@ private:
 struct InformationTreeRowSpec {
   std::string_view id;
   std::string_view label;
-  std::string_view value;
+  std::string_view metadata;
   bool expandable = false;
   bool expanded = false;
   SemanticStatus status = SemanticStatus::Neutral;
@@ -119,7 +124,7 @@ struct InformationTreeRowResult : InteractionResult {
 /** Scopes one non-selectable Inspector information tree. */
 class InformationTree {
 public:
-  InformationTree();
+  explicit InformationTree(HierarchyTreeStyle style = {});
   ~InformationTree();
 
   InformationTree(const InformationTree &) = delete;
@@ -134,6 +139,7 @@ private:
   InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec);
 
   int open_nodes_ = 0;
+  FontHandle section_font_;
 };
 
 /**

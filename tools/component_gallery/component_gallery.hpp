@@ -1,6 +1,5 @@
 #pragma once
 
-#include "gallery_hierarchy_studies.hpp"
 #include "gallery_settings_model.hpp"
 #include "gallery_state_model.hpp"
 
@@ -85,6 +84,56 @@ struct ShellGalleryState {
       .expanded = true,
   };
 };
+
+struct HierarchyCardState {
+  std::array<bool, 7> expanded{true, true, true, true, true, true, true};
+  std::array<bool, 7> selected{};
+  int selection_anchor = -1;
+  std::array<ToggleState, 7> visibility{
+      ToggleState::On, ToggleState::On, ToggleState::On, ToggleState::On,
+      ToggleState::On, ToggleState::On, ToggleState::On,
+  };
+  std::array<ColorRgba, 7> colors{};
+  ColorPickerState color_picker;
+  int color_row = 0;
+  int action_row = 0;
+  bool request_actions = false;
+};
+
+[[nodiscard]] inline std::array<HierarchyCardState, 3>
+DefaultHierarchyCardStates() {
+  constexpr ColorRgba purple{
+      .red = 0xa3 / 255.0f,
+      .green = 0x71 / 255.0f,
+      .blue = 0xf7 / 255.0f,
+  };
+  constexpr ColorRgba blue{
+      .red = 0x2f / 255.0f,
+      .green = 0x81 / 255.0f,
+      .blue = 0xf7 / 255.0f,
+  };
+  constexpr ColorRgba green{
+      .red = 0x3f / 255.0f,
+      .green = 0xb9 / 255.0f,
+      .blue = 0x50 / 255.0f,
+  };
+  constexpr ColorRgba amber{
+      .red = 0xd2 / 255.0f,
+      .green = 0x99 / 255.0f,
+      .blue = 0x22 / 255.0f,
+  };
+  constexpr ColorRgba neutral{
+      .red = 0x6e / 255.0f,
+      .green = 0x76 / 255.0f,
+      .blue = 0x81 / 255.0f,
+  };
+
+  std::array<HierarchyCardState, 3> states;
+  states[0].colors = {purple, blue, green, blue, amber, purple, purple};
+  states[1].colors = {purple, blue, blue, green, amber, purple, purple};
+  states[2].colors = {purple, blue, blue, green, amber, purple, neutral};
+  return states;
+}
 
 inline void
 RecordShellCommandInvocation(ShellGalleryState &state,
@@ -323,22 +372,8 @@ struct GalleryState {
   ToggleState direction_locked = ToggleState::On;
   ToggleState direction_unlocked = ToggleState::Off;
 
-  bool reference_bed_expanded = true;
-  bool reference_frame_expanded = true;
-  std::array<bool, 3> reference_tree_selected{false, true, false};
-  int reference_tree_selection_anchor = 1;
-  std::array<ToggleState, 2> reference_tree_visibility{ToggleState::On,
-                                                       ToggleState::Off};
-  std::array<ColorRgba, 3> reference_tree_colors{
-      ColorRgba{.red = 0.27f, .green = 0.58f, .blue = 0.97f},
-      ColorRgba{.red = 0.31f, .green = 0.76f, .blue = 0.36f},
-      ColorRgba{.red = 0.98f, .green = 0.36f, .blue = 0.32f},
-  };
-  ColorPickerState reference_tree_color_picker;
-  int reference_tree_color_row = 1;
-  int reference_tree_action_row = -1;
-  bool request_reference_tree_actions = false;
-  std::string reference_tree_feedback = "Select a row or use an inline action.";
+  std::array<HierarchyCardState, 3> hierarchy_cards =
+      DefaultHierarchyCardStates();
 
   bool assembly_expanded = true;
   bool part_expanded = true;
@@ -382,7 +417,6 @@ struct GalleryState {
       operation_states = DefaultOperationPresentationStates();
   std::array<StatusZoomPresentationState, kStatusSampleCount>
       status_zoom_states = DefaultStatusZoomPresentationStates();
-  HierarchyStudyState hierarchy_study;
   ShellGalleryState shell;
   SettingsGalleryState settings = DefaultSettingsGalleryState();
 };
@@ -451,8 +485,8 @@ inline void LeaveShellPreview(GalleryState &state) {
     state.settings.discard_confirmation_open = true;
   } else if (slug == "hierarchy-actions") {
     ActivateGalleryTab(state, GalleryTab::Components);
-    state.reference_tree_action_row = 1;
-    state.request_reference_tree_actions = true;
+    state.hierarchy_cards[0].action_row = 1;
+    state.hierarchy_cards[0].request_actions = true;
   } else if (slug == "shell-canvas-toolbar") {
     ActivateGalleryTab(state, GalleryTab::Shell);
     state.shell.active_workspace = steppenface::WorkspaceKind::Canvas;

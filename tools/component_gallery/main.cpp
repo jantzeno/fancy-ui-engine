@@ -60,8 +60,8 @@ HostOptions ParseOptions(const int argc, char **argv) {
           fancy_ui::gallery::ParseGalleryTab(value);
       if (!tab.has_value()) {
         std::cerr << "Unknown gallery tab: " << value
-                  << " (expected components, hierarchies, shell, settings, "
-                     "operations, or status)\n";
+                  << " (expected components, shell, settings, operations, "
+                     "or status)\n";
         options.valid = false;
       } else {
         fancy_ui::gallery::ActivateGalleryTab(options.gallery, *tab);
