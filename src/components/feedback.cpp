@@ -55,12 +55,13 @@ void StatusCard(const StatusCardSpec &spec) {
   const std::string message = detail::Owned(spec.message);
   const SemanticPalette &palette = CurrentPalette();
   const LayoutMetrics metrics = CurrentLayoutMetrics();
+  ImGui::PushFont(nullptr, metrics.typography.body_font_height);
   const ImVec4 foreground = detail::StatusColor(spec.status);
   const ImVec4 background = detail::StatusBackground(spec.status);
-  const float title_font_size = Scale(13.0f);
-  const float title_line_height = Scale(14.0f);
-  const float message_font_size = Scale(14.0f);
-  const float message_line_height = Scale(15.0f);
+  const float title_font_size = metrics.typography.body_font_height;
+  const float title_line_height = metrics.typography.body_font_height;
+  const float message_font_size = metrics.typography.body_font_height;
+  const float message_line_height = metrics.typography.body_font_height;
   const float copy_height = title_line_height + message_line_height;
   const float height =
       std::max(Scale(46.0f), copy_height + metrics.spacing.space02 * 2.0f);
@@ -96,6 +97,7 @@ void StatusCard(const StatusCardSpec &spec) {
       ImGui::GetColorU32(ToImVec4(palette.text_primary)), message.c_str());
   draw_list->PopClipRect();
   ImGui::PopID();
+  ImGui::PopFont();
 }
 
 void Notification(const NotificationSpec &spec) {

@@ -5,6 +5,7 @@
 #include "fancy_ui/steppenface/surface_host.hpp"
 #include "fancy_ui/steppenface/ui_assets.hpp"
 #include "fancy_ui/steppenface/ui_intent.hpp"
+#include "fancy_ui/ui_environment.hpp"
 
 #include <filesystem>
 #include <memory>
@@ -35,7 +36,10 @@ public:
   ApplicationUi &operator=(ApplicationUi &&) noexcept;
 
   [[nodiscard]] AssetLoadReport
-  Initialize(const std::filesystem::path &asset_root, float dpi_scale = 1.0f);
+  Initialize(const std::filesystem::path &asset_root,
+             const UiEnvironment &environment = UiEnvironment{});
+  [[nodiscard]] AssetLoadReport
+  UpdateEnvironment(const UiEnvironment &environment);
   [[nodiscard]] const SessionState &session() const;
   void SetSession(SessionState session);
   [[nodiscard]] FrameResult Draw(const ApplicationView &view,

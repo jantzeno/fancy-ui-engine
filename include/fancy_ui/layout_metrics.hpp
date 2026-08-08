@@ -1,5 +1,7 @@
 #pragma once
 
+#include "fancy_ui/ui_environment.hpp"
+
 namespace fancy_ui {
 
 /**
@@ -43,8 +45,10 @@ struct LayoutMetrics {
   } geometry;
 
   struct Typography {
-    float body_font_size;
     float body_font_height;
+    float section_heading_font_height;
+    float settings_title_font_height;
+    float page_title_font_height;
   } typography;
 
   struct Menu {
@@ -52,7 +56,6 @@ struct LayoutMetrics {
     float popup_padding_vertical;
     float popup_width;
     float trigger_rounding;
-    float font_size;
   } menu;
 
   struct Shell {
@@ -99,7 +102,8 @@ struct LayoutMetrics {
 };
 
 [[nodiscard]] const LayoutMetrics &LogicalLayoutMetrics();
-[[nodiscard]] LayoutMetrics ResolveLayoutMetrics(float ui_scale);
+[[nodiscard]] LayoutMetrics
+ResolveLayoutMetrics(const UiEnvironment &environment);
 [[nodiscard]] LayoutMetrics CurrentLayoutMetrics();
 
 } // namespace fancy_ui

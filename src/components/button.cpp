@@ -6,12 +6,15 @@
 
 #include <imgui.h>
 
+#include <algorithm>
+#include <cmath>
 #include <string>
 
 namespace fancy_ui {
 
 ButtonResult Button(const ButtonSpec &spec) {
-  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  ImGui::PushFont(nullptr, metrics.typography.body_font_height);
   const std::string id = detail::Owned(spec.id);
   const std::string label =
       detail::Owned(spec.availability.busy ? std::string(spec.label) + "..."
@@ -52,8 +55,12 @@ ButtonResult Button(const ButtonSpec &spec) {
   const auto scaled_extent = [](const float value) {
     return value <= 0.0f ? value : Scale(value);
   };
-  const ImVec2 scaled_size(scaled_extent(spec.size.x),
-                           scaled_extent(spec.size.y));
+  ImVec2 scaled_size(scaled_extent(spec.size.x), scaled_extent(spec.size.y));
+  if (scaled_size.y > 0.0f) {
+    scaled_size.y =
+        std::max(scaled_size.y, std::ceil(metrics.typography.body_font_height +
+                                          metrics.spacing.space01 * 2.0f));
+  }
   const float vertical_padding = detail::ResolveButtonVerticalPadding(
       scaled_size.y, ImGui::CalcTextSize(label.c_str()).y,
       ImGui::GetStyle().FramePadding.y);

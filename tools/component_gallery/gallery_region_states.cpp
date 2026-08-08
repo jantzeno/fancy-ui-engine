@@ -348,7 +348,8 @@ void DrawStateCardHeading(const std::string_view title, ImFont *font) {
   const ImVec2 start = ImGui::GetCursorPos();
   ImGui::SetCursorPos(ImVec2(start.x + Scale(12.0f), start.y + Scale(8.0f)));
   if (font != nullptr) {
-    ImGui::PushFont(font);
+    ImGui::PushFont(
+        font, CurrentLayoutMetrics().typography.section_heading_font_height);
   }
   ImGui::TextUnformatted(title.data(), title.data() + title.size());
   if (font != nullptr) {
@@ -375,14 +376,15 @@ void DrawPhaseIcon(detail::UiAssetAtlas &assets,
 }
 
 void DrawOperationCopy(const OperationSample &sample, const float width,
-                       ImFont *bold_font) {
+                       ImFont *heading_font) {
   const float height = Scale(24.0f);
   const ImVec2 minimum = ImGui::GetCursorScreenPos();
   ImGui::Dummy(ImVec2(std::max(width, Scale(24.0f)), height));
   const ImVec2 maximum = ImGui::GetItemRectMax();
   const float gap = Scale(8.0f);
-  if (bold_font != nullptr) {
-    ImGui::PushFont(bold_font);
+  if (heading_font != nullptr) {
+    ImGui::PushFont(heading_font,
+                    CurrentLayoutMetrics().typography.body_font_height);
   }
   const ImVec2 label_size = ImGui::CalcTextSize(
       sample.label.data(), sample.label.data() + sample.label.size());
@@ -396,7 +398,7 @@ void DrawOperationCopy(const OperationSample &sample, const float width,
                             label_maximum, label_maximum.x, sample.label.data(),
                             sample.label.data() + sample.label.size(),
                             &label_size);
-  if (bold_font != nullptr) {
+  if (heading_font != nullptr) {
     ImGui::PopFont();
   }
   const float detail_x = minimum.x + label_width + gap;
@@ -523,7 +525,7 @@ void DrawOperationStrip(detail::UiAssetAtlas &assets,
         (!sample.actions.empty() && progress_width > 0.0f ? gap : 0.0f) +
         (!sample.actions.empty() ? gap : 0.0f);
     const float copy_width = std::max(Scale(48.0f), available - reserved);
-    DrawOperationCopy(sample, copy_width, assets.bold_font());
+    DrawOperationCopy(sample, copy_width, assets.heading_font());
 
     if (progress_width > 0.0f) {
       ImGui::SameLine();
@@ -645,7 +647,8 @@ void DrawDetailEntry(const OperationDetailEntry &entry, const bool row_layout) {
 }
 
 void DrawOperationTray(const OperationSample &sample,
-                       OperationPresentationState &state, ImFont *bold_font) {
+                       OperationPresentationState &state,
+                       ImFont *heading_font) {
   ImGui::PushStyleColor(ImGuiCol_ChildBg,
                         ToImVec4(CurrentPalette().surface_muted));
   ImGui::PushStyleColor(ImGuiCol_Border,
@@ -668,12 +671,13 @@ void DrawOperationTray(const OperationSample &sample,
       for (const OperationDetailSection &section : sample.sections) {
         ImGui::TableNextColumn();
         ImGui::PushID(section.title.data());
-        if (bold_font != nullptr) {
-          ImGui::PushFont(bold_font);
+        if (heading_font != nullptr) {
+          ImGui::PushFont(heading_font,
+                          CurrentLayoutMetrics().typography.body_font_height);
         }
         ImGui::TextUnformatted(section.title.data(),
                                section.title.data() + section.title.size());
-        if (bold_font != nullptr) {
+        if (heading_font != nullptr) {
           ImGui::PopFont();
         }
         ImGui::Separator();
@@ -716,9 +720,9 @@ void DrawOperationCard(detail::UiAssetAtlas &assets,
                         ImGuiChildFlags_Borders,
                         ImGuiWindowFlags_NoScrollbar |
                             ImGuiWindowFlags_NoSavedSettings)) {
-    DrawStateCardHeading(sample.title, assets.bold_font());
+    DrawStateCardHeading(sample.title, assets.heading_font());
     if (state.expanded && !sample.sections.empty()) {
-      DrawOperationTray(sample, state, assets.bold_font());
+      DrawOperationTray(sample, state, assets.heading_font());
     }
     DrawOperationStrip(assets, sample, state);
     if (!state.feedback.empty()) {
@@ -1049,7 +1053,7 @@ void DrawStatusCard(detail::UiAssetAtlas &assets, const StatusSample &sample,
     const ImVec2 card_minimum = ImGui::GetWindowPos();
     const ImVec2 card_maximum(card_minimum.x + ImGui::GetWindowWidth(),
                               card_minimum.y + ImGui::GetWindowHeight());
-    DrawStateCardHeading(sample.title, assets.bold_font());
+    DrawStateCardHeading(sample.title, assets.heading_font());
     const float border = ImGui::GetStyle().ChildBorderSize;
     const float operation_height =
         sample_index == 6 ? Scale(kOperationStripHeight) : 0.0f;
@@ -1155,7 +1159,7 @@ void DrawStatusBarStateGallery(detail::UiAssetAtlas &assets,
                               ImGuiChildFlags_Borders,
                               ImGuiWindowFlags_NoSavedSettings |
                                   ImGuiWindowFlags_NoScrollbar)) {
-          DrawStateCardHeading(samples[index].title, assets.bold_font());
+          DrawStateCardHeading(samples[index].title, assets.heading_font());
           const float narrow_width =
               std::min(Scale(760.0f), ImGui::GetContentRegionAvail().x);
           ImGui::PushStyleColor(ImGuiCol_ChildBg,

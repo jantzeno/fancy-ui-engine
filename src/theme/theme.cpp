@@ -5,6 +5,7 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <cmath>
 
 namespace fancy_ui {
 
@@ -22,7 +23,7 @@ ImVec4 ToImVec4(const ColorRgba color) {
 }
 
 SemanticPalette active_palette = PaletteFor(ResolvedTheme::Dark);
-float active_ui_scale = 1.0f;
+UiEnvironment active_ui_environment;
 
 } // namespace
 
@@ -107,9 +108,21 @@ SemanticPalette PaletteFor(const ResolvedTheme theme) {
   };
 }
 
-void ApplyTheme(const ResolvedTheme theme, const float ui_scale) {
+void ApplyTheme(const ResolvedTheme theme, const UiEnvironment &environment) {
   active_palette = PaletteFor(theme);
-  active_ui_scale = std::clamp(ui_scale, 0.75f, 2.0f);
+  active_ui_environment = environment;
+  if (!std::isfinite(active_ui_environment.base_font_em) ||
+      active_ui_environment.base_font_em <= 0.0f) {
+    active_ui_environment.base_font_em = 40.0f / 3.0f;
+  }
+  if (!std::isfinite(active_ui_environment.layout_scale) ||
+      active_ui_environment.layout_scale <= 0.0f) {
+    active_ui_environment.layout_scale = 1.0f;
+  }
+  if (!std::isfinite(active_ui_environment.raster_scale) ||
+      active_ui_environment.raster_scale <= 0.0f) {
+    active_ui_environment.raster_scale = 1.0f;
+  }
   const LayoutMetrics metrics = CurrentLayoutMetrics();
   ImGuiStyle &style = ImGui::GetStyle();
   const float vertical_frame_padding =
@@ -202,10 +215,12 @@ void ApplyTheme(const ResolvedTheme theme, const float ui_scale) {
 
 const SemanticPalette &CurrentPalette() { return active_palette; }
 
-float CurrentUiScale() { return active_ui_scale; }
+const UiEnvironment &CurrentUiEnvironment() { return active_ui_environment; }
+
+float CurrentUiScale() { return active_ui_environment.layout_scale; }
 
 float Scale(const float logical_pixels) {
-  return logical_pixels * active_ui_scale;
+  return logical_pixels * active_ui_environment.layout_scale;
 }
 
 } // namespace fancy_ui

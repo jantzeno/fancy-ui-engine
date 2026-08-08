@@ -9,6 +9,9 @@ namespace fancy_ui {
 
 namespace {
 
+constexpr float kNotoVerticalMetricsPerEm = 1362.0f / 1000.0f;
+constexpr float kDefaultBodyFontEm = 40.0f / 3.0f;
+
 constexpr LayoutMetrics kLogicalMetrics{
     .spacing =
         {
@@ -44,10 +47,13 @@ constexpr LayoutMetrics kLogicalMetrics{
         },
     .typography =
         {
-            .body_font_size = 16.0f,
-            // Dear ImGui uses the full Noto Sans vertical metrics as its font
-            // height; desktop and CSS sizes use the 1000-unit em.
-            .body_font_height = 16.0f * 1362.0f / 1000.0f,
+            .body_font_height = kDefaultBodyFontEm * kNotoVerticalMetricsPerEm,
+            .section_heading_font_height =
+                kDefaultBodyFontEm * 1.125f * kNotoVerticalMetricsPerEm,
+            .settings_title_font_height =
+                kDefaultBodyFontEm * 1.25f * kNotoVerticalMetricsPerEm,
+            .page_title_font_height =
+                kDefaultBodyFontEm * 1.5f * kNotoVerticalMetricsPerEm,
         },
     .menu =
         {
@@ -55,7 +61,6 @@ constexpr LayoutMetrics kLogicalMetrics{
             .popup_padding_vertical = 8.0f,
             .popup_width = 264.0f,
             .trigger_rounding = 4.0f,
-            .font_size = 18.0f,
         },
     .shell =
         {
@@ -109,8 +114,15 @@ float Resolve(const float logical_pixels, const float scale) {
 
 const LayoutMetrics &LogicalLayoutMetrics() { return kLogicalMetrics; }
 
-LayoutMetrics ResolveLayoutMetrics(const float requested_scale) {
-  const float scale = std::clamp(requested_scale, 0.75f, 2.0f);
+LayoutMetrics ResolveLayoutMetrics(const UiEnvironment &environment) {
+  const float scale =
+      std::isfinite(environment.layout_scale) && environment.layout_scale > 0.0f
+          ? environment.layout_scale
+          : 1.0f;
+  const float body_em =
+      std::isfinite(environment.base_font_em) && environment.base_font_em > 0.0f
+          ? environment.base_font_em
+          : kDefaultBodyFontEm;
   LayoutMetrics metrics = kLogicalMetrics;
   const auto resolve = [scale](float &value) { value = Resolve(value, scale); };
 
@@ -142,14 +154,19 @@ LayoutMetrics ResolveLayoutMetrics(const float requested_scale) {
   resolve(metrics.geometry.row_height);
   resolve(metrics.geometry.panel_header_height);
 
-  resolve(metrics.typography.body_font_size);
-  resolve(metrics.typography.body_font_height);
+  metrics.typography.body_font_height =
+      body_em * kNotoVerticalMetricsPerEm * scale;
+  metrics.typography.section_heading_font_height =
+      metrics.typography.body_font_height * 1.125f;
+  metrics.typography.settings_title_font_height =
+      metrics.typography.body_font_height * 1.25f;
+  metrics.typography.page_title_font_height =
+      metrics.typography.body_font_height * 1.5f;
 
   resolve(metrics.menu.popup_padding_horizontal);
   resolve(metrics.menu.popup_padding_vertical);
   resolve(metrics.menu.popup_width);
   resolve(metrics.menu.trigger_rounding);
-  resolve(metrics.menu.font_size);
 
   resolve(metrics.shell.application_bar_height);
   resolve(metrics.shell.context_toolbar_height);
@@ -184,11 +201,34 @@ LayoutMetrics ResolveLayoutMetrics(const float requested_scale) {
   resolve(metrics.settings.minimum_height);
   resolve(metrics.settings.inset);
   resolve(metrics.settings.title_bar_height);
+
+  const float padded_body =
+      metrics.typography.body_font_height + metrics.spacing.space02 * 2.0f;
+  const float compact_body =
+      metrics.typography.body_font_height + metrics.spacing.space01 * 2.0f;
+  metrics.geometry.control_height =
+      std::max(metrics.geometry.control_height, std::ceil(padded_body));
+  metrics.geometry.row_height =
+      std::max(metrics.geometry.row_height, std::ceil(padded_body));
+  metrics.geometry.compact_target =
+      std::max(metrics.geometry.compact_target, std::ceil(compact_body));
+  metrics.shell.application_bar_height =
+      std::max(metrics.shell.application_bar_height, std::ceil(padded_body));
+  metrics.shell.context_toolbar_height =
+      std::max(metrics.shell.context_toolbar_height, std::ceil(padded_body));
+  metrics.shell.operation_strip_height =
+      std::max(metrics.shell.operation_strip_height, std::ceil(compact_body));
+  metrics.shell.status_bar_height =
+      std::max(metrics.shell.status_bar_height, std::ceil(compact_body));
+  metrics.explorer.search_height =
+      std::max(metrics.explorer.search_height, std::ceil(padded_body));
+  metrics.inspector.section_header_height = std::max(
+      metrics.inspector.section_header_height, std::ceil(compact_body));
   return metrics;
 }
 
 LayoutMetrics CurrentLayoutMetrics() {
-  return ResolveLayoutMetrics(CurrentUiScale());
+  return ResolveLayoutMetrics(CurrentUiEnvironment());
 }
 
 } // namespace fancy_ui

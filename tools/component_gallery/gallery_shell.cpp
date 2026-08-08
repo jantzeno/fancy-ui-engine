@@ -712,11 +712,13 @@ void DrawGalleryToolbarField(ShellGalleryState &state, const FieldView &field) {
 
 void DrawPanelHeading(detail::UiAssetAtlas &assets,
                       const std::string_view title) {
-  if (assets.bold_font() != nullptr) {
-    ImGui::PushFont(assets.bold_font());
+  if (assets.heading_font() != nullptr) {
+    ImGui::PushFont(
+        assets.heading_font(),
+        CurrentLayoutMetrics().typography.section_heading_font_height);
   }
   ImGui::TextUnformatted(title.data(), title.data() + title.size());
-  if (assets.bold_font() != nullptr) {
+  if (assets.heading_font() != nullptr) {
     ImGui::PopFont();
   }
   ImGui::Separator();

@@ -325,8 +325,8 @@ public:
                           const ApplicationChromeCallbacks &callbacks,
                           const ApplicationBarHost host) {
     const LayoutMetrics metrics = CurrentLayoutMetrics();
-    ImFont *menu_font = assets_.regular_font();
-    ImGui::PushFont(menu_font, metrics.menu.font_size);
+    ImFont *menu_font = assets_.body_font();
+    ImGui::PushFont(menu_font, metrics.typography.body_font_height);
     const float vertical_padding = std::max(
         0.0f,
         (metrics.shell.application_bar_height - ImGui::GetFontSize()) * 0.5f);

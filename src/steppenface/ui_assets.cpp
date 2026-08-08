@@ -4,11 +4,18 @@
 
 namespace fancy_ui::steppenface {
 
-std::span<const std::string_view> RequiredUiFontFiles() {
+std::span<const UiFontAssetSpec> RequiredUiFontAssets() {
   static constexpr std::array kFonts{
-      std::string_view{"NotoSans-Regular.ttf"},
-      std::string_view{"NotoSans-Bold.ttf"},
-      std::string_view{"NotoSansMono-Regular.ttf"},
+      UiFontAssetSpec{"NotoSans-Thin.ttf", UiFontWeight::Thin},
+      UiFontAssetSpec{"NotoSans-ExtraLight.ttf", UiFontWeight::ExtraLight},
+      UiFontAssetSpec{"NotoSans-Light.ttf", UiFontWeight::Light},
+      UiFontAssetSpec{"NotoSans-Regular.ttf", UiFontWeight::Regular},
+      UiFontAssetSpec{"NotoSans-Medium.ttf", UiFontWeight::Medium},
+      UiFontAssetSpec{"NotoSans-SemiBold.ttf", UiFontWeight::SemiBold},
+      UiFontAssetSpec{"NotoSans-Bold.ttf", UiFontWeight::Bold},
+      UiFontAssetSpec{"NotoSans-ExtraBold.ttf", UiFontWeight::ExtraBold},
+      UiFontAssetSpec{"NotoSans-Black.ttf", UiFontWeight::Black},
+      UiFontAssetSpec{"NotoSansMono-Regular.ttf", UiFontWeight::Regular, true},
   };
   return kFonts;
 }

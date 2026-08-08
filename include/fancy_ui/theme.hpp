@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fancy_ui/component_types.hpp"
+#include "fancy_ui/ui_environment.hpp"
 #include <optional>
 
 namespace fancy_ui {
@@ -60,9 +61,11 @@ ResolveTheme(ThemeMode mode,
  * Applies a resolved semantic palette to Dear ImGui and stores it for shared
  * components drawn during subsequent frames.
  */
-void ApplyTheme(ResolvedTheme theme, float ui_scale = 1.0f);
+void ApplyTheme(ResolvedTheme theme,
+                const UiEnvironment &environment = UiEnvironment{});
 
 [[nodiscard]] const SemanticPalette &CurrentPalette();
+[[nodiscard]] const UiEnvironment &CurrentUiEnvironment();
 [[nodiscard]] float CurrentUiScale();
 [[nodiscard]] float Scale(float logical_pixels);
 

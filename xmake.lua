@@ -9,6 +9,11 @@ target("fancy_ui")
     add_includedirs(path.join(repo_dir, "src"))
     add_deps("im2d_ui", "workspace_vendor_lunasvg")
     add_packages("imgui")
+    if is_plat("windows") then
+        add_syslinks("user32")
+    elseif is_plat("macosx") then
+        add_frameworks("CoreText", "CoreFoundation")
+    end
 
 target("fancy_ui_tests")
     set_kind("binary")

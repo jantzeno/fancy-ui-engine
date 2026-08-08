@@ -12,3 +12,4 @@
 #include "fancy_ui/shell/application.hpp"
 #include "fancy_ui/steppenface/application_ui.hpp"
 #include "fancy_ui/theme.hpp"
+#include "fancy_ui/ui_environment.hpp"

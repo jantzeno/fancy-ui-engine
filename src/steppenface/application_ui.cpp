@@ -130,7 +130,6 @@ FontHandle NativeFontHandle(ImFont *font) {
 
 class ApplicationUi::Impl {
 public:
-  static constexpr float kToolbarControlHeight = 32.0f;
   static constexpr float kToolbarControlRounding = 4.0f;
   static constexpr float kToolbarLabelOffsetY = -1.0f;
 
@@ -145,6 +144,7 @@ public:
   };
 
   SessionState session;
+  std::filesystem::path asset_root;
   detail::UiAssetAtlas assets;
   detail::ApplicationChrome chrome{assets};
   std::vector<UiIntent> intents;
@@ -267,9 +267,11 @@ public:
                        const ImVec2 maximum, const ImU32 color) {
     const ImVec2 center((minimum.x + maximum.x) * 0.5f,
                         (minimum.y + maximum.y) * 0.5f);
+    const float half_icon = CurrentLayoutMetrics().geometry.icon * 0.5f;
     static_cast<void>(DrawAtlasIcon(
-        icon, UiIconSize::Small16, ImVec2(center.x - 8.0f, center.y - 8.0f),
-        ImVec2(center.x + 8.0f, center.y + 8.0f), color));
+        icon, UiIconSize::Small16,
+        ImVec2(center.x - half_icon, center.y - half_icon),
+        ImVec2(center.x + half_icon, center.y + half_icon), color));
   }
 
   bool ToolbarButton(const std::string &id, const std::string &label,
@@ -280,15 +282,19 @@ public:
     if (!availability.visible) {
       return false;
     }
+    const LayoutMetrics metrics = CurrentLayoutMetrics();
     const SemanticPalette &palette = CurrentPalette();
     const bool disabled = !availability.enabled || availability.busy;
-    const float disclosure_width = !icon_only && has_popup ? 16.0f : 0.0f;
+    const float disclosure_width =
+        !icon_only && has_popup ? metrics.geometry.icon : 0.0f;
     const ImVec2 size =
         icon_only
-            ? ImVec2(kToolbarControlHeight, kToolbarControlHeight)
-            : ImVec2(std::max(56.0f, ImGui::CalcTextSize(label.c_str()).x +
-                                         24.0f + disclosure_width),
-                     kToolbarControlHeight);
+            ? ImVec2(metrics.geometry.control_height,
+                     metrics.geometry.control_height)
+            : ImVec2(std::max(Scale(56.0f),
+                              ImGui::CalcTextSize(label.c_str()).x +
+                                  metrics.spacing.space06 + disclosure_width),
+                     metrics.geometry.control_height);
 
     ImGui::PushID(id.c_str());
     ImGui::BeginDisabled(disabled);
@@ -336,9 +342,9 @@ public:
     ImDrawList *draw_list = ImGui::GetWindowDrawList();
     draw_list->AddRectFilled(minimum, maximum,
                              ImGui::GetColorU32(ToImVec4(fill)),
-                             kToolbarControlRounding);
+                             Scale(kToolbarControlRounding));
     draw_list->AddRect(minimum, maximum, ImGui::GetColorU32(ToImVec4(border)),
-                       kToolbarControlRounding);
+                       Scale(kToolbarControlRounding));
     if (icon_only) {
       DrawToolbarIcon(icon, minimum, maximum,
                       ImGui::GetColorU32(ToImVec4(foreground)));
@@ -349,22 +355,24 @@ public:
           ImVec2(
               std::floor((minimum.x + label_maximum_x - label_size.x) * 0.5f),
               std::floor((minimum.y + maximum.y - label_size.y) * 0.5f +
-                         kToolbarLabelOffsetY)),
+                         Scale(kToolbarLabelOffsetY))),
           ImGui::GetColorU32(ToImVec4(foreground)), label.c_str());
       if (has_popup) {
-        const float center_x = maximum.x - 10.0f;
+        const float center_x = maximum.x - Scale(10.0f);
         const float center_y = (minimum.y + maximum.y) * 0.5f;
-        draw_list->AddTriangleFilled(ImVec2(center_x - 3.0f, center_y - 1.5f),
-                                     ImVec2(center_x + 3.0f, center_y - 1.5f),
-                                     ImVec2(center_x, center_y + 2.0f),
-                                     ImGui::GetColorU32(ToImVec4(foreground)));
+        draw_list->AddTriangleFilled(
+            ImVec2(center_x - Scale(3.0f), center_y - Scale(1.5f)),
+            ImVec2(center_x + Scale(3.0f), center_y - Scale(1.5f)),
+            ImVec2(center_x, center_y + Scale(2.0f)),
+            ImGui::GetColorU32(ToImVec4(foreground)));
       }
     }
     if (keyboard_focused) {
-      draw_list->AddRect(ImVec2(minimum.x + 3.0f, minimum.y + 3.0f),
-                         ImVec2(maximum.x - 3.0f, maximum.y - 3.0f),
-                         ImGui::GetColorU32(ToImVec4(palette.focus)), 2.0f,
-                         ImDrawFlags_RoundCornersAll, 2.0f);
+      draw_list->AddRect(
+          ImVec2(minimum.x + Scale(3.0f), minimum.y + Scale(3.0f)),
+          ImVec2(maximum.x - Scale(3.0f), maximum.y - Scale(3.0f)),
+          ImGui::GetColorU32(ToImVec4(palette.focus)), Scale(2.0f),
+          ImDrawFlags_RoundCornersAll, Scale(2.0f));
     }
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
       const std::string &message =
@@ -390,6 +398,7 @@ public:
       return;
     }
 
+    const LayoutMetrics metrics = CurrentLayoutMetrics();
     ImGui::PushID(segmented.id.value.c_str());
     std::vector<ToolbarSegmentInteraction> interactions;
     interactions.reserve(choices.size());
@@ -401,8 +410,9 @@ public:
       const Availability &availability = choice.action.availability;
       const bool disabled = !availability.enabled || availability.busy;
       const ImVec2 size(
-          std::max(56.0f, ImGui::CalcTextSize(choice.label.c_str()).x + 24.0f),
-          kToolbarControlHeight);
+          std::max(Scale(56.0f), ImGui::CalcTextSize(choice.label.c_str()).x +
+                                     metrics.spacing.space06),
+          metrics.geometry.control_height);
 
       ImGui::PushID(choice.id.value.c_str());
       ImGui::BeginDisabled(disabled);
@@ -454,7 +464,7 @@ public:
                                               : palette.text_secondary;
       draw_list->AddRectFilled(interaction.minimum, interaction.maximum,
                                ImGui::GetColorU32(ToImVec4(fill)),
-                               kToolbarControlRounding, corners);
+                               Scale(kToolbarControlRounding), corners);
 
       const ImVec2 label_size =
           ImGui::CalcTextSize(interaction.choice->label.c_str());
@@ -465,20 +475,23 @@ public:
                  std::floor((interaction.minimum.y + interaction.maximum.y -
                              label_size.y) *
                                 0.5f +
-                            kToolbarLabelOffsetY)),
+                            Scale(kToolbarLabelOffsetY))),
           ImGui::GetColorU32(ToImVec4(foreground)),
           interaction.choice->label.c_str());
       if (selected) {
-        draw_list->AddRectFilled(
-            ImVec2(interaction.minimum.x + 1.0f, interaction.maximum.y - 3.0f),
-            ImVec2(interaction.maximum.x - 1.0f, interaction.maximum.y - 1.0f),
-            ImGui::GetColorU32(ToImVec4(palette.focus)));
+        draw_list->AddRectFilled(ImVec2(interaction.minimum.x + Scale(1.0f),
+                                        interaction.maximum.y - Scale(3.0f)),
+                                 ImVec2(interaction.maximum.x - Scale(1.0f),
+                                        interaction.maximum.y - Scale(1.0f)),
+                                 ImGui::GetColorU32(ToImVec4(palette.focus)));
       }
       if (interaction.keyboard_focused) {
-        draw_list->AddRect(
-            ImVec2(interaction.minimum.x + 3.0f, interaction.minimum.y + 3.0f),
-            ImVec2(interaction.maximum.x - 3.0f, interaction.maximum.y - 3.0f),
-            ImGui::GetColorU32(ToImVec4(palette.focus)), 2.0f, corners, 2.0f);
+        draw_list->AddRect(ImVec2(interaction.minimum.x + Scale(3.0f),
+                                  interaction.minimum.y + Scale(3.0f)),
+                           ImVec2(interaction.maximum.x - Scale(3.0f),
+                                  interaction.maximum.y - Scale(3.0f)),
+                           ImGui::GetColorU32(ToImVec4(palette.focus)),
+                           Scale(2.0f), corners, Scale(2.0f));
       }
     }
 
@@ -486,7 +499,8 @@ public:
     const ImVec2 group_maximum = interactions.back().maximum;
     draw_list->AddRect(group_minimum, group_maximum,
                        ImGui::GetColorU32(ToImVec4(palette.border_strong)),
-                       kToolbarControlRounding, ImDrawFlags_RoundCornersAll);
+                       Scale(kToolbarControlRounding),
+                       ImDrawFlags_RoundCornersAll);
     for (std::size_t index = 1; index < interactions.size(); ++index) {
       const float separator_x = interactions[index].minimum.x;
       draw_list->AddLine(ImVec2(separator_x, group_minimum.y),
@@ -508,10 +522,12 @@ public:
       ImGui::OpenPopup(("##popup." + popover.id.value).c_str());
     }
     ImGui::SetNextWindowSizeConstraints(
-        ImVec2(224.0f, 0.0f),
-        ImVec2(320.0f, std::numeric_limits<float>::max()));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 4.0f));
+        ImVec2(Scale(224.0f), 0.0f),
+        ImVec2(Scale(320.0f), std::numeric_limits<float>::max()));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(Scale(8.0f), Scale(8.0f)));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        ImVec2(Scale(8.0f), Scale(4.0f)));
     ImGui::PushStyleColor(ImGuiCol_PopupBg,
                           ToImVec4(CurrentPalette().application_surface));
     if (ImGui::BeginPopup(("##popup." + popover.id.value).c_str())) {
@@ -599,11 +615,14 @@ public:
               EmitEdit(view.revision, value.action);
             }
           } else if constexpr (std::is_same_v<Item, ToolbarSeparatorView>) {
+            const LayoutMetrics metrics = CurrentLayoutMetrics();
             const ImVec2 cursor = ImGui::GetCursorScreenPos();
-            ImGui::Dummy(ImVec2(1.0f, 24.0f));
+            ImGui::Dummy(ImVec2(metrics.geometry.border,
+                                metrics.geometry.compact_target));
             ImGui::GetWindowDrawList()->AddLine(
-                ImVec2(cursor.x, cursor.y + 4.0f),
-                ImVec2(cursor.x, cursor.y + 20.0f),
+                ImVec2(cursor.x, cursor.y + metrics.spacing.space02),
+                ImVec2(cursor.x, cursor.y + metrics.geometry.compact_target -
+                                     metrics.spacing.space02),
                 ImGui::GetColorU32(ToImVec4(CurrentPalette().border)));
           } else if constexpr (std::is_same_v<Item, ToolbarSpacerView>) {
           } else if constexpr (std::is_same_v<Item, ToolbarPopoverView>) {
@@ -617,9 +636,10 @@ public:
                            const std::vector<ToolbarItemView> &items,
                            const std::size_t begin, const std::size_t end,
                            const bool icon_only, const bool horizontal) {
+    const float horizontal_spacing = CurrentLayoutMetrics().spacing.space03;
     for (std::size_t index = begin; index < end; ++index) {
       if (index > begin && horizontal) {
-        ImGui::SameLine(0.0f, 8.0f);
+        ImGui::SameLine(0.0f, horizontal_spacing);
       }
       DrawToolbarItem(view, items[index], icon_only);
     }
@@ -715,11 +735,13 @@ public:
   }
 
   void DrawExplorer(const ApplicationView &view) {
-    if (assets.bold_font() != nullptr) {
-      ImGui::PushFont(assets.bold_font());
+    if (assets.heading_font() != nullptr) {
+      ImGui::PushFont(
+          assets.heading_font(),
+          CurrentLayoutMetrics().typography.section_heading_font_height);
     }
     ImGui::TextUnformatted(view.explorer.title.c_str());
-    if (assets.bold_font() != nullptr) {
+    if (assets.heading_font() != nullptr) {
       ImGui::PopFont();
     }
 
@@ -743,7 +765,8 @@ public:
       ImGui::NewLine();
     }
 
-    HierarchyTree tree({.section_font = NativeFontHandle(assets.bold_font())});
+    HierarchyTree tree(
+        {.section_font = NativeFontHandle(assets.heading_font())});
     std::size_t root = 0;
     while (root < view.explorer.rows.size()) {
       DrawExplorerNode(view, query, root, tree);
@@ -797,13 +820,18 @@ public:
     PointerState pointer = CapturePointer(
         minimum, ImVec2(framebuffer_scale.x, framebuffer_scale.y));
     if (!view.workspace.viewport_toolbar.empty()) {
+      const LayoutMetrics metrics = CurrentLayoutMetrics();
       const ImVec2 mouse = ImGui::GetIO().MousePos;
       const float toolbar_height =
-          static_cast<float>(view.workspace.viewport_toolbar.size()) * 32.0f +
-          static_cast<float>(view.workspace.viewport_toolbar.size() - 1) * 4.0f;
-      if (mouse.x >= minimum.x + 16.0f && mouse.x <= minimum.x + 48.0f &&
-          mouse.y >= minimum.y + 16.0f &&
-          mouse.y <= minimum.y + 16.0f + toolbar_height) {
+          static_cast<float>(view.workspace.viewport_toolbar.size()) *
+              metrics.geometry.control_height +
+          static_cast<float>(view.workspace.viewport_toolbar.size() - 1) *
+              metrics.spacing.space03;
+      if (mouse.x >= minimum.x + metrics.spacing.space05 &&
+          mouse.x <= minimum.x + metrics.spacing.space05 +
+                         metrics.geometry.control_height &&
+          mouse.y >= minimum.y + metrics.spacing.space05 &&
+          mouse.y <= minimum.y + metrics.spacing.space05 + toolbar_height) {
         pointer.hovered = false;
         pointer.primary_clicked = false;
         pointer.primary_released = false;
@@ -858,9 +886,11 @@ public:
     if (view.workspace.kind == WorkspaceKind::Model3d) {
       DrawModelSurface(view, surfaces);
       if (!view.workspace.viewport_toolbar.empty()) {
+        const LayoutMetrics metrics = CurrentLayoutMetrics();
         const ImVec2 surface_minimum = ImGui::GetItemRectMin();
         ImGui::SetCursorScreenPos(
-            ImVec2(surface_minimum.x + 16.0f, surface_minimum.y + 16.0f));
+            ImVec2(surface_minimum.x + metrics.spacing.space05,
+                   surface_minimum.y + metrics.spacing.space05));
         ImGui::BeginGroup();
         DrawToolbarSequence(view, view.workspace.viewport_toolbar, 0,
                             view.workspace.viewport_toolbar.size(), true,
@@ -941,11 +971,13 @@ public:
   }
 
   void DrawInspector(const ApplicationView &view) {
-    if (assets.bold_font() != nullptr) {
-      ImGui::PushFont(assets.bold_font());
+    if (assets.heading_font() != nullptr) {
+      ImGui::PushFont(
+          assets.heading_font(),
+          CurrentLayoutMetrics().typography.section_heading_font_height);
     }
     ImGui::TextUnformatted(view.inspector.title.c_str());
-    if (assets.bold_font() != nullptr) {
+    if (assets.heading_font() != nullptr) {
       ImGui::PopFont();
     }
     if (view.inspector.sections.empty()) {
@@ -1088,8 +1120,21 @@ ApplicationUi &ApplicationUi::operator=(ApplicationUi &&) noexcept = default;
 
 AssetLoadReport
 ApplicationUi::Initialize(const std::filesystem::path &asset_root,
-                          const float dpi_scale) {
-  return impl_->assets.Load(asset_root, dpi_scale);
+                          const UiEnvironment &environment) {
+  impl_->asset_root = asset_root;
+  return impl_->assets.Load(asset_root, environment);
+}
+
+AssetLoadReport
+ApplicationUi::UpdateEnvironment(const UiEnvironment &environment) {
+  if (impl_->asset_root.empty()) {
+    return {
+        .used_fallback_font = true,
+        .messages =
+            {"Fancy UI must be initialized before its environment is updated"},
+    };
+  }
+  return impl_->assets.Load(impl_->asset_root, environment);
 }
 
 const SessionState &ApplicationUi::session() const { return impl_->session; }
@@ -1109,7 +1154,7 @@ FrameResult ApplicationUi::Draw(const ApplicationView &view,
     impl_->session.ActivateDestination(view.active_destination);
   }
 
-  ApplyTheme(ResolveTheme(view.theme_mode), impl_->assets.ui_scale());
+  ApplyTheme(ResolveTheme(view.theme_mode), impl_->assets.ui_environment());
   const bool operation_available = view.operation.has_value();
   const detail::ApplicationChromeCallbacks chrome_callbacks =
       impl_->ChromeCallbacks(view);

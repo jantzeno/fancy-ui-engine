@@ -6,6 +6,7 @@
 #include <lunasvg.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <string>
@@ -27,6 +28,11 @@ ImVec4 ToImVec4(const ColorRgba color) {
   return ImVec4(color.red, color.green, color.blue, color.alpha);
 }
 
+std::size_t FontIndex(const UiFontWeight weight) {
+  const int numeric = std::clamp(static_cast<int>(weight), 100, 900);
+  return static_cast<std::size_t>((numeric / 100) - 1);
+}
+
 } // namespace
 
 class UiAssetAtlas::Impl {
@@ -36,10 +42,11 @@ public:
     lunasvg::Bitmap bitmap;
   };
 
-  ImFont *regular_font = nullptr;
-  ImFont *bold_font = nullptr;
+  std::array<ImFont *, 9> sans_fonts{};
+  ImFont *body_font = nullptr;
+  ImFont *heading_font = nullptr;
   ImFont *mono_font = nullptr;
-  float ui_scale = 1.0f;
+  UiEnvironment environment;
   std::unordered_map<std::string, ImFontAtlasRectId> icon_rects;
   std::vector<PendingIcon> pending_icons;
 };
@@ -51,7 +58,7 @@ UiAssetAtlas &UiAssetAtlas::operator=(UiAssetAtlas &&) noexcept = default;
 
 steppenface::AssetLoadReport
 UiAssetAtlas::Load(const std::filesystem::path &asset_root,
-                   const float requested_scale) {
+                   const UiEnvironment &requested_environment) {
   steppenface::AssetLoadReport report;
   if (ImGui::GetCurrentContext() == nullptr) {
     report.used_fallback_font = true;
@@ -62,7 +69,19 @@ UiAssetAtlas::Load(const std::filesystem::path &asset_root,
 
   ImGuiIO &io = ImGui::GetIO();
   io.Fonts->Clear();
-  impl_->ui_scale = std::clamp(requested_scale, 0.75f, 2.0f);
+  impl_->environment = requested_environment;
+  if (!std::isfinite(impl_->environment.base_font_em) ||
+      impl_->environment.base_font_em <= 0.0f) {
+    impl_->environment.base_font_em = 40.0f / 3.0f;
+  }
+  if (!std::isfinite(impl_->environment.layout_scale) ||
+      impl_->environment.layout_scale <= 0.0f) {
+    impl_->environment.layout_scale = 1.0f;
+  }
+  if (!std::isfinite(impl_->environment.raster_scale) ||
+      impl_->environment.raster_scale <= 0.0f) {
+    impl_->environment.raster_scale = 1.0f;
+  }
   const auto load_font = [&report, &asset_root](const std::string_view name,
                                                 const float size) -> ImFont * {
     const std::filesystem::path path = asset_root / "fonts" / std::string(name);
@@ -78,16 +97,39 @@ UiAssetAtlas::Load(const std::filesystem::path &asset_root,
     return font;
   };
 
-  const std::span<const std::string_view> fonts =
-      steppenface::RequiredUiFontFiles();
   const float body_font_height =
-      ResolveLayoutMetrics(impl_->ui_scale).typography.body_font_height;
-  impl_->regular_font = load_font(fonts[0], body_font_height);
-  impl_->bold_font = load_font(fonts[1], 18.0f * impl_->ui_scale);
-  impl_->mono_font = load_font(fonts[2], body_font_height);
-  if (impl_->regular_font == nullptr) {
-    impl_->regular_font = io.Fonts->AddFontDefault();
+      ResolveLayoutMetrics(impl_->environment).typography.body_font_height;
+  impl_->sans_fonts.fill(nullptr);
+  impl_->mono_font = nullptr;
+  for (const steppenface::UiFontAssetSpec &font :
+       steppenface::RequiredUiFontAssets()) {
+    ImFont *loaded = load_font(font.filename, body_font_height);
+    if (font.monospace) {
+      impl_->mono_font = loaded;
+    } else {
+      impl_->sans_fonts[FontIndex(font.weight)] = loaded;
+    }
+  }
+  impl_->body_font =
+      impl_->sans_fonts[FontIndex(impl_->environment.body_weight)];
+  impl_->heading_font = impl_->sans_fonts[FontIndex(static_cast<UiFontWeight>(
+      std::max(static_cast<int>(impl_->environment.body_weight),
+               static_cast<int>(UiFontWeight::Bold))))];
+  if (impl_->body_font == nullptr) {
+    impl_->body_font = impl_->sans_fonts[FontIndex(UiFontWeight::Regular)];
+  }
+  if (impl_->heading_font == nullptr) {
+    impl_->heading_font = impl_->sans_fonts[FontIndex(UiFontWeight::Bold)];
+  }
+  if (impl_->body_font == nullptr) {
+    impl_->body_font = io.Fonts->AddFontDefault();
     report.used_fallback_font = true;
+  }
+  if (impl_->heading_font == nullptr) {
+    impl_->heading_font = impl_->body_font;
+  }
+  if (impl_->mono_font == nullptr) {
+    impl_->mono_font = impl_->body_font;
   }
 
   impl_->icon_rects.clear();
@@ -108,8 +150,8 @@ UiAssetAtlas::Load(const std::filesystem::path &asset_root,
     }
     const int logical_pixels = steppenface::LogicalPixels(asset.size);
     const int icon_pixels = std::max(
-        logical_pixels,
-        static_cast<int>(std::round(logical_pixels * impl_->ui_scale)));
+        logical_pixels, static_cast<int>(std::round(
+                            logical_pixels * impl_->environment.raster_scale)));
     lunasvg::Bitmap bitmap = document->renderToBitmap(icon_pixels, icon_pixels);
     if (bitmap.isNull()) {
       report.messages.push_back("Could not rasterize UI icon: " +
@@ -122,8 +164,8 @@ UiAssetAtlas::Load(const std::filesystem::path &asset_root,
          .bitmap = std::move(bitmap)});
   }
 
-  io.FontDefault = impl_->regular_font;
-  ApplyTheme(ResolvedTheme::Dark, impl_->ui_scale);
+  io.FontDefault = impl_->body_font;
+  ApplyTheme(ResolvedTheme::Dark, impl_->environment);
   return report;
 }
 
@@ -222,9 +264,11 @@ IconPainter UiAssetAtlas::Painter(const std::string_view semantic_id,
   };
 }
 
-ImFont *UiAssetAtlas::regular_font() const { return impl_->regular_font; }
-ImFont *UiAssetAtlas::bold_font() const { return impl_->bold_font; }
+ImFont *UiAssetAtlas::body_font() const { return impl_->body_font; }
+ImFont *UiAssetAtlas::heading_font() const { return impl_->heading_font; }
 ImFont *UiAssetAtlas::mono_font() const { return impl_->mono_font; }
-float UiAssetAtlas::ui_scale() const { return impl_->ui_scale; }
+const UiEnvironment &UiAssetAtlas::ui_environment() const {
+  return impl_->environment;
+}
 
 } // namespace fancy_ui::detail

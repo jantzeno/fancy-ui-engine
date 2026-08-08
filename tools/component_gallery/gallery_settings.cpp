@@ -30,11 +30,13 @@ Validation ValidationFor(const SettingsGalleryState &state,
 
 void DrawPageHeader(detail::UiAssetAtlas &assets, const char *title,
                     const char *description) {
-  if (assets.bold_font() != nullptr) {
-    ImGui::PushFont(assets.bold_font());
+  if (assets.heading_font() != nullptr) {
+    ImGui::PushFont(
+        assets.heading_font(),
+        CurrentLayoutMetrics().typography.settings_title_font_height);
   }
   ImGui::TextUnformatted(title);
-  if (assets.bold_font() != nullptr) {
+  if (assets.heading_font() != nullptr) {
     ImGui::PopFont();
   }
   ImGui::TextWrapped("%s", description);
@@ -887,11 +889,12 @@ void DrawSettingsWindow(detail::UiAssetAtlas &assets, GalleryState &gallery) {
                           ImVec2(0.0f, metrics.settings.title_bar_height),
                           ImGuiChildFlags_AlwaysUseWindowPadding)) {
       detail::DrawSecondaryText("EXPORT FACE");
-      if (assets.bold_font() != nullptr) {
-        ImGui::PushFont(assets.bold_font());
+      if (assets.heading_font() != nullptr) {
+        ImGui::PushFont(assets.heading_font(),
+                        metrics.typography.settings_title_font_height);
       }
       ImGui::TextUnformatted("System Settings");
-      if (assets.bold_font() != nullptr) {
+      if (assets.heading_font() != nullptr) {
         ImGui::PopFont();
       }
       ImGui::SameLine(ImGui::GetWindowWidth() - Scale(38.0f));

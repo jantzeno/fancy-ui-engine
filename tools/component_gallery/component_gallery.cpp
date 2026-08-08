@@ -23,7 +23,8 @@ namespace {
 
 void Heading(const char *title, ImFont *font) {
   if (font != nullptr) {
-    ImGui::PushFont(font, Scale(24.0f));
+    ImGui::PushFont(
+        font, CurrentLayoutMetrics().typography.section_heading_font_height);
   }
   ImGui::TextUnformatted(title);
   if (font != nullptr) {
@@ -680,7 +681,7 @@ void DrawCanonicalHierarchy(detail::UiAssetAtlas &assets,
                             HierarchyCardState &state,
                             const std::span<const HierarchyFixtureRow> rows,
                             const std::string_view label) {
-  ImGui::PushFont(nullptr, Scale(16.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   ImGui::TextColored(ImVec4(CurrentPalette().text_secondary.red,
                             CurrentPalette().text_secondary.green,
                             CurrentPalette().text_secondary.blue,
@@ -691,7 +692,8 @@ void DrawCanonicalHierarchy(detail::UiAssetAtlas &assets,
 
   bool request_color_picker = false;
   {
-    HierarchyTree tree({.section_font = NativeFontHandle(assets.bold_font())});
+    HierarchyTree tree(
+        {.section_font = NativeFontHandle(assets.heading_font())});
     std::size_t root = 0;
     while (root < rows.size()) {
       DrawHierarchyFixtureNode(assets, state, rows, root, tree,
@@ -747,7 +749,8 @@ void DrawHierarchyInteractionDemo(detail::UiAssetAtlas &assets,
       AggregateVisibility(state.tree_visibility);
 
   {
-    HierarchyTree tree({.section_font = NativeFontHandle(assets.bold_font())});
+    HierarchyTree tree(
+        {.section_font = NativeFontHandle(assets.heading_font())});
     const HierarchyRowResult assembly = HierarchyRow(
         tree, {
                   .id = "assembly",
@@ -922,7 +925,7 @@ void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
       AggregateVisibility(state.invalid_issue_visibility);
   {
     InformationTree tree(
-        {.section_font = NativeFontHandle(assets.bold_font())});
+        {.section_font = NativeFontHandle(assets.heading_font())});
     const InformationTreeRowResult invalid = InformationTreeRow(
         tree, {
                   .id = "invalid",
@@ -965,7 +968,7 @@ void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
       AggregateVisibility(state.issue_visibility);
   {
     InformationTree tree(
-        {.section_font = NativeFontHandle(assets.bold_font())});
+        {.section_font = NativeFontHandle(assets.heading_font())});
     const InformationTreeRowResult repairable = InformationTreeRow(
         tree, {
                   .id = "repairable",
@@ -1022,7 +1025,7 @@ void DrawIssueHierarchy(detail::UiAssetAtlas &assets, GalleryState &state) {
       AggregateVisibility(state.warning_issue_visibility);
   {
     InformationTree tree(
-        {.section_font = NativeFontHandle(assets.bold_font())});
+        {.section_font = NativeFontHandle(assets.heading_font())});
     const InformationTreeRowResult warnings = InformationTreeRow(
         tree, {
                   .id = "warnings",
@@ -1221,7 +1224,7 @@ void DrawHierarchySample(detail::UiAssetAtlas &assets, GalleryState &state) {
 }
 
 void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
-  ApplyTheme(state.theme, state.scale);
+  ApplyTheme(state.theme, assets.ui_environment());
   assets.InstallPendingIcons();
 
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
@@ -1256,16 +1259,17 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
   }
   ImGui::PopStyleVar();
 
-  if (assets.bold_font() != nullptr) {
-    ImGui::PushFont(assets.bold_font(), Scale(29.0f));
+  if (assets.heading_font() != nullptr) {
+    ImGui::PushFont(assets.heading_font(),
+                    CurrentLayoutMetrics().typography.page_title_font_height);
   }
   ImGui::TextUnformatted("Fancy UI gallery");
-  if (assets.bold_font() != nullptr) {
+  if (assets.heading_font() != nullptr) {
     ImGui::PopFont();
   }
   ImGui::SameLine();
-  detail::DrawSecondaryText(
-      std::format("- Fancy UI - {:.0f}%", state.scale * 100.0f));
+  detail::DrawSecondaryText(std::format(
+      "- Fancy UI - {:.0f}%", assets.ui_environment().raster_scale * 100.0f));
   ImGui::SameLine(ImGui::GetWindowWidth() - Scale(184.0f));
   if (Button({
                  .id = "theme-light",
@@ -1288,7 +1292,7 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
     state.theme = ResolvedTheme::Dark;
     state.settings.system_theme = ResolvedTheme::Dark;
   }
-  ImGui::PushFont(nullptr, Scale(21.0f));
+  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
   detail::DrawSecondaryText(
       "Canonical light/dark parity; pointer and keyboard states remain live.");
   ImGui::PopFont();
@@ -1332,7 +1336,8 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
     };
     tab("Components", GalleryTab::Components, [&assets, &state] {
       detail::ApplicationChrome chrome(assets);
-      ImGui::PushFont(nullptr, Scale(21.0f));
+      ImGui::PushFont(nullptr,
+                      CurrentLayoutMetrics().typography.body_font_height);
       detail::DrawSecondaryText(
           "Shared controls, hierarchy rows, semantic feedback, and values.");
       ImGui::PopFont();
@@ -1348,65 +1353,68 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
             ImGui::TableSetupColumn(
                 "component", ImGuiTableColumnFlags_WidthFixed, Scale(302.0f));
           }
-          GalleryCard("buttons", "Buttons", assets.bold_font(), DrawButtons);
-          GalleryCard("availability", "Availability", assets.bold_font(),
+          GalleryCard("buttons", "Buttons", assets.heading_font(), DrawButtons);
+          GalleryCard("availability", "Availability", assets.heading_font(),
                       [&state] { DrawAvailability(state); });
           GalleryCard(
-              "workspace-switcher", "Workspace switcher", assets.bold_font(),
+              "workspace-switcher", "Workspace switcher", assets.heading_font(),
               [&chrome, &state] { DrawWorkspaceSwitcher(chrome, state); });
-          GalleryCard("selection-scope", "Selection scope", assets.bold_font(),
+          GalleryCard("selection-scope", "Selection scope",
+                      assets.heading_font(),
                       [&chrome, &state] { DrawSelectionScope(chrome, state); });
-          GalleryCard("selection-tool", "Selection tool", assets.bold_font(),
+          GalleryCard("selection-tool", "Selection tool", assets.heading_font(),
                       [&chrome, &state] { DrawSelectionTool(chrome, state); });
-          GalleryCard("inputs", "Inputs", assets.bold_font(),
+          GalleryCard("inputs", "Inputs", assets.heading_font(),
                       [&state] { DrawInputs(state); });
-          GalleryCard("slider", "Slider", assets.bold_font(),
+          GalleryCard("slider", "Slider", assets.heading_font(),
                       [&state] { DrawSlider(state); });
-          GalleryCard("compass", "Compass", assets.bold_font(),
+          GalleryCard("compass", "Compass", assets.heading_font(),
                       [&state] { DrawCompass(state, false); });
           GalleryCard("compass-inherited", "Compass · inherited",
-                      assets.bold_font(),
+                      assets.heading_font(),
                       [&state] { DrawCompass(state, true); });
-          GalleryCard("checkboxes", "Checkboxes", assets.bold_font(),
+          GalleryCard("checkboxes", "Checkboxes", assets.heading_font(),
                       [&state] { DrawCheckboxes(state); });
-          GalleryCard("visibility", "Visibility", assets.bold_font(),
+          GalleryCard("visibility", "Visibility", assets.heading_font(),
                       [&assets, &state] { DrawVisibility(assets, state); });
-          GalleryCard("enabled-locked", "Enabled & locked", assets.bold_font(),
+          GalleryCard("enabled-locked", "Enabled & locked",
+                      assets.heading_font(),
                       [&assets, &state] { DrawEnabledLocked(assets, state); });
           GalleryCard(
-              "hierarchy-step", "STEP", assets.bold_font(),
+              "hierarchy-step", "STEP", assets.heading_font(),
               [&assets, &state] {
                 DrawCanonicalHierarchy(assets, state.hierarchy_cards[0],
                                        kStepHierarchy, "STEP");
               },
               false, true, 448.0f, 604.0f);
           GalleryCard(
-              "hierarchy-svg", "SVG", assets.bold_font(),
+              "hierarchy-svg", "SVG", assets.heading_font(),
               [&assets, &state] {
                 DrawCanonicalHierarchy(assets, state.hierarchy_cards[1],
                                        kSvgHierarchy, "SVG");
               },
               false, true, 448.0f, 604.0f);
           GalleryCard(
-              "hierarchy-dxf", "DXF", assets.bold_font(),
+              "hierarchy-dxf", "DXF", assets.heading_font(),
               [&assets, &state] {
                 DrawCanonicalHierarchy(assets, state.hierarchy_cards[2],
                                        kDxfHierarchy, "DXF");
               },
               false, true, 448.0f, 604.0f);
           GalleryCard(
-              "hierarchy-canvas-issues", "Canvas Issues", assets.bold_font(),
+              "hierarchy-canvas-issues", "Canvas Issues", assets.heading_font(),
               [&assets, &state] { DrawIssueHierarchy(assets, state); }, false,
               true, 448.0f, 604.0f);
-          GalleryCard("status-types", "Status types", assets.bold_font(),
+          GalleryCard("status-types", "Status types", assets.heading_font(),
                       [&assets] { DrawStatusTypes(assets); });
-          GalleryCard("operation", "Operation", assets.bold_font(),
+          GalleryCard("operation", "Operation", assets.heading_font(),
                       [&assets] { DrawOperation(assets); });
-          GalleryCard("empty-overflow", "Empty & overflow", assets.bold_font(),
-                      DrawEmptyOverflow);
-          GalleryCard("color-pickers", "Color pickers", assets.bold_font(),
+          GalleryCard("empty-overflow", "Empty & overflow",
+                      assets.heading_font(), DrawEmptyOverflow);
+          GalleryCard("color-pickers", "Color pickers", assets.heading_font(),
                       [&state] { DrawColorPickers(state); });
-          GalleryCard("progress", "Progress", assets.bold_font(), DrawProgress);
+          GalleryCard("progress", "Progress", assets.heading_font(),
+                      DrawProgress);
           ImGui::EndTable();
         }
       }

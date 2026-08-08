@@ -40,6 +40,13 @@ float ContrastRatio(const fancy_ui::ColorRgba first,
   return (lighter + 0.05f) / (darker + 0.05f);
 }
 
+fancy_ui::UiEnvironment EnvironmentAt(const float scale) {
+  return {
+      .layout_scale = scale,
+      .raster_scale = scale,
+  };
+}
+
 } // namespace
 
 TEST_CASE("component availability carries the caller-provided reason") {
@@ -66,6 +73,49 @@ TEST_CASE("light and dark palettes expose distinct semantic surfaces") {
   REQUIRE(dark.control_disabled_fill.alpha == 1.0f);
   REQUIRE(light.control_disabled_fill != light.control);
   REQUIRE(dark.control_disabled_fill != dark.control);
+}
+
+TEST_CASE("display scale and pixel density scale the UI exactly once") {
+  fancy_ui::UiEnvironment environment;
+
+  fancy_ui::UpdateDisplayScales(environment, 1.25f, 1.25f);
+  REQUIRE(environment.layout_scale == Catch::Approx(1.0f));
+  REQUIRE(environment.raster_scale == Catch::Approx(1.25f));
+
+  fancy_ui::UpdateDisplayScales(environment, 1.25f, 1.0f);
+  REQUIRE(environment.layout_scale == Catch::Approx(1.25f));
+  REQUIRE(environment.raster_scale == Catch::Approx(1.25f));
+
+  fancy_ui::UpdateDisplayScales(environment, 2.0f, 2.0f);
+  REQUIRE(environment.layout_scale == Catch::Approx(1.0f));
+  REQUIRE(environment.raster_scale == Catch::Approx(2.0f));
+
+  fancy_ui::UpdateDisplayScales(environment, 5.0f, 1.0f);
+  REQUIRE(environment.layout_scale == Catch::Approx(5.0f));
+  REQUIRE(environment.raster_scale == Catch::Approx(5.0f));
+}
+
+TEST_CASE("the UI font manifest exposes every upright Noto weight") {
+  const auto fonts = fancy_ui::steppenface::RequiredUiFontAssets();
+  std::set<fancy_ui::UiFontWeight> weights;
+  std::size_t monospace_count = 0;
+  for (const fancy_ui::steppenface::UiFontAssetSpec &font : fonts) {
+    if (font.monospace) {
+      ++monospace_count;
+    } else {
+      weights.insert(font.weight);
+    }
+  }
+
+  const std::set expected_weights{
+      fancy_ui::UiFontWeight::Thin,   fancy_ui::UiFontWeight::ExtraLight,
+      fancy_ui::UiFontWeight::Light,  fancy_ui::UiFontWeight::Regular,
+      fancy_ui::UiFontWeight::Medium, fancy_ui::UiFontWeight::SemiBold,
+      fancy_ui::UiFontWeight::Bold,   fancy_ui::UiFontWeight::ExtraBold,
+      fancy_ui::UiFontWeight::Black,
+  };
+  REQUIRE(weights == expected_weights);
+  REQUIRE(monospace_count == 1);
 }
 
 TEST_CASE("operation and destructive control colors meet contrast targets") {
@@ -110,19 +160,19 @@ TEST_CASE("operation and destructive control colors meet contrast targets") {
   ImGui::DestroyContext();
 }
 
-TEST_CASE("theme scale clamps and scales shared interaction metrics") {
+TEST_CASE("theme scale supports the platform scale without an upper clamp") {
   ImGui::CreateContext();
 
-  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, 3.0f);
-  REQUIRE(fancy_ui::CurrentUiScale() == Catch::Approx(2.0f));
-  REQUIRE(ImGui::GetStyle().FramePadding.x == Catch::Approx(24.0f));
-  REQUIRE(ImGui::GetStyle().ItemSpacing.y == Catch::Approx(16.0f));
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, EnvironmentAt(3.0f));
+  REQUIRE(fancy_ui::CurrentUiScale() == Catch::Approx(3.0f));
+  REQUIRE(ImGui::GetStyle().FramePadding.x == Catch::Approx(36.0f));
+  REQUIRE(ImGui::GetStyle().ItemSpacing.y == Catch::Approx(24.0f));
   REQUIRE(ImGui::GetStyle().ButtonTextAlign.x == Catch::Approx(0.5f));
   REQUIRE(ImGui::GetStyle().ButtonTextAlign.y == Catch::Approx(0.5f));
   REQUIRE(ImGui::GetStyle().DisabledAlpha == Catch::Approx(1.0f));
-  REQUIRE(ImGui::GetStyle().ChildRounding == Catch::Approx(8.0f));
-  REQUIRE(ImGui::GetStyle().ScrollbarSize == Catch::Approx(20.0f));
-  REQUIRE(ImGui::GetStyle().TabBarOverlineSize == Catch::Approx(6.0f));
+  REQUIRE(ImGui::GetStyle().ChildRounding == Catch::Approx(12.0f));
+  REQUIRE(ImGui::GetStyle().ScrollbarSize == Catch::Approx(30.0f));
+  REQUIRE(ImGui::GetStyle().TabBarOverlineSize == Catch::Approx(9.0f));
   const fancy_ui::SemanticPalette dark =
       fancy_ui::PaletteFor(fancy_ui::ResolvedTheme::Dark);
   const ImVec4 tree_lines = ImGui::GetStyle().Colors[ImGuiCol_TreeLines];
@@ -138,9 +188,9 @@ TEST_CASE("theme scale clamps and scales shared interaction metrics") {
   REQUIRE(selected_tab.y == Catch::Approx(dark.selection.green));
   REQUIRE(selected_tab.z == Catch::Approx(dark.selection.blue));
 
-  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Light, 0.5f);
-  REQUIRE(fancy_ui::CurrentUiScale() == Catch::Approx(0.75f));
-  REQUIRE(fancy_ui::Scale(32.0f) == Catch::Approx(24.0f));
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Light, EnvironmentAt(0.5f));
+  REQUIRE(fancy_ui::CurrentUiScale() == Catch::Approx(0.5f));
+  REQUIRE(fancy_ui::Scale(32.0f) == Catch::Approx(16.0f));
   ImGui::DestroyContext();
 }
 
@@ -164,31 +214,32 @@ TEST_CASE("layout metrics expose the normative shell and panel geometry") {
 
   REQUIRE(metrics.geometry.progress_height == 6.0f);
   REQUIRE(metrics.geometry.row_height == 32.0f);
-  REQUIRE(metrics.typography.body_font_size == 16.0f);
-  REQUIRE(metrics.typography.body_font_height == Catch::Approx(21.792f));
+  REQUIRE(metrics.typography.body_font_height == Catch::Approx(18.16f));
+  REQUIRE(metrics.typography.section_heading_font_height ==
+          Catch::Approx(20.43f));
   REQUIRE(metrics.explorer.tree_indent == 16.0f);
   REQUIRE(metrics.inspector.label_width == 112.0f);
   REQUIRE(metrics.inspector.stack_breakpoint == 288.0f);
   REQUIRE(metrics.menu.popup_width == 264.0f);
-  REQUIRE(metrics.menu.font_size == 18.0f);
   REQUIRE(metrics.settings.title_bar_height == 48.0f);
 }
 
-TEST_CASE("resolved layout metrics clamp scale and round once") {
-  const fancy_ui::LayoutMetrics minimum = fancy_ui::ResolveLayoutMetrics(0.5f);
+TEST_CASE("resolved layout metrics scale geometry once") {
+  const fancy_ui::LayoutMetrics minimum =
+      fancy_ui::ResolveLayoutMetrics(EnvironmentAt(0.5f));
   const fancy_ui::LayoutMetrics fractional =
-      fancy_ui::ResolveLayoutMetrics(1.25f);
-  const fancy_ui::LayoutMetrics maximum = fancy_ui::ResolveLayoutMetrics(3.0f);
+      fancy_ui::ResolveLayoutMetrics(EnvironmentAt(1.25f));
+  const fancy_ui::LayoutMetrics maximum =
+      fancy_ui::ResolveLayoutMetrics(EnvironmentAt(3.0f));
 
-  REQUIRE(minimum.shell.application_bar_height == 30.0f);
+  REQUIRE(minimum.shell.application_bar_height == 20.0f);
   REQUIRE(fractional.spacing.condensed == 1.0f);
   REQUIRE(fractional.geometry.focus_ring == 3.0f);
   REQUIRE(fractional.shell.explorer_width == 320.0f);
   REQUIRE(fractional.geometry.row_height == 40.0f);
-  REQUIRE(fractional.typography.body_font_size == 20.0f);
-  REQUIRE(fractional.typography.body_font_height == 27.0f);
+  REQUIRE(fractional.typography.body_font_height == Catch::Approx(22.7f));
   REQUIRE(fractional.explorer.tree_indent == 20.0f);
-  REQUIRE(maximum.shell.inspector_width == 640.0f);
+  REQUIRE(maximum.shell.inspector_width == 960.0f);
 }
 
 TEST_CASE("default progress bars flex and use the shared height") {
@@ -240,7 +291,7 @@ TEST_CASE("shared tooltips use eight scaled pixels without changing windows") {
   int width = 0;
   int height = 0;
   io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
-  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, 1.5f);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, EnvironmentAt(1.5f));
   const ImVec2 window_padding = ImGui::GetStyle().WindowPadding;
 
   ImGui::NewFrame();
@@ -496,7 +547,7 @@ TEST_CASE("logical control dimensions follow the configured UI scale") {
   int width = 0;
   int height = 0;
   io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
-  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, 2.0f);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, EnvironmentAt(2.0f));
 
   ImGui::NewFrame();
   ImGui::Begin("scaled-control");
@@ -836,7 +887,7 @@ TEST_CASE("sectioned hierarchy roots and children use contiguous 32 px rows") {
     int width = 0;
     int height = 0;
     io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
-    fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, scale);
+    fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, EnvironmentAt(scale));
 
     ImVec2 parent_minimum;
     ImVec2 parent_maximum;
@@ -1006,7 +1057,7 @@ TEST_CASE("color picker layouts fit their popup work area at the right edge") {
     int width = 0;
     int height = 0;
     io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
-    fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, scale);
+    fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark, EnvironmentAt(scale));
     io.AddMousePosEvent(1260.0f, 100.0f);
 
     fancy_ui::ColorPickerState picker;
@@ -1126,6 +1177,7 @@ TEST_CASE("UI icon manifest has unique size variants backed by SVG masters") {
 TEST_CASE("the complete source UI asset bundle loads and rasterizes") {
   const std::filesystem::path asset_root =
       std::filesystem::path(FANCY_UI_TEST_SOURCE_ROOT) / "assets" / "ui";
+  REQUIRE(std::filesystem::is_regular_file(asset_root / "fonts" / "OFL.txt"));
 
   for (const float scale : std::array{1.0f, 1.25f, 1.5f, 2.0f}) {
     ImGui::CreateContext();
@@ -1135,7 +1187,7 @@ TEST_CASE("the complete source UI asset bundle loads and rasterizes") {
     float control_height = 0.0f;
     {
       fancy_ui::steppenface::ApplicationUi ui;
-      report = ui.Initialize(asset_root, scale);
+      report = ui.Initialize(asset_root, EnvironmentAt(scale));
       const fancy_ui::LayoutMetrics metrics = fancy_ui::CurrentLayoutMetrics();
       effective_body_font_height = ImGui::GetIO().FontDefault->LegacySize;
       frame_height =
@@ -1151,7 +1203,7 @@ TEST_CASE("the complete source UI asset bundle loads and rasterizes") {
     REQUIRE(report.ok());
     REQUIRE_FALSE(report.used_fallback_font);
     REQUIRE(effective_body_font_height ==
-            std::round(16.0f * scale * 1362.0f / 1000.0f));
+            Catch::Approx((40.0f / 3.0f) * scale * 1362.0f / 1000.0f));
     REQUIRE(frame_height == Catch::Approx(control_height));
   }
 }

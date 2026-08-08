@@ -127,12 +127,13 @@ void EmptyState(const EmptyStateSpec &spec) {
 }
 
 InteractionResult ValueDisplay(const ValueDisplaySpec &spec) {
-  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  ImGui::PushFont(nullptr, metrics.typography.body_font_height);
   const std::string id = detail::Owned(spec.id);
   const std::string label = detail::Owned(spec.label);
   const std::string complete_value =
       spec.mixed ? std::string("Mixed") : detail::Owned(spec.value);
-  const float height = Scale(32.0f);
+  const float height = metrics.geometry.control_height;
 
   ImGui::PushID(id.c_str());
   ImGui::InvisibleButton("##value-display",

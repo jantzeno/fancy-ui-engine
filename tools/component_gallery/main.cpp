@@ -31,11 +31,22 @@ struct HostOptions {
   fancy_ui::gallery::GalleryState gallery;
   std::filesystem::path screenshot;
   std::string capture_state;
+  std::optional<float> display_scale_override;
+  std::optional<float> pixel_density_override;
   bool valid = true;
 };
 
 GLADloadproc SdlGlProcLoader() {
   return reinterpret_cast<GLADloadproc>(SDL_GL_GetProcAddress);
+}
+
+std::optional<float> ParsePositiveFloat(const char *text) {
+  char *end = nullptr;
+  const float value = std::strtof(text, &end);
+  if (end == text || *end != '\0' || !std::isfinite(value) || value <= 0.0f) {
+    return std::nullopt;
+  }
+  return value;
 }
 
 HostOptions ParseOptions(const int argc, char **argv) {
@@ -48,8 +59,21 @@ HostOptions ParseOptions(const int argc, char **argv) {
                                                : fancy_ui::ResolvedTheme::Dark;
       options.gallery.settings.system_theme = options.gallery.theme;
     } else if (argument == "--scale" && index + 1 < argc) {
-      options.gallery.scale =
-          std::clamp(std::strtof(argv[++index], nullptr), 0.75f, 2.0f);
+      const std::optional<float> scale = ParsePositiveFloat(argv[++index]);
+      if (!scale.has_value()) {
+        std::cerr << "Scale must be a positive finite number\n";
+        options.valid = false;
+      } else {
+        options.display_scale_override = *scale;
+      }
+    } else if (argument == "--pixel-density" && index + 1 < argc) {
+      const std::optional<float> density = ParsePositiveFloat(argv[++index]);
+      if (!density.has_value()) {
+        std::cerr << "Pixel density must be a positive finite number\n";
+        options.valid = false;
+      } else {
+        options.pixel_density_override = *density;
+      }
     } else if (argument == "--screenshot" && index + 1 < argc) {
       options.screenshot = argv[++index];
     } else if (argument == "--state" && index + 1 < argc) {
@@ -74,6 +98,10 @@ HostOptions ParseOptions(const int argc, char **argv) {
     std::cerr << "Unknown gallery capture state: " << options.capture_state
               << '\n';
     options.valid = false;
+  }
+  if (options.display_scale_override.has_value()) {
+    options.gallery.scale = *options.display_scale_override /
+                            options.pixel_density_override.value_or(1.0f);
   }
   return options;
 }
@@ -120,11 +148,10 @@ int main(const int argc, char **argv) {
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-  SDL_WindowFlags window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+  SDL_WindowFlags window_flags =
+      SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
   if (!options.screenshot.empty()) {
     window_flags |= SDL_WINDOW_HIDDEN;
-  } else {
-    window_flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
   }
   int window_width = 1280;
   int window_height = 1024;
@@ -142,6 +169,25 @@ int main(const int argc, char **argv) {
   if (window == nullptr) {
     SDL_Quit();
     return Fail("Window creation failed");
+  }
+  float display_scale = options.display_scale_override.value_or(
+      SDL_GetWindowDisplayScale(window));
+  float pixel_density = options.pixel_density_override.value_or(
+      options.display_scale_override.has_value()
+          ? 1.0f
+          : SDL_GetWindowPixelDensity(window));
+  fancy_ui::UiEnvironment environment =
+      fancy_ui::DetectDesktopUiEnvironment(display_scale, pixel_density);
+  options.gallery.scale = environment.layout_scale;
+  if (!options.screenshot.empty()) {
+    const fancy_ui::gallery::GalleryCaptureExtent extent =
+        fancy_ui::gallery::GalleryScreenshotLogicalExtent(
+            options.gallery.active_tab);
+    SDL_SetWindowSize(
+        window,
+        static_cast<int>(std::lround(extent.width * environment.layout_scale)),
+        static_cast<int>(
+            std::lround(extent.height * environment.layout_scale)));
   }
   SDL_GLContext gl_context = SDL_GL_CreateContext(window);
   if (gl_context == nullptr || !SDL_GL_MakeCurrent(window, gl_context)) {
@@ -162,9 +208,8 @@ int main(const int argc, char **argv) {
   ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   ImGui::GetIO().IniFilename = nullptr;
   fancy_ui::detail::UiAssetAtlas assets;
-  const fancy_ui::steppenface::AssetLoadReport report =
-      assets.Load(std::filesystem::path(FANCY_UI_GALLERY_ASSET_ROOT),
-                  options.gallery.scale);
+  const fancy_ui::steppenface::AssetLoadReport report = assets.Load(
+      std::filesystem::path(FANCY_UI_GALLERY_ASSET_ROOT), environment);
   for (const std::string &message : report.messages) {
     std::cerr << message << '\n';
   }
@@ -187,6 +232,21 @@ int main(const int argc, char **argv) {
       if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
           event.window.windowID == SDL_GetWindowID(window)) {
         running = false;
+      }
+      if (event.type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED &&
+          event.window.windowID == SDL_GetWindowID(window) &&
+          !options.display_scale_override.has_value()) {
+        fancy_ui::UpdateDisplayScales(environment,
+                                      SDL_GetWindowDisplayScale(window),
+                                      options.pixel_density_override.value_or(
+                                          SDL_GetWindowPixelDensity(window)));
+        options.gallery.scale = environment.layout_scale;
+        const fancy_ui::steppenface::AssetLoadReport update_report =
+            assets.Load(std::filesystem::path(FANCY_UI_GALLERY_ASSET_ROOT),
+                        environment);
+        for (const std::string &message : update_report.messages) {
+          std::cerr << message << '\n';
+        }
       }
     }
     if (!running) {

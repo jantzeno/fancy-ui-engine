@@ -154,8 +154,9 @@ SelectResult Select(const SelectSpec &spec) {
       const SelectOption &option = spec.options[index];
       ImGui::PushID(detail::Owned(option.id).c_str());
       ImGui::BeginDisabled(!option.enabled);
-      if (ImGui::Selectable(detail::Owned(option.label).c_str(),
-                            index == selected, 0, ImVec2(0.0f, Scale(24.0f))) &&
+      if (ImGui::Selectable(
+              detail::Owned(option.label).c_str(), index == selected, 0,
+              ImVec2(0.0f, CurrentLayoutMetrics().geometry.compact_target)) &&
           option.enabled) {
         changed = true;
         result_index = index;

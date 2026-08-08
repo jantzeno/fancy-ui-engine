@@ -29,7 +29,8 @@ public:
   UiAssetAtlas &operator=(UiAssetAtlas &&) noexcept;
 
   [[nodiscard]] steppenface::AssetLoadReport
-  Load(const std::filesystem::path &asset_root, float ui_scale);
+  Load(const std::filesystem::path &asset_root,
+       const UiEnvironment &environment);
   void InstallPendingIcons();
 
   [[nodiscard]] bool DrawIcon(std::string_view semantic_id,
@@ -40,10 +41,10 @@ public:
   Painter(std::string_view semantic_id,
           steppenface::UiIconSize size = steppenface::UiIconSize::Small16);
 
-  [[nodiscard]] ImFont *regular_font() const;
-  [[nodiscard]] ImFont *bold_font() const;
+  [[nodiscard]] ImFont *body_font() const;
+  [[nodiscard]] ImFont *heading_font() const;
   [[nodiscard]] ImFont *mono_font() const;
-  [[nodiscard]] float ui_scale() const;
+  [[nodiscard]] const UiEnvironment &ui_environment() const;
 
 private:
   class Impl;

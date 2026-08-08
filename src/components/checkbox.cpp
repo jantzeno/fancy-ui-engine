@@ -20,7 +20,8 @@ ImVec4 ToImVec4(const ColorRgba color) {
 } // namespace
 
 CheckboxResult Checkbox(const CheckboxSpec &spec) {
-  ImGui::PushFont(nullptr, CurrentLayoutMetrics().typography.body_font_height);
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  ImGui::PushFont(nullptr, metrics.typography.body_font_height);
   const std::string id = detail::Owned(spec.id);
   const std::string label = detail::Owned(spec.label);
   const bool disabled = !spec.availability.enabled || spec.availability.busy;
@@ -28,7 +29,7 @@ CheckboxResult Checkbox(const CheckboxSpec &spec) {
   const float box_size = Scale(16.0f);
   const float icon_size = Scale(16.0f);
   const float gap = Scale(8.0f);
-  const float target_height = Scale(24.0f);
+  const float target_height = metrics.geometry.compact_target;
   const ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
   const bool has_state_icon =
       static_cast<bool>(spec.on_icon) || static_cast<bool>(spec.off_icon);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "fancy_ui/ui_environment.hpp"
+
 #include <cstdint>
 #include <span>
 #include <string>
@@ -26,11 +28,17 @@ struct UiIconAssetSpec {
   std::string_view filename;
 };
 
+struct UiFontAssetSpec {
+  std::string_view filename;
+  UiFontWeight weight = UiFontWeight::Regular;
+  bool monospace = false;
+};
+
 [[nodiscard]] constexpr int LogicalPixels(const UiIconSize size) {
   return static_cast<int>(size);
 }
 
-[[nodiscard]] std::span<const std::string_view> RequiredUiFontFiles();
+[[nodiscard]] std::span<const UiFontAssetSpec> RequiredUiFontAssets();
 [[nodiscard]] std::span<const UiIconAssetSpec> UiIconAssets();
 
 } // namespace fancy_ui::steppenface

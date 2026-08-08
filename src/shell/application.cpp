@@ -24,7 +24,6 @@ void DrawRegion(const RegionSpec &region, const ImVec2 size) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   }
   if (region.menu_bar) {
-    ImGui::PushFont(ImGui::GetFont(), metrics.menu.font_size);
     const float vertical_padding = std::max(
         0.0f,
         (metrics.shell.application_bar_height - ImGui::GetFontSize()) * 0.5f);
@@ -41,7 +40,6 @@ void DrawRegion(const RegionSpec &region, const ImVec2 size) {
   ImGui::EndChild();
   if (region.menu_bar) {
     ImGui::PopStyleVar(2);
-    ImGui::PopFont();
   }
   if (region.zero_padding) {
     ImGui::PopStyleVar();
