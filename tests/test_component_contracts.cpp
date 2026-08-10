@@ -160,6 +160,23 @@ TEST_CASE("operation and destructive control colors meet contrast targets") {
   ImGui::DestroyContext();
 }
 
+TEST_CASE("enabled fields use the strong border contrast role") {
+  ImGui::CreateContext();
+  for (const fancy_ui::ResolvedTheme theme :
+       {fancy_ui::ResolvedTheme::Light, fancy_ui::ResolvedTheme::Dark}) {
+    fancy_ui::ApplyTheme(theme);
+    const fancy_ui::SemanticPalette palette = fancy_ui::PaletteFor(theme);
+    fancy_ui::detail::PushFieldControlState({}, {});
+    const ImVec4 border = ImGui::GetStyleColorVec4(ImGuiCol_Border);
+    REQUIRE(border.x == Catch::Approx(palette.border_strong.red));
+    REQUIRE(border.y == Catch::Approx(palette.border_strong.green));
+    REQUIRE(border.z == Catch::Approx(palette.border_strong.blue));
+    REQUIRE(ContrastRatio(palette.border_strong, palette.control) >= 3.0f);
+    fancy_ui::detail::PopFieldControlState({}, {});
+  }
+  ImGui::DestroyContext();
+}
+
 TEST_CASE("theme scale supports the platform scale without an upper clamp") {
   ImGui::CreateContext();
 
@@ -242,6 +259,55 @@ TEST_CASE("resolved layout metrics scale geometry once") {
   REQUIRE(maximum.shell.inspector_width == 960.0f);
 }
 
+TEST_CASE("shared spatial and resize controls clamp prepared values") {
+  REQUIRE(fancy_ui::ClampResizeValue(80.0f, 160.0f, 240.0f) == 160.0f);
+  REQUIRE(fancy_ui::ResizeValueAfterCommand(
+              160.0f, 160.0f, 240.0f, 8.0f,
+              fancy_ui::ResizeCommand::Increase) == 168.0f);
+  REQUIRE(fancy_ui::ResizeValueAfterCommand(200.0f, 240.0f, 160.0f, 8.0f,
+                                            fancy_ui::ResizeCommand::Maximum) ==
+          240.0f);
+
+  REQUIRE(fancy_ui::CanonicalGrainAxisAngle(-15.0) == 165.0);
+  REQUIRE(fancy_ui::CanonicalGrainAxisAngle(180.0) == 0.0);
+  REQUIRE(fancy_ui::ClampGrainDisplayAngle(-15.0) == 0.0);
+  REQUIRE(fancy_ui::ClampGrainDisplayAngle(180.0) == 180.0);
+  REQUIRE(fancy_ui::SnapGrainAngle(44.0, fancy_ui::GrainSnapZone::Labels) ==
+          45.0);
+  REQUIRE(fancy_ui::SnapGrainAngle(178.0, fancy_ui::GrainSnapZone::Spokes) ==
+          180.0);
+
+  REQUIRE(fancy_ui::StatusZoomPercentFromSliderPosition(0.0f) ==
+          fancy_ui::kStatusZoomMinimumPercent);
+  REQUIRE(fancy_ui::StatusZoomPercentFromSliderPosition(100.0f) ==
+          fancy_ui::kStatusZoomMaximumPercent);
+  for (const float percent :
+       std::array{10.0f, 25.0f, 100.0f, 240.0f, 800.0f, 1600.0f}) {
+    const float position =
+        fancy_ui::StatusZoomSliderPositionFromPercent(percent);
+    REQUIRE(fancy_ui::StatusZoomPercentFromSliderPosition(position) ==
+            Catch::Approx(percent).margin(std::max(2.0f, percent * 0.03f)));
+  }
+}
+
+TEST_CASE("concave overlay hatching stays inside the polygon") {
+  static constexpr std::array polygon{
+      fancy_ui::Vec2{0.0f, 0.0f}, fancy_ui::Vec2{8.0f, 0.0f},
+      fancy_ui::Vec2{8.0f, 3.0f}, fancy_ui::Vec2{3.0f, 3.0f},
+      fancy_ui::Vec2{3.0f, 8.0f}, fancy_ui::Vec2{0.0f, 8.0f},
+  };
+  const auto segments = fancy_ui::detail::HatchSegments(polygon, 1.0f);
+
+  REQUIRE_FALSE(segments.empty());
+  for (const fancy_ui::detail::HatchSegment &segment : segments) {
+    const fancy_ui::Vec2 midpoint{
+        .x = (segment.start.x + segment.end.x) * 0.5f,
+        .y = (segment.start.y + segment.end.y) * 0.5f,
+    };
+    REQUIRE_FALSE((midpoint.x > 3.0f && midpoint.y > 3.0f));
+  }
+}
+
 TEST_CASE("default progress bars flex and use the shared height") {
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
@@ -307,6 +373,83 @@ TEST_CASE("shared tooltips use eight scaled pixels without changing windows") {
   REQUIRE(tooltip->WindowPadding.x == Catch::Approx(12.0f));
   REQUIRE(tooltip->WindowPadding.y == Catch::Approx(12.0f));
   ImGui::DestroyContext();
+}
+
+TEST_CASE("overflow text preserves complete UTF-8 code points") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(320.0f, 240.0f);
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int texture_width = 0;
+  int texture_height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &texture_width, &texture_height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+  ImGui::NewFrame();
+
+  const std::string empty = fancy_ui::detail::EllipsizeText("value", 0.0f);
+  const float width = ImGui::CalcTextSize("ééé").x - 0.1f;
+  const std::string truncated = fancy_ui::detail::EllipsizeText("ééé", width);
+
+  ImGui::EndFrame();
+  ImGui::DestroyContext();
+
+  REQUIRE(empty.empty());
+  REQUIRE(truncated != "ééé");
+  REQUIRE((truncated.empty() || truncated.ends_with("...")));
+  const std::string prefix = truncated.empty()
+                                 ? std::string{}
+                                 : truncated.substr(0, truncated.size() - 3);
+  REQUIRE((prefix.empty() || prefix == "é" || prefix == "éé"));
+}
+
+TEST_CASE(
+    "requested tab panels and multiselect popups draw deterministically") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(320.0f, 240.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  static constexpr std::array tabs{
+      fancy_ui::ChoiceSpec{.id = "canvas", .label = "Canvas"},
+      fancy_ui::ChoiceSpec{.id = "model", .label = "3D"},
+  };
+  std::size_t drawn_panel = tabs.size();
+  ImGui::NewFrame();
+  ImGui::Begin("tabs-contract");
+  const fancy_ui::TabSetResult result = fancy_ui::TabSet({
+      .id = "workspace",
+      .tabs = tabs,
+      .selected_index = 1,
+      .draw_panel =
+          [&drawn_panel](const std::size_t index) { drawn_panel = index; },
+  });
+  static constexpr std::array multiselect_options{
+      fancy_ui::CheckedMultiselectOption{.id = "guides",
+                                         .label = "Guides",
+                                         .state = fancy_ui::ToggleState::On},
+  };
+  const fancy_ui::CheckedMultiselectResult multiselect =
+      fancy_ui::CheckedMultiselect({
+          .id = "snapping",
+          .label = "Snapping",
+          .summary = "1 of 1",
+          .options = multiselect_options,
+          .request_open = true,
+      });
+  ImGui::End();
+  ImGui::Render();
+
+  ImGui::DestroyContext();
+  REQUIRE(result.selected_index == 1);
+  REQUIRE(drawn_panel == 1);
+  REQUIRE(multiselect.popup_open);
 }
 
 TEST_CASE("compact buttons center labels without leaking frame padding") {

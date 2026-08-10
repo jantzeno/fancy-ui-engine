@@ -82,11 +82,11 @@ float DrawVerticalSplitter(const char *id, const float height,
   const ColorRgba color =
       interaction.active || interaction.hovered || keyboard_focused
           ? palette.focus
-          : palette.border;
+          : palette.border_strong;
   const float line_width =
       interaction.active || interaction.hovered || keyboard_focused
           ? metrics.geometry.focus_ring
-          : metrics.geometry.border;
+          : std::max(metrics.geometry.border, Scale(2.0f));
   const float center_x = std::floor((minimum.x + maximum.x) * 0.5f);
   ImGui::GetWindowDrawList()->AddLine(
       ImVec2(center_x, minimum.y), ImVec2(center_x, maximum.y),

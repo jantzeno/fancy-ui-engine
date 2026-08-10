@@ -6,8 +6,10 @@
 #include <imgui.h>
 
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace fancy_ui::detail {
 
@@ -75,7 +77,13 @@ struct FieldLayout {
   bool cell_padding_pushed = false;
 };
 
+struct HatchSegment {
+  Vec2 start;
+  Vec2 end;
+};
+
 [[nodiscard]] std::string Owned(std::string_view value);
+[[nodiscard]] std::string EllipsizeText(std::string_view text, float width);
 void ShowTooltip(std::string_view text);
 void DrawSecondaryText(std::string_view text);
 void DrawSecondaryTextWrapped(std::string_view text);
@@ -92,6 +100,7 @@ void BeginAvailability(const Availability &availability);
 void EndAvailability(const Availability &availability,
                      std::string_view tooltip);
 [[nodiscard]] InteractionResult CaptureInteraction();
+[[nodiscard]] bool CancelledThisFrame(const InteractionResult &interaction);
 [[nodiscard]] std::optional<InteractionPreview> CurrentInteractionPreview();
 [[nodiscard]] ControlColors ResolveControlColors(const ControlState &state);
 void DrawFocusRing(const InteractionResult &interaction,
@@ -108,5 +117,7 @@ DrawSliderInt(std::string_view id, int &value, int minimum, int maximum,
 void DrawValidationHint(const Validation &validation);
 [[nodiscard]] ImVec4 StatusColor(SemanticStatus status);
 [[nodiscard]] ImVec4 StatusBackground(SemanticStatus status);
+[[nodiscard]] std::vector<HatchSegment>
+HatchSegments(std::span<const Vec2> polygon, float spacing);
 
 } // namespace fancy_ui::detail

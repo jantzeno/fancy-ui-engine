@@ -84,7 +84,7 @@ to the tab that opened the preview. An unclaimed Escape does the same; an open
 menu, popup, text edit, or active control consumes the first Escape instead.
 
 Shell screenshots use the canonical 1280 × 720 logical canvas, scaled by
-`--scale`. Components use 1280 × 2240, Settings and Operations use 1280 ×
+`--scale`. Components use 1280 × 2760, Settings and Operations use 1280 ×
 1440, and Status uses 1280 × 1024.
 
 The Settings page opens one modeless 880 × 560 System Settings window with

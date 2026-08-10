@@ -44,6 +44,7 @@ public:
   [[nodiscard]] ImFont *body_font() const;
   [[nodiscard]] ImFont *heading_font() const;
   [[nodiscard]] ImFont *mono_font() const;
+  [[nodiscard]] ImFont *font(UiFontWeight weight) const;
   [[nodiscard]] const UiEnvironment &ui_environment() const;
 
 private:

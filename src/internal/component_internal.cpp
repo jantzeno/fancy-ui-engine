@@ -155,7 +155,7 @@ void DrawSliderPresentation(const float normalized_value,
   const ImVec2 track_maximum(geometry.track_maximum_x,
                              geometry.track_y + metrics.spacing.space02 * 0.5f);
   draw_list->AddRectFilled(track_minimum, track_maximum,
-                           ImGui::GetColorU32(ToImVec4(palette.border)),
+                           ImGui::GetColorU32(ToImVec4(palette.surface_raised)),
                            track_radius);
 
   const float thumb_x = geometry.track_minimum_x +
@@ -165,6 +165,10 @@ void DrawSliderPresentation(const float normalized_value,
     draw_list->AddRectFilled(track_minimum, ImVec2(thumb_x, track_maximum.y),
                              ImGui::GetColorU32(grab_color), track_radius);
   }
+  draw_list->AddRect(track_minimum, track_maximum,
+                     ImGui::GetColorU32(ToImVec4(palette.border_strong)),
+                     track_radius, ImDrawFlags_RoundCornersAll,
+                     metrics.geometry.border);
   const ImVec2 thumb_minimum(thumb_x - geometry.thumb_width * 0.5f,
                              geometry.track_y - geometry.thumb_height * 0.5f);
   const ImVec2 thumb_maximum(thumb_x + geometry.thumb_width * 0.5f,
@@ -211,6 +215,31 @@ ScopedFieldLayoutPreview::~ScopedFieldLayoutPreview() {
 
 std::string Owned(const std::string_view value) {
   return std::string(value.data(), value.size());
+}
+
+std::string EllipsizeText(const std::string_view text, const float width) {
+  const std::string owned = Owned(text);
+  if (width <= 0.0f) {
+    return {};
+  }
+  if (ImGui::CalcTextSize(owned.c_str()).x <= width) {
+    return owned;
+  }
+  constexpr std::string_view suffix = "...";
+  const float suffix_width = ImGui::CalcTextSize(suffix.data()).x;
+  std::size_t length = owned.size();
+  while (length > 0) {
+    --length;
+    while (length > 0 &&
+           (static_cast<unsigned char>(owned[length]) & 0xc0U) == 0x80U) {
+      --length;
+    }
+    const std::string candidate = owned.substr(0, length);
+    if (ImGui::CalcTextSize(candidate.c_str()).x + suffix_width <= width) {
+      return candidate + std::string(suffix);
+    }
+  }
+  return width >= suffix_width ? std::string(suffix) : std::string{};
 }
 
 void ShowTooltip(const std::string_view text) {
@@ -304,6 +333,8 @@ void PushFieldControlState(const Availability &availability,
                           ToImVec4(palette.control_disabled_border));
   } else if (validation.invalid) {
     ImGui::PushStyleColor(ImGuiCol_Border, ToImVec4(palette.failure));
+  } else {
+    ImGui::PushStyleColor(ImGuiCol_Border, ToImVec4(palette.border_strong));
   }
 }
 
@@ -311,7 +342,7 @@ void PopFieldControlState(const Availability &availability,
                           const Validation &validation) {
   if (!availability.enabled || availability.busy) {
     ImGui::PopStyleColor(3);
-  } else if (validation.invalid) {
+  } else {
     ImGui::PopStyleColor();
   }
 }
@@ -357,6 +388,11 @@ InteractionResult CaptureInteraction() {
       .focused = ImGui::IsItemFocused(),
       .active = ImGui::IsItemActive(),
   };
+}
+
+bool CancelledThisFrame(const InteractionResult &interaction) {
+  return (interaction.active || interaction.focused) &&
+         ImGui::IsKeyPressed(ImGuiKey_Escape, false);
 }
 
 std::optional<InteractionPreview> CurrentInteractionPreview() {

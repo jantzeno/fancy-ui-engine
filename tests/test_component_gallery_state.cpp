@@ -61,7 +61,7 @@ TEST_CASE("gallery screenshots use state-sheet-specific logical extents") {
       GalleryScreenshotLogicalExtent(GalleryTab::Status);
 
   REQUIRE(components.width == 1280);
-  REQUIRE(components.height == 2240);
+  REQUIRE(components.height == 2760);
   REQUIRE(shell.width == 1280);
   REQUIRE(shell.height == 720);
   REQUIRE(settings.width == 1280);
@@ -86,6 +86,37 @@ TEST_CASE("gallery capture slugs seed representative transient states") {
   REQUIRE(state.active_tab == GalleryTab::Components);
   REQUIRE(state.hierarchy_cards[0].action_row == 1);
   REQUIRE(state.hierarchy_cards[0].request_actions);
+
+  REQUIRE(SeedGalleryCaptureState(state, "components-context-menu"));
+  REQUIRE(state.component_capture == ComponentCaptureVariant::ContextMenuOpen);
+  REQUIRE(SeedGalleryCaptureState(state, "components-status-zoom"));
+  REQUIRE(state.component_capture == ComponentCaptureVariant::StatusZoomOpen);
+  REQUIRE(SeedGalleryCaptureState(state, "components-renaming"));
+  REQUIRE(state.renamable_select.renaming);
+  REQUIRE(state.renamable_select.draft == "Draft");
+  REQUIRE(SeedGalleryCaptureState(state, "components-multiselect"));
+  REQUIRE(state.component_capture == ComponentCaptureVariant::MultiselectOpen);
+  REQUIRE(SeedGalleryCaptureState(state, "components-modeless-window"));
+  REQUIRE(state.component_capture ==
+          ComponentCaptureVariant::ModelessWindowOpen);
+  REQUIRE(SeedGalleryCaptureState(state, "components-grain-bed"));
+  REQUIRE(state.component_capture == ComponentCaptureVariant::GrainBed);
+  REQUIRE(state.grain_degrees == 90.0);
+  REQUIRE(SeedGalleryCaptureState(state, "components-grain-part"));
+  REQUIRE(state.component_capture == ComponentCaptureVariant::GrainPart);
+  REQUIRE(state.grain_degrees == 0.0);
+  REQUIRE(SeedGalleryCaptureState(state, "components-grain-paired"));
+  REQUIRE(state.component_capture == ComponentCaptureVariant::GrainPaired);
+  REQUIRE(state.grain_degrees == 35.0);
+  REQUIRE(SeedGalleryCaptureState(state, "components-grain-dragging"));
+  REQUIRE(state.component_capture == ComponentCaptureVariant::GrainDragging);
+  REQUIRE(state.grain_degrees == 35.0);
+  REQUIRE(state.grain_gizmo.pointer_captured);
+  REQUIRE(state.grain_gizmo.draft_degrees == 45.0);
+  REQUIRE(SeedGalleryCaptureState(state, "components-grain-locked"));
+  REQUIRE(state.component_capture == ComponentCaptureVariant::GrainLocked);
+  REQUIRE(state.grain_degrees == 35.0);
+  REQUIRE_FALSE(state.grain_gizmo.editing);
   REQUIRE_FALSE(SeedGalleryCaptureState(state, "unknown"));
 }
 
@@ -109,19 +140,6 @@ TEST_CASE("operation phases choose canonical default tray disclosure") {
   REQUIRE(states[7].tray_height == kOperationTrayMaximumHeight);
 }
 
-TEST_CASE("operation tray resizing clamps and follows keyboard steps") {
-  REQUIRE(ClampOperationTrayHeight(80.0f) == kOperationTrayMinimumHeight);
-  REQUIRE(ClampOperationTrayHeight(999.0f) == kOperationTrayMaximumHeight);
-  REQUIRE(OperationTrayHeightAfterCommand(
-              160.0f, TrayResizeCommand::Increase) == 168.0f);
-  REQUIRE(OperationTrayHeightAfterCommand(
-              168.0f, TrayResizeCommand::Decrease) == 160.0f);
-  REQUIRE(OperationTrayHeightAfterCommand(200.0f, TrayResizeCommand::Minimum) ==
-          kOperationTrayMinimumHeight);
-  REQUIRE(OperationTrayHeightAfterCommand(200.0f, TrayResizeCommand::Maximum) ==
-          kOperationTrayMaximumHeight);
-}
-
 TEST_CASE("operation strip height is stable across tray disclosure") {
   const OperationLayout collapsed =
       ResolveOperationLayout(false, true, 200.0f, false);
@@ -138,24 +156,6 @@ TEST_CASE("operation strip height is stable across tray disclosure") {
   REQUIRE(without_details.tray_height == 0.0f);
   REQUIRE(with_feedback.content_height - collapsed.content_height ==
           kOperationFeedbackHeight);
-}
-
-TEST_CASE("status zoom uses a logarithmic ten to sixteen hundred scale") {
-  REQUIRE(StatusZoomPercentFromSliderPosition(0.0f) ==
-          kStatusZoomMinimumPercent);
-  REQUIRE(StatusZoomPercentFromSliderPosition(100.0f) ==
-          kStatusZoomMaximumPercent);
-  REQUIRE(StatusZoomSliderPositionFromPercent(-50.0f) == Catch::Approx(0.0f));
-  REQUIRE(StatusZoomSliderPositionFromPercent(5000.0f) ==
-          Catch::Approx(100.0f));
-
-  for (const float percent :
-       std::array{10.0f, 25.0f, 50.0f, 100.0f, 240.0f, 800.0f, 1600.0f}) {
-    const float position = StatusZoomSliderPositionFromPercent(percent);
-    const float round_trip = StatusZoomPercentFromSliderPosition(position);
-    REQUIRE(round_trip ==
-            Catch::Approx(percent).margin(std::max(2.0f, percent * 0.03f)));
-  }
 }
 
 TEST_CASE("application shell gallery starts with both side panels visible") {

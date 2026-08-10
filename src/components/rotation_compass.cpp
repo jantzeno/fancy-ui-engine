@@ -121,20 +121,27 @@ RotationCompassResult RotationCompass(const RotationCompassSpec &spec) {
                                     kRotationCountMaximum, false, false,
                                     ImGuiSliderFlags_AlwaysClamp);
     interaction = detail::CaptureInteraction();
+    const ImVec2 slider_minimum = ImGui::GetItemRectMin();
+    const ImVec2 slider_maximum = ImGui::GetItemRectMax();
     committed = ImGui::IsItemDeactivatedAfterEdit();
     detail::DrawFocusRing(interaction, true);
     detail::EndAvailability(spec.availability, spec.tooltip);
-    ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(palette.text_secondary));
-    const float editor_start_x = ImGui::GetCursorPosX();
-    ImGui::TextUnformatted("1");
-    const std::string maximum = std::to_string(kRotationCountMaximum);
-    ImGui::SameLine();
-    ImGui::SetCursorPosX(editor_start_x + editor_width -
-                         ImGui::CalcTextSize(maximum.c_str()).x);
-    ImGui::TextUnformatted(maximum.c_str());
-    ImGui::PopStyleColor();
 
     ImDrawList *draw_list = ImGui::GetWindowDrawList();
+    const std::string minimum_label = "1";
+    const std::string maximum_label = std::to_string(kRotationCountMaximum);
+    const ImVec2 maximum_label_size =
+        ImGui::CalcTextSize(maximum_label.c_str());
+    const float label_y = std::clamp(
+        slider_maximum.y + Scale(2.0f), slider_minimum.y,
+        child_minimum.y + child_size.y - padding - maximum_label_size.y);
+    const ImU32 label_color = ImGui::GetColorU32(
+        ToImVec4(disabled ? palette.text_disabled : palette.text_secondary));
+    draw_list->AddText(ImVec2(slider_minimum.x, label_y), label_color,
+                       minimum_label.c_str());
+    draw_list->AddText(
+        ImVec2(slider_minimum.x + editor_width - maximum_label_size.x, label_y),
+        label_color, maximum_label.c_str());
     draw_list->AddCircle(center, radius,
                          ImGui::GetColorU32(ToImVec4(palette.border_strong)),
                          48, Scale(1.0f));

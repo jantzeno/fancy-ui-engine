@@ -49,6 +49,7 @@ WorkspaceSelectionGeometry(const WorkspaceKind workspace) {
   int width = 0;
   int height = 0;
   io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
 
   ApplicationUi ui;
   ApplicationView view;
@@ -145,11 +146,9 @@ ToolbarSegmentGeometry(const std::size_t selected_index) {
   int width = 0;
   int height = 0;
   io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
 
-  ApplicationUi ui;
-  ApplicationView view;
-  view.application_bar.document_dirty = false;
-  view.context_toolbar.items.emplace_back(ToolbarSegmentedView{
+  const ToolbarSegmentedView segmented{
       .id = {.value = "test.segmented"},
       .choices =
           {
@@ -164,11 +163,21 @@ ToolbarSegmentGeometry(const std::size_t selected_index) {
                   .selected = selected_index == 1,
               },
           },
-  });
+  };
+  fancy_ui::detail::UiAssetAtlas assets;
+  fancy_ui::detail::ApplicationChrome chrome(assets);
 
   for (int frame = 0; frame < 2; ++frame) {
     ImGui::NewFrame();
-    (void)ui.Draw(view, {});
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(320.0f, 120.0f), ImGuiCond_Always);
+    ImGui::Begin("segmented-geometry", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoSavedSettings |
+                     ImGuiWindowFlags_NoBackground);
+    ImGui::SetCursorPos(ImVec2(40.0f, 44.0f));
+    chrome.DrawToolbarSegmented(segmented, {}, {}, 160.0f);
+    ImGui::End();
     ImGui::Render();
   }
 
@@ -848,7 +857,12 @@ TEST_CASE("toolbar segmented controls share connected mirrored geometry") {
 
   CAPTURE(left.selection.size(), left.underline.size(), left.border.size());
   REQUIRE_FALSE(left.selection.empty());
-  REQUIRE(left.selection == right.selection);
+  REQUIRE(left.selection.size() == right.selection.size());
+  for (std::size_t index = 0; index < left.selection.size(); ++index) {
+    CAPTURE(index, left.selection[index].first, left.selection[index].second,
+            right.selection[index].first, right.selection[index].second);
+    REQUIRE(left.selection[index] == right.selection[index]);
+  }
   REQUIRE_FALSE(left.underline.empty());
   REQUIRE(left.underline == right.underline);
   REQUIRE_FALSE(left.border.empty());

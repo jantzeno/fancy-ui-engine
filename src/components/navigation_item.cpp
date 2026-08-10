@@ -1,4 +1,4 @@
-#include "fancy_ui/components/navigation.hpp"
+#include "fancy_ui/components/navigation_item.hpp"
 
 #include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/theme.hpp"

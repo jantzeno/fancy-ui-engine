@@ -1,4 +1,4 @@
-#include "fancy_ui/components/spatial.hpp"
+#include "fancy_ui/components/spatial_control.hpp"
 
 #include "fancy_ui/components/button.hpp"
 

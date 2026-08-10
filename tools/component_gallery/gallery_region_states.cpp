@@ -552,63 +552,19 @@ void DrawOperationStrip(detail::UiAssetAtlas &assets,
 }
 
 void DrawTrayResizeHandle(OperationPresentationState &state) {
-  const float handle_height = Scale(8.0f);
-  const float handle_width = ImGui::GetContentRegionAvail().x;
-  ImGui::InvisibleButton("##tray-resize", ImVec2(handle_width, handle_height),
-                         ImGuiButtonFlags_EnableNav);
-  const InteractionResult interaction = detail::CaptureInteraction();
-  const ImVec2 minimum = ImGui::GetItemRectMin();
-  const ImVec2 maximum = ImGui::GetItemRectMax();
-  if (ImGui::IsItemActivated()) {
-    state.resizing = true;
-    state.resize_start_mouse_y = ImGui::GetIO().MousePos.y;
-    state.resize_start_height = state.tray_height;
-  }
-  if (ImGui::IsItemActive() && state.resizing &&
-      ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-    const float delta =
-        (state.resize_start_mouse_y - ImGui::GetIO().MousePos.y) /
-        CurrentUiScale();
-    state.tray_height =
-        ClampOperationTrayHeight(state.resize_start_height + delta);
-  }
-  if (ImGui::IsItemDeactivated()) {
-    state.resizing = false;
-  }
-  if (interaction.hovered &&
-      ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-    state.tray_height = kOperationTrayDefaultHeight;
-  }
-  if (interaction.focused) {
-    if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
-      state.tray_height = OperationTrayHeightAfterCommand(
-          state.tray_height, TrayResizeCommand::Increase);
-    } else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
-      state.tray_height = OperationTrayHeightAfterCommand(
-          state.tray_height, TrayResizeCommand::Decrease);
-    } else if (ImGui::IsKeyPressed(ImGuiKey_Home)) {
-      state.tray_height = OperationTrayHeightAfterCommand(
-          state.tray_height, TrayResizeCommand::Minimum);
-    } else if (ImGui::IsKeyPressed(ImGuiKey_End)) {
-      state.tray_height = OperationTrayHeightAfterCommand(
-          state.tray_height, TrayResizeCommand::Maximum);
-    }
-  }
-  ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  const ColorRgba line_color = interaction.hovered || interaction.focused
-                                   ? CurrentPalette().focus
-                                   : CurrentPalette().border_strong;
-  const float line_width = Scale(48.0f);
-  const float line_y = minimum.y + Scale(3.0f);
-  draw_list->AddRectFilled(
-      ImVec2((minimum.x + maximum.x - line_width) * 0.5f, line_y),
-      ImVec2((minimum.x + maximum.x + line_width) * 0.5f, line_y + Scale(2.0f)),
-      ImGui::GetColorU32(ToImVec4(line_color)), Scale(1.0f));
-  detail::DrawFocusRing(interaction);
-  if (interaction.hovered ||
-      (interaction.focused && ImGui::GetIO().NavVisible)) {
-    detail::ShowTooltip(
-        "Drag or use Up and Down arrows to resize; double-click to reset");
+  const ResizeHandleResult result = ResizeHandle({
+      .id = "tray-resize",
+      .value = state.tray_height,
+      .minimum = kOperationTrayMinimumHeight,
+      .maximum = kOperationTrayMaximumHeight,
+      .keyboard_step = 8.0f,
+      .reset_value = kOperationTrayDefaultHeight,
+      .direction = ResizeDirection::Vertical,
+      .tooltip =
+          "Drag or use Up and Down arrows to resize; double-click to reset",
+  });
+  if (result.changed) {
+    state.tray_height = result.value;
   }
 }
 
@@ -1015,12 +971,14 @@ void DrawZoomPanel(const StatusSample &sample,
     detail::DrawSecondaryText("Zoom · 10–1600%");
     ImGui::SameLine();
     ImGui::Text("%.0f%%", zoom.percent);
-    float slider_position = StatusZoomSliderPositionFromPercent(zoom.percent);
+    float slider_position =
+        fancy_ui::StatusZoomSliderPositionFromPercent(zoom.percent);
     ImGui::SetNextItemWidth(-1.0f);
     if (detail::DrawSliderFloat("##zoom-slider", slider_position, 0.0f, 100.0f,
                                 "%.0f", {}, false, false,
                                 ImGuiSliderFlags_AlwaysClamp)) {
-      zoom.percent = StatusZoomPercentFromSliderPosition(slider_position);
+      zoom.percent =
+          fancy_ui::StatusZoomPercentFromSliderPosition(slider_position);
       zoom.feedback = "Zoom adjusted";
     }
     detail::DrawFocusRing(detail::CaptureInteraction(), true);

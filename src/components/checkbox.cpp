@@ -33,9 +33,20 @@ CheckboxResult Checkbox(const CheckboxSpec &spec) {
   const ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
   const bool has_state_icon =
       static_cast<bool>(spec.on_icon) || static_cast<bool>(spec.off_icon);
-  const float content_width = (spec.show_checkbox ? box_size + gap : 0.0f) +
-                              (has_state_icon ? icon_size + gap : 0.0f) +
-                              text_size.x;
+  const bool dual_state_icons = spec.state == ToggleState::Mixed &&
+                                static_cast<bool>(spec.on_icon) &&
+                                static_cast<bool>(spec.off_icon);
+  const float icon_gap = Scale(2.0f);
+  const float icon_width = has_state_icon
+                               ? icon_size * (dual_state_icons ? 2.0f : 1.0f) +
+                                     (dual_state_icons ? icon_gap : 0.0f)
+                               : 0.0f;
+  const float content_width =
+      (spec.show_checkbox
+           ? box_size + ((has_state_icon || !label.empty()) ? gap : 0.0f)
+           : 0.0f) +
+      icon_width + ((has_state_icon && !label.empty()) ? gap : 0.0f) +
+      text_size.x;
 
   ImGui::PushID(id.c_str());
   detail::BeginAvailability(spec.availability);
@@ -96,17 +107,27 @@ CheckboxResult Checkbox(const CheckboxSpec &spec) {
   }
 
   if (has_state_icon) {
-    const Rect bounds{
-        .minimum = {.x = cursor_x, .y = center_y - icon_size * 0.5f},
-        .maximum = {.x = cursor_x + icon_size,
-                    .y = center_y + icon_size * 0.5f},
+    const ColorRgba icon_color =
+        disabled ? palette.text_disabled : palette.focus;
+    const auto draw_icon = [&](const IconPainter &painter) {
+      if (painter) {
+        painter({.minimum = {.x = cursor_x, .y = center_y - icon_size * 0.5f},
+                 .maximum = {.x = cursor_x + icon_size,
+                             .y = center_y + icon_size * 0.5f}},
+                icon_color);
+      }
+      cursor_x += icon_size;
     };
-    const IconPainter &painter =
-        spec.state == ToggleState::On ? spec.on_icon : spec.off_icon;
-    if (painter) {
-      painter(bounds, disabled ? palette.text_disabled : palette.focus);
+    if (dual_state_icons) {
+      draw_icon(spec.on_icon);
+      cursor_x += icon_gap;
+      draw_icon(spec.off_icon);
+    } else {
+      draw_icon(spec.state == ToggleState::On ? spec.on_icon : spec.off_icon);
     }
-    cursor_x += icon_size + gap;
+    if (!label.empty()) {
+      cursor_x += gap;
+    }
   }
   draw_list->AddText(
       ImVec2(cursor_x, std::floor(center_y - text_size.y * 0.5f)),

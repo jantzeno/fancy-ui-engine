@@ -267,6 +267,10 @@ IconPainter UiAssetAtlas::Painter(const std::string_view semantic_id,
 ImFont *UiAssetAtlas::body_font() const { return impl_->body_font; }
 ImFont *UiAssetAtlas::heading_font() const { return impl_->heading_font; }
 ImFont *UiAssetAtlas::mono_font() const { return impl_->mono_font; }
+ImFont *UiAssetAtlas::font(const UiFontWeight weight) const {
+  ImFont *font = impl_->sans_fonts[FontIndex(weight)];
+  return font != nullptr ? font : impl_->body_font;
+}
 const UiEnvironment &UiAssetAtlas::ui_environment() const {
   return impl_->environment;
 }

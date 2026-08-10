@@ -1,4 +1,4 @@
-#include "fancy_ui/components/layout.hpp"
+#include "fancy_ui/components/section.hpp"
 
 #include "fancy_ui/layout_metrics.hpp"
 #include "internal/component_internal.hpp"
@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 namespace fancy_ui {
 

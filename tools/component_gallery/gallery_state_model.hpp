@@ -30,7 +30,7 @@ struct GalleryCaptureExtent {
 GalleryScreenshotLogicalExtent(const GalleryTab tab) {
   switch (tab) {
   case GalleryTab::Components:
-    return {.width = 1280, .height = 2240};
+    return {.width = 1280, .height = 2760};
   case GalleryTab::Shell:
     return {.width = 1280, .height = 720};
   case GalleryTab::Settings:
@@ -52,17 +52,9 @@ enum class OperationPhase : std::uint8_t {
   Failed,
 };
 
-enum class TrayResizeCommand : std::uint8_t {
-  Increase,
-  Decrease,
-  Minimum,
-  Maximum,
-};
-
 inline constexpr float kOperationTrayMinimumHeight = 160.0f;
 inline constexpr float kOperationTrayMaximumHeight = 240.0f;
 inline constexpr float kOperationTrayDefaultHeight = 160.0f;
-inline constexpr float kOperationTrayKeyboardStep = 8.0f;
 inline constexpr float kGalleryStateHeadingHeight = 37.0f;
 inline constexpr float kOperationStripHeight = 32.0f;
 inline constexpr float kOperationStripItemHeight = 24.0f;
@@ -77,8 +69,6 @@ inline constexpr float kStatusZoomCommandHeight = 24.0f;
 inline constexpr float kStatusZoomCommandSpacing = 0.0f;
 inline constexpr float kStatusZoomPanelPadding = 8.0f;
 inline constexpr float kStatusZoomPanelItemSpacing = 4.0f;
-inline constexpr float kStatusZoomMinimumPercent = 10.0f;
-inline constexpr float kStatusZoomMaximumPercent = 1600.0f;
 
 struct OperationLayout {
   float heading_height = kGalleryStateHeadingHeight;
@@ -92,9 +82,6 @@ struct OperationPresentationState {
   bool expanded = false;
   bool user_toggled = false;
   float tray_height = kOperationTrayDefaultHeight;
-  bool resizing = false;
-  float resize_start_mouse_y = 0.0f;
-  float resize_start_height = kOperationTrayDefaultHeight;
   std::string feedback;
 };
 
@@ -121,33 +108,13 @@ OperationDetailsExpandedByDefault(const OperationPhase phase) {
   return false;
 }
 
-[[nodiscard]] constexpr float ClampOperationTrayHeight(const float height) {
-  return std::clamp(height, kOperationTrayMinimumHeight,
-                    kOperationTrayMaximumHeight);
-}
-
-[[nodiscard]] constexpr float
-OperationTrayHeightAfterCommand(const float current,
-                                const TrayResizeCommand command) {
-  switch (command) {
-  case TrayResizeCommand::Increase:
-    return ClampOperationTrayHeight(current + kOperationTrayKeyboardStep);
-  case TrayResizeCommand::Decrease:
-    return ClampOperationTrayHeight(current - kOperationTrayKeyboardStep);
-  case TrayResizeCommand::Minimum:
-    return kOperationTrayMinimumHeight;
-  case TrayResizeCommand::Maximum:
-    return kOperationTrayMaximumHeight;
-  }
-  return ClampOperationTrayHeight(current);
-}
-
 [[nodiscard]] constexpr OperationLayout
 ResolveOperationLayout(const bool expanded, const bool has_details,
                        const float tray_height, const bool has_feedback) {
   OperationLayout layout;
   if (expanded && has_details) {
-    layout.tray_height = ClampOperationTrayHeight(tray_height);
+    layout.tray_height = std::clamp(tray_height, kOperationTrayMinimumHeight,
+                                    kOperationTrayMaximumHeight);
   }
   if (has_feedback) {
     layout.feedback_height = kOperationFeedbackHeight;
@@ -155,22 +122,6 @@ ResolveOperationLayout(const bool expanded, const bool has_details,
   layout.content_height = layout.heading_height + layout.tray_height +
                           layout.strip_height + layout.feedback_height;
   return layout;
-}
-
-[[nodiscard]] inline float
-StatusZoomPercentFromSliderPosition(const float position) {
-  const float normalized = std::clamp(position, 0.0f, 100.0f) / 100.0f;
-  const float ratio = kStatusZoomMaximumPercent / kStatusZoomMinimumPercent;
-  return std::round(kStatusZoomMinimumPercent * std::pow(ratio, normalized));
-}
-
-[[nodiscard]] inline float
-StatusZoomSliderPositionFromPercent(const float percent) {
-  const float clamped =
-      std::clamp(percent, kStatusZoomMinimumPercent, kStatusZoomMaximumPercent);
-  const float ratio = kStatusZoomMaximumPercent / kStatusZoomMinimumPercent;
-  return 100.0f * std::log(clamped / kStatusZoomMinimumPercent) /
-         std::log(ratio);
 }
 
 [[nodiscard]] inline std::optional<GalleryTab>
@@ -207,7 +158,6 @@ DefaultOperationPresentationStates() {
     states[index].expanded = OperationDetailsExpandedByDefault(phases[index]);
   }
   states[7].tray_height = kOperationTrayMaximumHeight;
-  states[7].resize_start_height = kOperationTrayMaximumHeight;
   return states;
 }
 

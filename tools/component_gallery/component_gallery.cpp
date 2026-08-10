@@ -21,6 +21,8 @@ namespace fancy_ui::gallery {
 
 namespace {
 
+FontHandle NativeFontHandle(ImFont *font);
+
 void Heading(const char *title, ImFont *font) {
   if (font != nullptr) {
     ImGui::PushFont(
@@ -433,6 +435,275 @@ void DrawEnabledLocked(detail::UiAssetAtlas &assets, GalleryState &state) {
         state.direction_locked, locked, unlocked);
   field("direction-unlocked", "Direction", "Locked", "Unlocked",
         state.direction_unlocked, locked, unlocked);
+}
+
+void DrawNavigationPrimitives(GalleryState &state) {
+  static constexpr std::array choices{
+      ChoiceSpec{.id = "canvas", .label = "Canvas"},
+      ChoiceSpec{.id = "model", .label = "3D"},
+  };
+  const SegmentedControlResult segmented = SegmentedControl({
+      .id = "workspace",
+      .choices = choices,
+      .selected_index = state.segmented_index,
+      .width = 276.0f,
+  });
+  if (segmented.changed) {
+    state.segmented_index = segmented.selected_index;
+  }
+
+  const TabSetResult tabs = TabSet({
+      .id = "tabs",
+      .tabs = choices,
+      .selected_index = state.tab_index,
+      .draw_panel =
+          [](const std::size_t index) {
+            detail::DrawSecondaryText(index == 0 ? "Canvas panel" : "3D panel");
+          },
+  });
+  if (tabs.changed) {
+    state.tab_index = tabs.selected_index;
+  }
+
+  const ExplorerSearchResult search = ExplorerSearch({
+      .id = "search",
+      .placeholder = "Search objects",
+      .query = state.explorer_query,
+  });
+  if (search.changed) {
+    state.explorer_query = search.query;
+  }
+
+  static const std::array arrange_items{
+      ContextMenuItemSpec{.id = "front", .label = "Bring to front"},
+      ContextMenuItemSpec{.id = "back", .label = "Send to back"},
+  };
+  static const std::array menu_items{
+      ContextMenuItemSpec{.id = "rename", .label = "Rename"},
+      ContextMenuItemSpec{.id = "separator",
+                          .kind = ContextMenuItemKind::Separator},
+      ContextMenuItemSpec{.id = "arrange",
+                          .label = "Arrange",
+                          .kind = ContextMenuItemKind::Submenu,
+                          .children = arrange_items},
+  };
+  const ButtonResult menu_trigger = Button({
+      .id = "menu-trigger",
+      .label = "Context menu",
+      .variant = ButtonVariant::Secondary,
+      .size = {.x = 132.0f, .y = 28.0f},
+  });
+  const bool request_menu =
+      menu_trigger.activated ||
+      state.component_capture == ComponentCaptureVariant::ContextMenuOpen;
+  const ContextMenuResult menu = ContextMenu(
+      {
+          .id = "menu",
+          .items = menu_items,
+          .request_open = request_menu,
+          .anchor = request_menu ? std::optional<Vec2>{Vec2{
+                                       .x = ImGui::GetItemRectMin().x,
+                                       .y = ImGui::GetItemRectMax().y,
+                                   }}
+                                 : std::nullopt,
+      },
+      state.context_menu);
+  if (menu.activated_id.has_value()) {
+    state.explorer_query = *menu.activated_id;
+  }
+  ImGui::SameLine();
+  const StatusZoomPopoverResult zoom = StatusZoomPopover(
+      {
+          .id = "zoom",
+          .percent = state.zoom_percent,
+          .request_open = state.component_capture ==
+                          ComponentCaptureVariant::StatusZoomOpen,
+          .selection_availability =
+              {
+                  .enabled = false,
+                  .reason = "Select an object to zoom to it",
+              },
+      },
+      state.zoom_popover);
+  if (zoom.changed) {
+    state.zoom_percent = zoom.percent;
+  } else if (zoom.command == StatusZoomCommand::ActualSize) {
+    state.zoom_percent = 100.0f;
+  }
+}
+
+void DrawAdvancedFields(GalleryState &state) {
+  const detail::ScopedFieldLayoutPreview layout(Scale(76.0f));
+  const std::array options{
+      SelectOption{.id = "draft", .label = state.renamable_labels[0]},
+      SelectOption{.id = "production", .label = state.renamable_labels[1]},
+      SelectOption{.id = "archive", .label = state.renamable_labels[2]},
+  };
+  const RenamableSelectResult renamable = RenamableSelect(
+      {
+          .id = "profile",
+          .label = "Profile",
+          .options = options,
+          .selected_index = state.renamable_index,
+      },
+      state.renamable_select);
+  if (renamable.selection_changed) {
+    state.renamable_index = renamable.selected_index;
+  }
+  if (renamable.committed) {
+    state.renamable_labels[state.renamable_index] = renamable.value;
+  }
+
+  const std::array multiselect_options{
+      CheckedMultiselectOption{.id = "guides",
+                               .label = "Guides",
+                               .state = state.multiselect_states[0]},
+      CheckedMultiselectOption{.id = "major-grid",
+                               .label = "Major grid",
+                               .state = state.multiselect_states[1]},
+      CheckedMultiselectOption{.id = "minor-grid",
+                               .label = "Minor grid",
+                               .state = state.multiselect_states[2]},
+  };
+  const auto enabled_count = static_cast<int>(std::ranges::count_if(
+      state.multiselect_states,
+      [](const ToggleState value) { return value != ToggleState::Off; }));
+  const std::string summary = std::format("{} of 3", enabled_count);
+  const CheckedMultiselectResult multiselect = CheckedMultiselect({
+      .id = "snapping",
+      .label = "Snapping",
+      .summary = summary,
+      .options = multiselect_options,
+      .request_open =
+          state.component_capture == ComponentCaptureVariant::MultiselectOpen,
+  });
+  if (multiselect.changed && multiselect.option_id.has_value()) {
+    for (std::size_t index = 0; index < multiselect_options.size(); ++index) {
+      if (multiselect_options[index].id == *multiselect.option_id) {
+        state.multiselect_states[index] = multiselect.state;
+      }
+    }
+  }
+
+  static constexpr std::array radio_options{
+      SelectOption{.id = "top-left", .label = "Top left"},
+      SelectOption{.id = "center", .label = "Center"},
+  };
+  const RadioGroupResult radio = RadioGroup({
+      .id = "origin",
+      .label = "Origin",
+      .options = radio_options,
+      .selected_index = state.radio_index,
+      .layout = RadioGroupLayout::Horizontal,
+  });
+  if (radio.changed) {
+    state.radio_index = radio.selected_index;
+  }
+
+  static constexpr std::array metrics{
+      MetricValue{.label = "Placed", .value = "19 / 22"},
+      MetricValue{.label = "Use", .value = "87.4%"},
+  };
+  MetricRow({.id = "metrics", .label = "Current best", .metrics = metrics});
+}
+
+void DrawSpatialGizmo(detail::UiAssetAtlas &assets, GalleryState &state) {
+  const bool bed =
+      state.component_capture == ComponentCaptureVariant::GrainBed;
+  const bool part =
+      state.component_capture == ComponentCaptureVariant::GrainPart;
+  const std::optional<GrainDirectionValue> secondary =
+      bed || part
+          ? std::nullopt
+          : std::optional{GrainDirectionValue{
+                .kind = GrainDirectionKind::Bed, .degrees = 90.0}};
+  const GrainDirectionGizmoResult result = GrainDirectionGizmo(
+      {
+          .id = "grain",
+          .primary = {.kind = bed ? GrainDirectionKind::Bed
+                                  : GrainDirectionKind::Part,
+                      .degrees = state.grain_degrees},
+          .secondary = secondary,
+          .locked =
+              state.component_capture == ComponentCaptureVariant::GrainLocked,
+          .regular_font = NativeFontHandle(assets.font(UiFontWeight::Regular)),
+          .medium_font = NativeFontHandle(assets.font(UiFontWeight::Medium)),
+          .bold_font = NativeFontHandle(assets.font(UiFontWeight::Bold)),
+          .monospace_font = NativeFontHandle(assets.mono_font()),
+      },
+      state.grain_gizmo);
+  if (result.committed) {
+    state.grain_degrees = result.degrees;
+  }
+}
+
+void DrawSpatialOverlay() {
+  static constexpr std::array points{
+      Vec2{.x = 4.0f, .y = 4.0f},
+      Vec2{.x = 250.0f, .y = 20.0f},
+      Vec2{.x = 220.0f, .y = 124.0f},
+      Vec2{.x = 24.0f, .y = 110.0f},
+  };
+  SpatialOverlay({
+      .id = "selection-overlay",
+      .points = points,
+      .label = "Auto-split preview",
+      .status = SemanticStatus::Preview,
+      .pattern = SpatialOverlayPattern::Hatched,
+      .selected = true,
+  });
+}
+
+void DrawLayoutAndFeedback(GalleryState &state) {
+  const OperationDisclosureResult disclosure = OperationDisclosure({
+      .id = "disclosure",
+      .expanded = state.operation_expanded,
+  });
+  if (disclosure.changed) {
+    state.operation_expanded = disclosure.expanded;
+  }
+  ImGui::SameLine();
+  detail::DrawSecondaryText(state.operation_expanded ? "Details expanded"
+                                                     : "Details collapsed");
+  const ResizeHandleResult resize = ResizeHandle({
+      .id = "resize",
+      .value = state.resize_value,
+      .minimum = 160.0f,
+      .maximum = 240.0f,
+      .keyboard_step = 8.0f,
+      .reset_value = 200.0f,
+      .direction = ResizeDirection::Vertical,
+      .tooltip = "Resize operation details",
+  });
+  if (resize.changed) {
+    state.resize_value = resize.value;
+  }
+  detail::DrawSecondaryText(
+      std::format("Tray height · {:.0f} px", state.resize_value));
+  const ButtonResult open = Button({
+      .id = "open-window",
+      .label = "Open modeless window",
+      .size = {.x = 188.0f, .y = 28.0f},
+  });
+  const ModelessWindowResult window = ModelessWindow(
+      {
+          .id = "component-modeless",
+          .title = "File task",
+          .request_open =
+              open.activated || state.component_capture ==
+                                    ComponentCaptureVariant::ModelessWindowOpen,
+          .initial_size = {.x = 420.0f, .y = 240.0f},
+          .draw_content =
+              [] {
+                StatusCard({
+                    .id = "task-status",
+                    .message = "Prepared UI content remains interactive",
+                    .status = SemanticStatus::Information,
+                });
+              },
+      },
+      state.modeless_window);
+  state.modeless_window = window.state;
 }
 
 template <std::size_t Size>
@@ -1380,6 +1651,25 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
           GalleryCard("enabled-locked", "Enabled & locked",
                       assets.heading_font(),
                       [&assets, &state] { DrawEnabledLocked(assets, state); });
+          GalleryCard(
+              "navigation-primitives", "Navigation primitives",
+              assets.heading_font(),
+              [&state] { DrawNavigationPrimitives(state); }, false, false,
+              300.0f);
+          GalleryCard(
+              "advanced-fields", "Advanced fields", assets.heading_font(),
+              [&state] { DrawAdvancedFields(state); }, false, false, 300.0f);
+          GalleryCard(
+              "layout-feedback", "Layout & feedback", assets.heading_font(),
+              [&state] { DrawLayoutAndFeedback(state); }, false, false, 300.0f);
+          GalleryCard("spatial-overlay", "Spatial overlay",
+                      assets.heading_font(), DrawSpatialOverlay, false, false,
+                      300.0f);
+          GalleryCard(
+              "grain-gizmo", "Grain direction gizmo", assets.heading_font(),
+              [&assets, &state] { DrawSpatialGizmo(assets, state); }, false,
+              true, 448.0f,
+              604.0f);
           GalleryCard(
               "hierarchy-step", "STEP", assets.heading_font(),
               [&assets, &state] {

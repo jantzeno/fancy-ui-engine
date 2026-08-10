@@ -3,7 +3,12 @@
 #include "gallery_settings_model.hpp"
 #include "gallery_state_model.hpp"
 
-#include "fancy_ui/components/fields.hpp"
+#include "fancy_ui/components/color_picker_types.hpp"
+#include "fancy_ui/components/context_menu.hpp"
+#include "fancy_ui/components/grain_direction_gizmo.hpp"
+#include "fancy_ui/components/modeless_window.hpp"
+#include "fancy_ui/components/renamable_select.hpp"
+#include "fancy_ui/components/status_zoom_popover.hpp"
 #include "fancy_ui/shell/application.hpp"
 #include "fancy_ui/steppenface/application_view.hpp"
 #include "fancy_ui/theme.hpp"
@@ -19,6 +24,20 @@ class UiAssetAtlas;
 }
 
 namespace fancy_ui::gallery {
+
+enum class ComponentCaptureVariant {
+  Default,
+  ContextMenuOpen,
+  StatusZoomOpen,
+  Renaming,
+  MultiselectOpen,
+  ModelessWindowOpen,
+  GrainBed,
+  GrainPart,
+  GrainPaired,
+  GrainDragging,
+  GrainLocked,
+};
 
 struct GalleryCanvasToolbarState {
   steppenface::SelectionScope selection_scope =
@@ -371,6 +390,24 @@ struct GalleryState {
   ToggleState grain_disabled = ToggleState::Off;
   ToggleState direction_locked = ToggleState::On;
   ToggleState direction_unlocked = ToggleState::Off;
+  std::size_t segmented_index = 0;
+  std::size_t tab_index = 0;
+  std::string explorer_query;
+  ContextMenuState context_menu;
+  StatusZoomPopoverState zoom_popover;
+  float zoom_percent = 100.0f;
+  std::array<std::string, 3> renamable_labels{"Draft", "Production", "Archive"};
+  std::size_t renamable_index = 0;
+  RenamableSelectState renamable_select;
+  std::array<ToggleState, 3> multiselect_states{
+      ToggleState::On, ToggleState::Off, ToggleState::Mixed};
+  std::size_t radio_index = 0;
+  GrainDirectionGizmoState grain_gizmo;
+  double grain_degrees = 35.0;
+  bool operation_expanded = true;
+  float resize_value = 200.0f;
+  ModelessWindowState modeless_window;
+  ComponentCaptureVariant component_capture = ComponentCaptureVariant::Default;
 
   std::array<HierarchyCardState, 3> hierarchy_cards =
       DefaultHierarchyCardStates();
@@ -487,6 +524,53 @@ inline void LeaveShellPreview(GalleryState &state) {
     ActivateGalleryTab(state, GalleryTab::Components);
     state.hierarchy_cards[0].action_row = 1;
     state.hierarchy_cards[0].request_actions = true;
+  } else if (slug == "components-context-menu") {
+    ActivateGalleryTab(state, GalleryTab::Components);
+    state.component_capture = ComponentCaptureVariant::ContextMenuOpen;
+  } else if (slug == "components-status-zoom") {
+    ActivateGalleryTab(state, GalleryTab::Components);
+    state.component_capture = ComponentCaptureVariant::StatusZoomOpen;
+  } else if (slug == "components-renaming") {
+    ActivateGalleryTab(state, GalleryTab::Components);
+    state.component_capture = ComponentCaptureVariant::Renaming;
+    state.renamable_select.renaming = true;
+    state.renamable_select.original = "Draft";
+    state.renamable_select.draft = "Draft";
+  } else if (slug == "components-multiselect") {
+    ActivateGalleryTab(state, GalleryTab::Components);
+    state.component_capture = ComponentCaptureVariant::MultiselectOpen;
+  } else if (slug == "components-modeless-window") {
+    ActivateGalleryTab(state, GalleryTab::Components);
+    state.component_capture = ComponentCaptureVariant::ModelessWindowOpen;
+  } else if (slug == "components-grain-bed") {
+    ActivateGalleryTab(state, GalleryTab::Components);
+    state.component_capture = ComponentCaptureVariant::GrainBed;
+    state.grain_degrees = 90.0;
+    state.grain_gizmo = {};
+  } else if (slug == "components-grain-part") {
+    ActivateGalleryTab(state, GalleryTab::Components);
+    state.component_capture = ComponentCaptureVariant::GrainPart;
+    state.grain_degrees = 0.0;
+    state.grain_gizmo = {};
+  } else if (slug == "components-grain-paired") {
+    ActivateGalleryTab(state, GalleryTab::Components);
+    state.component_capture = ComponentCaptureVariant::GrainPaired;
+    state.grain_degrees = 35.0;
+    state.grain_gizmo = {};
+  } else if (slug == "components-grain-dragging") {
+    ActivateGalleryTab(state, GalleryTab::Components);
+    state.component_capture = ComponentCaptureVariant::GrainDragging;
+    state.grain_degrees = 35.0;
+    state.grain_gizmo = {};
+    state.grain_gizmo.editing = true;
+    state.grain_gizmo.pointer_captured = true;
+    state.grain_gizmo.original_degrees = 35.0;
+    state.grain_gizmo.draft_degrees = 45.0;
+  } else if (slug == "components-grain-locked") {
+    ActivateGalleryTab(state, GalleryTab::Components);
+    state.component_capture = ComponentCaptureVariant::GrainLocked;
+    state.grain_degrees = 35.0;
+    state.grain_gizmo = {};
   } else if (slug == "shell-canvas-toolbar") {
     ActivateGalleryTab(state, GalleryTab::Shell);
     state.shell.active_workspace = steppenface::WorkspaceKind::Canvas;
