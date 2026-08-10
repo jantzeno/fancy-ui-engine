@@ -79,6 +79,7 @@ ContextMenuResult ContextMenu(const ContextMenuSpec &spec,
     result.opened = true;
   }
   bool open = false;
+  detail::PushMenuPopupStyle();
   if (ImGui::BeginPopup("##context-menu")) {
     open = true;
     state.open = true;
@@ -88,6 +89,7 @@ ContextMenuResult ContextMenu(const ContextMenuSpec &spec,
     }
     ImGui::EndPopup();
   }
+  detail::PopMenuPopupStyle();
   if (state.open && !open) {
     result.closed = true;
     state.open = false;

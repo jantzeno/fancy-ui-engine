@@ -49,6 +49,7 @@ StatusZoomPopoverResult StatusZoomPopover(const StatusZoomPopoverSpec &spec,
     result.opened = true;
   }
   bool open = false;
+  detail::PushMenuPopupStyle();
   if (ImGui::BeginPopup("##zoom-popover")) {
     open = true;
     state.open = true;
@@ -89,6 +90,7 @@ StatusZoomPopoverResult StatusZoomPopover(const StatusZoomPopoverSpec &spec,
     result.committed = slider.committed;
     ImGui::EndPopup();
   }
+  detail::PopMenuPopupStyle();
   if (result.closed) {
     open = false;
   }

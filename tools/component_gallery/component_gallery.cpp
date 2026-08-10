@@ -991,6 +991,7 @@ void DrawCanonicalHierarchy(detail::UiAssetAtlas &assets,
     ImGui::OpenPopup("##hierarchy-actions");
     state.request_actions = false;
   }
+  detail::PushMenuPopupStyle();
   if (ImGui::BeginPopup("##hierarchy-actions")) {
     const int action_row =
         std::clamp(state.action_row, 0, static_cast<int>(rows.size()) - 1);
@@ -1001,6 +1002,7 @@ void DrawCanonicalHierarchy(detail::UiAssetAtlas &assets,
     static_cast<void>(ImGui::MenuItem("Inspect properties"));
     ImGui::EndPopup();
   }
+  detail::PopMenuPopupStyle();
 }
 
 void DrawHierarchyInteractionDemo(detail::UiAssetAtlas &assets,
@@ -1152,6 +1154,7 @@ void DrawHierarchyInteractionDemo(detail::UiAssetAtlas &assets,
     state.tree_feedback = "Face plate color edit cancelled.";
   }
 
+  detail::PushMenuPopupStyle();
   if (ImGui::BeginPopup("##tree-actions")) {
     const int row = std::clamp(state.tree_action_row, 0, 2);
     ImGui::TextUnformatted(
@@ -1167,6 +1170,7 @@ void DrawHierarchyInteractionDemo(detail::UiAssetAtlas &assets,
     }
     ImGui::EndPopup();
   }
+  detail::PopMenuPopupStyle();
   ImGui::Spacing();
   detail::DrawSecondaryText(state.tree_feedback);
 }

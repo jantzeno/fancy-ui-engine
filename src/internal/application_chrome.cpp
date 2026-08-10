@@ -145,7 +145,12 @@ public:
                           ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
     ImGui::PushStyleColor(ImGuiCol_HeaderActive,
                           ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        ImVec2(metrics.spacing.space03,
+                               std::max(0.0f, metrics.geometry.control_height -
+                                                  ImGui::GetFontSize())));
     const bool open = ImGui::BeginMenu(label);
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
     const bool hovered = ImGui::IsItemHovered();
     const ImVec2 minimum = ImGui::GetItemRectMin();
@@ -349,31 +354,18 @@ public:
     const SemanticPalette &palette = CurrentPalette();
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
                         ImVec2(metrics.spacing.space03, Scale(7.0f)));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        ImVec2(metrics.menu.popup_padding_horizontal,
-                               metrics.menu.popup_padding_vertical));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                        ImVec2(metrics.spacing.space03,
-                               std::max(0.0f, metrics.geometry.control_height -
-                                                  ImGui::GetFontSize())));
-    ImGui::PushStyleColor(ImGuiCol_Border, ToImVec4(palette.border_strong));
-    ImGui::PushStyleColor(ImGuiCol_PopupBg,
-                          ToImVec4(palette.application_surface));
+    PushMenuPopupStyle();
     for (const ApplicationMenuView &menu : bar.menus) {
       ImGui::SetNextWindowSizeConstraints(
           ImVec2(metrics.menu.popup_width, 0.0f),
           ImVec2(metrics.menu.popup_width, std::numeric_limits<float>::max()));
       if (BeginApplicationMenu(menu.label.c_str(), metrics)) {
-        ImGui::PushStyleVar(
-            ImGuiStyleVar_ItemSpacing,
-            ImVec2(metrics.spacing.space03, metrics.spacing.space03));
         DrawMenuItems(bar, menu.items, callbacks, metrics);
-        ImGui::PopStyleVar();
         ImGui::EndMenu();
       }
     }
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(3);
+    PopMenuPopupStyle();
+    ImGui::PopStyleVar();
     ImGui::PopFont();
 
     const float switcher_x = ImGui::GetCursorPosX();
@@ -738,14 +730,7 @@ public:
     ImGui::SetNextWindowSizeConstraints(
         ImVec2(Scale(224.0f), 0.0f),
         ImVec2(Scale(320.0f), std::numeric_limits<float>::max()));
-    ImGui::PushStyleVar(
-        ImGuiStyleVar_WindowPadding,
-        ImVec2(metrics.spacing.space03, metrics.spacing.space03));
-    ImGui::PushStyleVar(
-        ImGuiStyleVar_ItemSpacing,
-        ImVec2(metrics.spacing.space03, metrics.spacing.space02));
-    ImGui::PushStyleColor(ImGuiCol_PopupBg,
-                          ToImVec4(CurrentPalette().application_surface));
+    PushMenuPopupStyle();
     if (ImGui::BeginPopup(("##popup." + popover.id.value).c_str())) {
       for (const ToolbarPopoverItemView &item : popover.items) {
         std::visit(
@@ -806,8 +791,7 @@ public:
       }
       ImGui::EndPopup();
     }
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar(2);
+    PopMenuPopupStyle();
   }
 
   void DrawToolbarItem(const ToolbarItemView &item,

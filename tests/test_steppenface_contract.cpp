@@ -1,3 +1,4 @@
+#include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/steppenface/application_ui.hpp"
 #include "fancy_ui/theme.hpp"
 #include "internal/application_chrome.hpp"
@@ -512,6 +513,23 @@ TEST_CASE(
       }
     }
     REQUIRE(popup != nullptr);
+    const fancy_ui::SemanticPalette palette =
+        fancy_ui::PaletteFor(fancy_ui::ResolvedTheme::Dark);
+    const fancy_ui::LayoutMetrics metrics = fancy_ui::CurrentLayoutMetrics();
+    REQUIRE(popup->WindowPadding.x ==
+            Catch::Approx(metrics.menu.popup_padding_horizontal));
+    REQUIRE(popup->WindowPadding.y ==
+            Catch::Approx(metrics.menu.popup_padding_vertical));
+    REQUIRE(popup->WindowRounding ==
+            Catch::Approx(metrics.geometry.surface_radius));
+    REQUIRE(popup->WindowBorderSize == Catch::Approx(metrics.geometry.border));
+    const ImU32 popup_color = ImGui::ColorConvertFloat4ToU32(
+        ImVec4(palette.surface_raised.red, palette.surface_raised.green,
+               palette.surface_raised.blue, palette.surface_raised.alpha));
+    REQUIRE(std::ranges::any_of(popup->DrawList->VtxBuffer,
+                                [popup_color](const ImDrawVert &vertex) {
+                                  return vertex.col == popup_color;
+                                }));
     const FrameResult activated =
         click(ImVec2(popup->Pos.x + popup->Size.x * 0.5f,
                      popup->Pos.y + popup->Size.y * 0.5f));
@@ -751,7 +769,7 @@ TEST_CASE(
   ImGui::DestroyContext();
 }
 
-TEST_CASE("application menus use compact dark popups and rounded triggers") {
+TEST_CASE("application menus use canonical popups and rounded triggers") {
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
   io.DisplaySize = ImVec2(1280.0f, 720.0f);
@@ -843,13 +861,24 @@ TEST_CASE("application menus use compact dark popups and rounded triggers") {
   REQUIRE(popup->WindowPadding.x == Catch::Approx(10.0f));
   REQUIRE(popup->WindowPadding.y == Catch::Approx(8.0f));
   REQUIRE(popup->ContentSize.y == Catch::Approx(44.0f));
+  const fancy_ui::LayoutMetrics metrics = fancy_ui::CurrentLayoutMetrics();
+  REQUIRE(popup->WindowRounding ==
+          Catch::Approx(metrics.geometry.surface_radius));
+  REQUIRE(popup->WindowBorderSize == Catch::Approx(metrics.geometry.border));
 
-  const ImU32 popup_color = ImGui::ColorConvertFloat4ToU32(ImVec4(
-      palette.application_surface.red, palette.application_surface.green,
-      palette.application_surface.blue, palette.application_surface.alpha));
+  const ImU32 popup_color = ImGui::ColorConvertFloat4ToU32(
+      ImVec4(palette.surface_raised.red, palette.surface_raised.green,
+             palette.surface_raised.blue, palette.surface_raised.alpha));
   REQUIRE(std::ranges::any_of(popup->DrawList->VtxBuffer,
                               [popup_color](const ImDrawVert &vertex) {
                                 return vertex.col == popup_color;
+                              }));
+  const ImU32 border_color = ImGui::ColorConvertFloat4ToU32(
+      ImVec4(palette.border_strong.red, palette.border_strong.green,
+             palette.border_strong.blue, palette.border_strong.alpha));
+  REQUIRE(std::ranges::any_of(popup->DrawList->VtxBuffer,
+                              [border_color](const ImDrawVert &vertex) {
+                                return vertex.col == border_color;
                               }));
   ImGui::DestroyContext();
 }

@@ -804,8 +804,7 @@ void DrawExplorer(detail::UiAssetAtlas &assets, GalleryState &state) {
                       ImVec2(0.0f, metrics.spacing.space02));
   if (ImGui::BeginChild("##shell-hierarchy",
                         ImVec2(-metrics.spacing.space03, 0.0f),
-                        ImGuiChildFlags_AlwaysUseWindowPadding,
-                        ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+                        ImGuiChildFlags_AlwaysUseWindowPadding)) {
     DrawHierarchySample(assets, state);
   }
   ImGui::EndChild();

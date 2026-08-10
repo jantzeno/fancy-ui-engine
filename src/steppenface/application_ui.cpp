@@ -525,12 +525,7 @@ public:
     ImGui::SetNextWindowSizeConstraints(
         ImVec2(Scale(224.0f), 0.0f),
         ImVec2(Scale(320.0f), std::numeric_limits<float>::max()));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        ImVec2(Scale(8.0f), Scale(8.0f)));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                        ImVec2(Scale(8.0f), Scale(4.0f)));
-    ImGui::PushStyleColor(ImGuiCol_PopupBg,
-                          ToImVec4(CurrentPalette().application_surface));
+    detail::PushMenuPopupStyle();
     if (ImGui::BeginPopup(("##popup." + popover.id.value).c_str())) {
       for (const ToolbarPopoverItemView &item : popover.items) {
         std::visit(
@@ -592,8 +587,7 @@ public:
       }
       ImGui::EndPopup();
     }
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar(2);
+    detail::PopMenuPopupStyle();
   }
 
   void DrawToolbarItem(const ApplicationView &view, const ToolbarItemView &item,

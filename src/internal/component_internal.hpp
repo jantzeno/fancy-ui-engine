@@ -85,6 +85,8 @@ struct HatchSegment {
 [[nodiscard]] std::string Owned(std::string_view value);
 [[nodiscard]] std::string EllipsizeText(std::string_view text, float width);
 void ShowTooltip(std::string_view text);
+void PushMenuPopupStyle();
+void PopMenuPopupStyle();
 void DrawSecondaryText(std::string_view text);
 void DrawSecondaryTextWrapped(std::string_view text);
 [[nodiscard]] float ResolveButtonVerticalPadding(float requested_height,

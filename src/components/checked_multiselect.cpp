@@ -53,6 +53,7 @@ CheckedMultiselect(const CheckedMultiselectSpec &spec) {
     ImGui::SetNextWindowPos(ImVec2(minimum.x, popup_y), ImGuiCond_Appearing);
     ImGui::OpenPopup("##options");
   }
+  detail::PushMenuPopupStyle();
   if (ImGui::BeginPopup("##options")) {
     result.popup_open = true;
     for (const CheckedMultiselectOption &option : spec.options) {
@@ -70,6 +71,7 @@ CheckedMultiselect(const CheckedMultiselectSpec &spec) {
     }
     ImGui::EndPopup();
   }
+  detail::PopMenuPopupStyle();
   detail::EndAvailability(spec.availability, spec.tooltip);
   detail::PopFieldControlState(spec.availability, {});
   detail::EndFieldLayout(layout, {});

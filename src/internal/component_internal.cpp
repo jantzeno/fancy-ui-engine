@@ -244,10 +244,38 @@ std::string EllipsizeText(const std::string_view text, const float width) {
 
 void ShowTooltip(const std::string_view text) {
   const std::string owned_text = Owned(text);
-  const ImVec2 padding(Scale(8.0f), Scale(8.0f));
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  ImGui::PushFont(nullptr, metrics.typography.body_font_height);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                      ImVec2(metrics.spacing.space03, metrics.spacing.space03));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                      metrics.geometry.surface_radius);
+  ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, metrics.geometry.border);
+  ImGui::PushStyleColor(ImGuiCol_Border,
+                        ToImVec4(CurrentPalette().border_strong));
   ImGui::SetTooltip("%s", owned_text.c_str());
-  ImGui::PopStyleVar();
+  ImGui::PopStyleColor();
+  ImGui::PopStyleVar(3);
+  ImGui::PopFont();
+}
+
+void PushMenuPopupStyle() {
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                      ImVec2(metrics.menu.popup_padding_horizontal,
+                             metrics.menu.popup_padding_vertical));
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                      ImVec2(metrics.spacing.space03, metrics.spacing.space03));
+  ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding,
+                      metrics.geometry.surface_radius);
+  ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, metrics.geometry.border);
+  ImGui::PushStyleColor(ImGuiCol_Border,
+                        ToImVec4(CurrentPalette().border_strong));
+}
+
+void PopMenuPopupStyle() {
+  ImGui::PopStyleColor();
+  ImGui::PopStyleVar(4);
 }
 
 void DrawSecondaryText(const std::string_view text) {

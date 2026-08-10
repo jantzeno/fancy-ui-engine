@@ -8,6 +8,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <filesystem>
@@ -347,7 +348,7 @@ TEST_CASE("default progress bars flex and use the shared height") {
   ImGui::DestroyContext();
 }
 
-TEST_CASE("shared tooltips use eight scaled pixels without changing windows") {
+TEST_CASE("shared tooltips own canonical type and surface geometry") {
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
   io.DisplaySize = ImVec2(320.0f, 240.0f);
@@ -370,8 +371,21 @@ TEST_CASE("shared tooltips use eight scaled pixels without changing windows") {
 
   ImGuiWindow *tooltip = ImGui::FindWindowByName("##Tooltip_00");
   REQUIRE(tooltip != nullptr);
+  const fancy_ui::LayoutMetrics metrics = fancy_ui::CurrentLayoutMetrics();
   REQUIRE(tooltip->WindowPadding.x == Catch::Approx(12.0f));
   REQUIRE(tooltip->WindowPadding.y == Catch::Approx(12.0f));
+  REQUIRE(tooltip->WindowRounding ==
+          Catch::Approx(metrics.geometry.surface_radius));
+  REQUIRE(tooltip->WindowBorderSize == Catch::Approx(metrics.geometry.border));
+  REQUIRE(tooltip->FontRefSize ==
+          Catch::Approx(metrics.typography.body_font_height).margin(0.51f));
+  const fancy_ui::ColorRgba border = fancy_ui::CurrentPalette().border_strong;
+  const ImU32 border_color = ImGui::ColorConvertFloat4ToU32(
+      ImVec4(border.red, border.green, border.blue, border.alpha));
+  REQUIRE(std::ranges::any_of(tooltip->DrawList->VtxBuffer,
+                              [border_color](const ImDrawVert &vertex) {
+                                return vertex.col == border_color;
+                              }));
   ImGui::DestroyContext();
 }
 
@@ -446,6 +460,19 @@ TEST_CASE(
   ImGui::End();
   ImGui::Render();
 
+  REQUIRE_FALSE(GImGui->OpenPopupStack.empty());
+  ImGuiWindow *popup = GImGui->OpenPopupStack.back().Window;
+  REQUIRE(popup != nullptr);
+  const fancy_ui::LayoutMetrics metrics = fancy_ui::CurrentLayoutMetrics();
+  REQUIRE(popup->WindowPadding.x ==
+          Catch::Approx(metrics.menu.popup_padding_horizontal));
+  REQUIRE(popup->WindowPadding.y ==
+          Catch::Approx(metrics.menu.popup_padding_vertical));
+  REQUIRE(popup->WindowRounding ==
+          Catch::Approx(metrics.geometry.surface_radius));
+  REQUIRE(popup->WindowBorderSize == Catch::Approx(metrics.geometry.border));
+  REQUIRE(popup->FontRefSize ==
+          Catch::Approx(metrics.typography.body_font_height).margin(0.51f));
   ImGui::DestroyContext();
   REQUIRE(result.selected_index == 1);
   REQUIRE(drawn_panel == 1);
@@ -575,8 +602,7 @@ TEST_CASE("rotation compass owns its stacked label gap") {
 
   const float item_gap =
       control_top - label_top - metrics.typography.body_font_height;
-  REQUIRE(item_gap >=
-          metrics.spacing.space02 - metrics.geometry.border);
+  REQUIRE(item_gap >= metrics.spacing.space02 - metrics.geometry.border);
   ImGui::DestroyContext();
 }
 
@@ -708,8 +734,7 @@ TEST_CASE("shell panel regions honor their declared content padding") {
   ImGui::End();
   ImGui::Render();
 
-  const float panel_inset =
-      fancy_ui::CurrentLayoutMetrics().spacing.space05;
+  const float panel_inset = fancy_ui::CurrentLayoutMetrics().spacing.space05;
   REQUIRE(explorer_inset == Catch::Approx(panel_inset));
   REQUIRE(workspace_inset == Catch::Approx(0.0f));
   REQUIRE(inspector_inset == Catch::Approx(panel_inset));
