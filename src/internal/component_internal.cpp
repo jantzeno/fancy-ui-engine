@@ -281,6 +281,7 @@ FieldLayout BeginFieldLayout(const std::string_view label) {
     ImGui::SetNextItemWidth(-std::numeric_limits<float>::min());
     return {};
   }
+  ImGui::SetCursorPosY(ImGui::GetCursorPosY() + metrics.spacing.space02);
   if (!field_layout_preview_label_width.has_value() &&
       ImGui::GetContentRegionAvail().x < metrics.inspector.stack_breakpoint) {
     ImGui::PushStyleColor(ImGuiCol_Text,

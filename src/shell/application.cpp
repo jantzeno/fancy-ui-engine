@@ -34,7 +34,10 @@ void DrawRegion(const RegionSpec &region, const ImVec2 size) {
   }
   const ImGuiWindowFlags flags =
       region.menu_bar ? ImGuiWindowFlags_MenuBar : ImGuiWindowFlags_None;
-  if (ImGui::BeginChild(id.c_str(), size, ImGuiChildFlags_None, flags)) {
+  const ImGuiChildFlags child_flags =
+      region.zero_padding ? ImGuiChildFlags_None
+                          : ImGuiChildFlags_AlwaysUseWindowPadding;
+  if (ImGui::BeginChild(id.c_str(), size, child_flags, flags)) {
     region.draw();
   }
   ImGui::EndChild();

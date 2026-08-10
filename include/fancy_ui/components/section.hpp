@@ -8,10 +8,10 @@ struct SectionSpec {
   std::string_view id;
   std::string_view heading;
   bool initially_open = true;
+  bool separated = false;
 };
 
 struct SectionResult {
-  bool visible = false;
   bool open = false;
 };
 

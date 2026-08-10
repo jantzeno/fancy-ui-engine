@@ -1200,7 +1200,8 @@ FrameResult ApplicationUi::Draw(const ApplicationView &view,
                     .draw =
                         [this, &view, &surfaces]() {
                           impl_->DrawWorkspace(view, surfaces);
-                        }},
+                        },
+                    .zero_padding = true},
       .inspector = {.id = "inspector",
                     .draw = [this, &view]() { impl_->DrawInspector(view); }},
       .operation_tray = {.id = "operation-tray",

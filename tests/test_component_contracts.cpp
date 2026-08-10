@@ -546,6 +546,40 @@ TEST_CASE("rotation compass derives evenly spaced canonical angles") {
   REQUIRE(angles == std::vector<double>{0.0, 90.0, 180.0, 270.0});
 }
 
+TEST_CASE("rotation compass owns its stacked label gap") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(400.0f, 240.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  const fancy_ui::LayoutMetrics metrics = fancy_ui::CurrentLayoutMetrics();
+  ImGui::NewFrame();
+  ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+  ImGui::SetNextWindowSize(io.DisplaySize);
+  ImGui::Begin("rotation-compass-label-gap");
+  const float label_top = ImGui::GetCursorScreenPos().y;
+  static_cast<void>(fancy_ui::RotationCompass({
+      .id = "rotations",
+      .label = "Search rotations",
+      .count = 8,
+  }));
+  const float control_top = ImGui::GetItemRectMin().y;
+  ImGui::End();
+  ImGui::Render();
+
+  const float item_gap =
+      control_top - label_top - metrics.typography.body_font_height;
+  REQUIRE(item_gap >=
+          metrics.spacing.space02 - metrics.geometry.border);
+  ImGui::DestroyContext();
+}
+
 TEST_CASE("shared slider thumb stays under the mouse while dragging") {
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
@@ -634,6 +668,106 @@ TEST_CASE("shell state starts with independently visible side panels") {
   REQUIRE(state.inspector_visible);
   REQUIRE(state.explorer_width == 256.0f);
   REQUIRE(state.inspector_width == 320.0f);
+}
+
+TEST_CASE("shell panel regions honor their declared content padding") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(1280.0f, 720.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  float explorer_inset = -1.0f;
+  float workspace_inset = -1.0f;
+  float inspector_inset = -1.0f;
+  ImGui::NewFrame();
+  ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+  ImGui::SetNextWindowSize(io.DisplaySize);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::Begin("shell-panel-padding", nullptr, ImGuiWindowFlags_NoDecoration);
+  ImGui::PopStyleVar();
+
+  const auto capture_inset = [](float &inset) {
+    inset = ImGui::GetCursorScreenPos().x - ImGui::GetWindowPos().x;
+  };
+  const fancy_ui::shell::ApplicationShellSpec spec{
+      .explorer = {.id = "explorer",
+                   .draw = [&]() { capture_inset(explorer_inset); }},
+      .workspace = {.id = "workspace",
+                    .draw = [&]() { capture_inset(workspace_inset); },
+                    .zero_padding = true},
+      .inspector = {.id = "inspector",
+                    .draw = [&]() { capture_inset(inspector_inset); }},
+  };
+  static_cast<void>(fancy_ui::shell::Application(spec, {}));
+  ImGui::End();
+  ImGui::Render();
+
+  const float panel_inset =
+      fancy_ui::CurrentLayoutMetrics().spacing.space05;
+  REQUIRE(explorer_inset == Catch::Approx(panel_inset));
+  REQUIRE(workspace_inset == Catch::Approx(0.0f));
+  REQUIRE(inspector_inset == Catch::Approx(panel_inset));
+  ImGui::DestroyContext();
+}
+
+TEST_CASE("section disclosure owns content with a header gap") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(640.0f, 480.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  ImGui::NewFrame();
+  ImGui::Begin("section-disclosure-contract");
+  const fancy_ui::SectionResult expanded = fancy_ui::BeginSection({
+      .id = "expanded",
+      .heading = "Expanded",
+  });
+  const float header_bottom = ImGui::GetItemRectMax().y;
+  bool expanded_content_drawn = false;
+  float content_top = header_bottom;
+  if (expanded.open) {
+    static_cast<void>(fancy_ui::TextInput({
+        .id = "owned-content",
+        .label = "Name",
+    }));
+    expanded_content_drawn = true;
+    content_top = ImGui::GetItemRectMin().y;
+  }
+  fancy_ui::EndSection(expanded);
+
+  const fancy_ui::SectionResult collapsed = fancy_ui::BeginSection({
+      .id = "collapsed",
+      .heading = "Collapsed",
+      .initially_open = false,
+      .separated = true,
+  });
+  bool collapsed_content_drawn = false;
+  if (collapsed.open) {
+    collapsed_content_drawn = true;
+  }
+  fancy_ui::EndSection(collapsed);
+  ImGui::End();
+  ImGui::Render();
+
+  REQUIRE(expanded.open);
+  REQUIRE(expanded_content_drawn);
+  REQUIRE(content_top - header_bottom >=
+          fancy_ui::CurrentLayoutMetrics().spacing.space02);
+  REQUIRE_FALSE(collapsed.open);
+  REQUIRE_FALSE(collapsed_content_drawn);
+  ImGui::DestroyContext();
 }
 
 TEST_CASE("inline application menu bar occupies the full shell region") {

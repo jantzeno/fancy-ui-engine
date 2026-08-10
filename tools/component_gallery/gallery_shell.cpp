@@ -711,17 +711,36 @@ void DrawGalleryToolbarField(ShellGalleryState &state, const FieldView &field) {
 }
 
 void DrawPanelHeading(detail::UiAssetAtlas &assets,
-                      const std::string_view title) {
+                      const std::string_view title,
+                      const bool vertically_centered) {
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  const float title_y =
+      vertically_centered
+          ? std::floor((metrics.geometry.panel_header_height -
+                        metrics.typography.section_heading_font_height) *
+                       0.5f)
+          : metrics.spacing.space04;
+  ImGui::SetCursorPos(
+      ImVec2(metrics.spacing.space05, std::max(0.0f, title_y)));
   if (assets.heading_font() != nullptr) {
     ImGui::PushFont(
         assets.heading_font(),
-        CurrentLayoutMetrics().typography.section_heading_font_height);
+        metrics.typography.section_heading_font_height);
   }
   ImGui::TextUnformatted(title.data(), title.data() + title.size());
   if (assets.heading_font() != nullptr) {
     ImGui::PopFont();
   }
-  ImGui::Separator();
+  const ImVec2 window_position = ImGui::GetWindowPos();
+  const ImVec2 window_size = ImGui::GetWindowSize();
+  const float separator_y =
+      window_position.y + metrics.geometry.panel_header_height -
+      metrics.geometry.border;
+  ImGui::GetWindowDrawList()->AddLine(
+      ImVec2(window_position.x, separator_y),
+      ImVec2(window_position.x + window_size.x, separator_y),
+      ImGui::GetColorU32(ImGuiCol_Border), metrics.geometry.border);
+  ImGui::SetCursorPosY(metrics.geometry.panel_header_height);
 }
 
 void DrawActivityRail(detail::UiAssetAtlas &assets,
@@ -760,18 +779,37 @@ void DrawActivityRail(detail::UiAssetAtlas &assets,
 }
 
 void DrawExplorer(detail::UiAssetAtlas &assets, GalleryState &state) {
-  DrawPanelHeading(assets, "Objects");
-  static_cast<void>(TextInput({
-      .id = "shell-explorer-search",
-      .label = "Search",
-      .value = "",
-  }));
-  ImGui::Spacing();
-  if (ImGui::BeginChild("##shell-hierarchy", ImVec2(0.0f, 0.0f), false,
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  DrawPanelHeading(assets, "Objects", true);
+
+  ImGui::SetCursorPos(ImVec2(metrics.spacing.space04,
+                            metrics.geometry.panel_header_height +
+                                metrics.spacing.space04));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  if (ImGui::BeginChild("##shell-explorer-search",
+                        ImVec2(-metrics.spacing.space04,
+                               metrics.explorer.search_height))) {
+    static_cast<void>(TextInput({
+        .id = "shell-explorer-search-input",
+        .label = "",
+        .value = "",
+        .placeholder = "Search objects, sources, parts",
+    }));
+  }
+  ImGui::EndChild();
+  ImGui::PopStyleVar();
+
+  ImGui::SetCursorPosX(metrics.spacing.space03);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                      ImVec2(0.0f, metrics.spacing.space02));
+  if (ImGui::BeginChild("##shell-hierarchy",
+                        ImVec2(-metrics.spacing.space03, 0.0f),
+                        ImGuiChildFlags_AlwaysUseWindowPadding,
                         ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
     DrawHierarchySample(assets, state);
   }
   ImGui::EndChild();
+  ImGui::PopStyleVar();
 }
 
 [[nodiscard]] bool DrawWorkspace(detail::UiAssetAtlas &assets,
@@ -819,15 +857,23 @@ void DrawExplorer(detail::UiAssetAtlas &assets, GalleryState &state) {
 
 void DrawInspector(detail::UiAssetAtlas &assets, GalleryState &state) {
   ShellGalleryState &shell = state.shell;
-  DrawPanelHeading(assets, "Inspector");
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  DrawPanelHeading(assets, "Inspector", false);
 
-  if (ImGui::BeginChild("##shell-inspector-scroll", ImVec2(0.0f, 0.0f), false,
+  ImGui::SetCursorPosX(0.0f);
+  ImGui::PushStyleVar(
+      ImGuiStyleVar_WindowPadding,
+      ImVec2(metrics.spacing.space05, metrics.spacing.space04));
+  if (ImGui::BeginChild("##shell-inspector-scroll", ImVec2(0.0f, 0.0f),
+                        ImGuiChildFlags_AlwaysUseWindowPadding,
                         ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+    const detail::ScopedFieldLayoutPreview field_layout(
+        metrics.inspector.label_width);
     const SectionResult values = BeginSection({
         .id = "inspector-values",
         .heading = "Values and fields",
     });
-    if (values.visible) {
+    if (values.open) {
       static_cast<void>(ValueDisplay({
           .id = "source",
           .label = "Source",
@@ -882,8 +928,9 @@ void DrawInspector(detail::UiAssetAtlas &assets, GalleryState &state) {
     const SectionResult toggles = BeginSection({
         .id = "inspector-toggles",
         .heading = "Toggles and range",
+        .separated = true,
     });
-    if (toggles.visible) {
+    if (toggles.open) {
       const CheckboxResult enabled = Checkbox({
           .id = "enabled",
           .label = "Enabled",
@@ -920,8 +967,9 @@ void DrawInspector(detail::UiAssetAtlas &assets, GalleryState &state) {
     const SectionResult specialized = BeginSection({
         .id = "inspector-specialized",
         .heading = "Specialized",
+        .separated = true,
     });
-    if (specialized.visible) {
+    if (specialized.open) {
       const RotationCompassResult rotations = RotationCompass({
           .id = "rotations",
           .label = "Search rotations",
@@ -950,8 +998,9 @@ void DrawInspector(detail::UiAssetAtlas &assets, GalleryState &state) {
     const SectionResult feedback = BeginSection({
         .id = "inspector-feedback",
         .heading = "Feedback and action",
+        .separated = true,
     });
-    if (feedback.visible) {
+    if (feedback.open) {
       StatusCard({
           .id = "readiness",
           .title = "Ready",
@@ -973,6 +1022,7 @@ void DrawInspector(detail::UiAssetAtlas &assets, GalleryState &state) {
     EndSection(feedback);
   }
   ImGui::EndChild();
+  ImGui::PopStyleVar();
 }
 
 } // namespace
@@ -1067,6 +1117,7 @@ bool DrawApplicationShellGallery(detail::UiAssetAtlas &assets,
           {
               .id = "gallery-explorer",
               .draw = [&assets, &state]() { DrawExplorer(assets, state); },
+              .zero_padding = true,
           },
       .workspace =
           {
@@ -1077,11 +1128,13 @@ bool DrawApplicationShellGallery(detail::UiAssetAtlas &assets,
                         DrawWorkspace(assets, state.shell.feedback) ||
                         return_requested;
                   },
+              .zero_padding = true,
           },
       .inspector =
           {
               .id = "gallery-inspector",
               .draw = [&assets, &state]() { DrawInspector(assets, state); },
+              .zero_padding = true,
           },
       .operation_tray =
           {

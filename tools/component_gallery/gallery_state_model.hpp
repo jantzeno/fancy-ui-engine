@@ -37,7 +37,7 @@ GalleryScreenshotLogicalExtent(const GalleryTab tab) {
   case GalleryTab::Operations:
     return {.width = 1280, .height = 1440};
   case GalleryTab::Status:
-    return {.width = 1280, .height = 1024};
+    return {.width = 1280, .height = 1088};
   }
   return {};
 }
@@ -63,13 +63,14 @@ inline constexpr float kOperationFeedbackHeight = 24.0f;
 inline constexpr std::size_t kOperationSampleCount = 8;
 inline constexpr std::size_t kStatusSampleCount = 8;
 inline constexpr float kStatusBarHeight = 24.0f;
-inline constexpr float kStatusFactLabelGap = 8.0f;
-inline constexpr float kStatusFactGroupGap = 16.0f;
-inline constexpr float kStatusFactCellPadding = 8.0f;
-inline constexpr float kStatusZoomCommandHeight = 24.0f;
+inline constexpr float kStatusFactLabelGap = 4.0f;
+inline constexpr float kStatusFactGroupGap = 12.0f;
+inline constexpr float kStatusFactCellPadding = 4.0f;
+inline constexpr float kStatusZoomPanelWidth = 230.0f;
+inline constexpr float kStatusZoomCommandHeight = 22.0f;
 inline constexpr float kStatusZoomCommandSpacing = 0.0f;
-inline constexpr float kStatusZoomPanelPadding = 8.0f;
-inline constexpr float kStatusZoomPanelItemSpacing = 4.0f;
+inline constexpr float kStatusZoomPanelPadding = 4.0f;
+inline constexpr float kStatusZoomPanelItemSpacing = 2.0f;
 
 struct OperationLayout {
   float heading_height = kOperationStateHeadingHeight;

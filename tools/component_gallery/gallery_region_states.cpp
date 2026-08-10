@@ -34,6 +34,12 @@ struct OperationAction {
   ButtonVariant variant = ButtonVariant::Secondary;
 };
 
+struct OperationStripMetrics {
+  float copy_width = 230.0f;
+  float progress_width = 136.0f;
+  float progress_bar_width = 88.0f;
+};
+
 struct OperationDetailEntry {
   std::string_view label;
   std::string_view value;
@@ -347,14 +353,16 @@ const std::array<StatusSample, kStatusSampleCount> &StatusSamples() {
 void DrawStateCardHeading(const std::string_view title, ImFont *font) {
   const ImVec2 start = ImGui::GetCursorPos();
   ImGui::SetCursorPos(ImVec2(start.x + Scale(12.0f), start.y + Scale(8.0f)));
+  ImGui::PushStyleColor(ImGuiCol_Text,
+                        ToImVec4(CurrentPalette().text_secondary));
   if (font != nullptr) {
-    ImGui::PushFont(
-        font, CurrentLayoutMetrics().typography.section_heading_font_height);
+    ImGui::PushFont(font, CurrentLayoutMetrics().typography.body_font_height);
   }
   ImGui::TextUnformatted(title.data(), title.data() + title.size());
   if (font != nullptr) {
     ImGui::PopFont();
   }
+  ImGui::PopStyleColor();
   ImGui::SetCursorPos(ImVec2(start.x, start.y + Scale(36.0f)));
   ImGui::Separator();
   ImGui::SetCursorPosY(start.y + Scale(37.0f));
@@ -398,9 +406,7 @@ void DrawOperationCopy(const OperationSample &sample, const float width,
   const float height = Scale(24.0f);
   const ImVec2 minimum = ImGui::GetCursorScreenPos();
   ImGui::Dummy(ImVec2(std::max(width, Scale(24.0f)), height));
-  const ImVec2 item_maximum = ImGui::GetItemRectMax();
-  const ImVec2 maximum(std::min(item_maximum.x, minimum.x + Scale(230.0f)),
-                       item_maximum.y);
+  const ImVec2 maximum = ImGui::GetItemRectMax();
   const float gap = Scale(8.0f);
   if (heading_font != nullptr) {
     ImGui::PushFont(heading_font,
@@ -456,10 +462,11 @@ float ActionWidth(const OperationAction &action) {
          Scale(24.0f);
 }
 
-void DrawOperationProgress(const OperationSample &sample, ImFont *mono_font) {
+void DrawOperationProgress(const OperationSample &sample, ImFont *mono_font,
+                           const OperationStripMetrics strip_metrics) {
   const LayoutMetrics metrics = CurrentLayoutMetrics();
-  const float progress_width = Scale(136.0f);
-  const float bar_width = Scale(88.0f);
+  const float progress_width = Scale(strip_metrics.progress_width);
+  const float bar_width = Scale(strip_metrics.progress_bar_width);
   const float gap = Scale(8.0f);
   const float item_height = Scale(kOperationStripItemHeight);
   const ImVec2 origin = ImGui::GetCursorScreenPos();
@@ -473,7 +480,7 @@ void DrawOperationProgress(const OperationSample &sample, ImFont *mono_font) {
           sample.indeterminate ? "Operation in progress" : "Operation progress",
       .value = sample.indeterminate ? std::nullopt : sample.progress,
       .status = SemanticStatus::Busy,
-      .size = {.x = 88.0f},
+      .size = {.x = strip_metrics.progress_bar_width},
   });
   if (mono_font != nullptr) {
     ImGui::PushFont(mono_font,
@@ -497,7 +504,8 @@ void DrawOperationProgress(const OperationSample &sample, ImFont *mono_font) {
 
 void DrawOperationStrip(detail::UiAssetAtlas &assets,
                         const OperationSample &sample,
-                        OperationPresentationState &state) {
+                        OperationPresentationState &state,
+                        const OperationStripMetrics strip_metrics = {}) {
   const PhasePresentation presentation = PresentationForPhase(sample.phase);
   const float strip_height = Scale(kOperationStripHeight);
   const float item_height = Scale(kOperationStripItemHeight);
@@ -516,8 +524,9 @@ void DrawOperationStrip(detail::UiAssetAtlas &assets,
     actions_width += gap * static_cast<float>(sample.actions.size() - 1);
   }
   const float progress_width =
-      (sample.progress.has_value() || sample.indeterminate) ? Scale(136.0f)
-                                                            : 0.0f;
+      (sample.progress.has_value() || sample.indeterminate)
+          ? Scale(strip_metrics.progress_width)
+          : 0.0f;
 
   ImGui::PushStyleColor(ImGuiCol_ChildBg,
                         detail::StatusBackground(presentation.status));
@@ -557,23 +566,28 @@ void DrawOperationStrip(detail::UiAssetAtlas &assets,
     align_to_row(item_height);
 
     const float available = ImGui::GetContentRegionAvail().x;
-    const float reserved =
-        actions_width + progress_width +
-        (!sample.actions.empty() && progress_width > 0.0f ? gap : 0.0f) +
-        (!sample.actions.empty() ? gap : 0.0f);
-    float copy_width = std::max(Scale(48.0f), available - reserved);
-    if (sample.actions.empty()) {
-      copy_width = std::min(copy_width, Scale(230.0f));
-    }
+    const float progress_gap = progress_width > 0.0f ? gap : 0.0f;
+    const float actions_gap = !sample.actions.empty() ? gap : 0.0f;
+    const float copy_width = std::max(
+        Scale(48.0f), std::min(Scale(strip_metrics.copy_width),
+                               available - progress_width - progress_gap -
+                                   actions_width - actions_gap));
     DrawOperationCopy(sample, copy_width, assets.heading_font());
 
     if (progress_width > 0.0f) {
       ImGui::SameLine();
       align_to_row(item_height);
-      DrawOperationProgress(sample, assets.mono_font());
+      DrawOperationProgress(sample, assets.mono_font(), strip_metrics);
     }
-    for (const OperationAction &action : sample.actions) {
-      ImGui::SameLine();
+    for (std::size_t index = 0; index < sample.actions.size(); ++index) {
+      const OperationAction &action = sample.actions[index];
+      if (index == 0) {
+        const float actions_x = window_minimum.x + ImGui::GetWindowWidth() -
+                                padding - actions_width;
+        ImGui::SetCursorScreenPos(ImVec2(actions_x, row_y));
+      } else {
+        ImGui::SameLine();
+      }
       align_to_row(item_height);
       const ButtonResult result = Button({
           .id = action.id,
@@ -822,19 +836,82 @@ void DrawFact(const std::string_view label, const std::string_view value,
   }
 }
 
+StatusBarResult DrawStatusZoomTrigger(detail::UiAssetAtlas &assets,
+                                      StatusZoomPresentationState &zoom,
+                                      const bool force_focus = false) {
+  StatusBarResult result;
+  ImGui::PushID("zoom-trigger");
+  if (zoom.request_focus) {
+    ImGui::SetKeyboardFocusHere();
+    zoom.request_focus = false;
+  }
+  const ImVec2 target(Scale(68.0f), Scale(24.0f));
+  ImGui::InvisibleButton("##zoom", target, ImGuiButtonFlags_EnableNav);
+  const InteractionResult interaction = detail::CaptureInteraction();
+  result.zoom_activated = ImGui::IsItemActivated();
+  result.zoom_hovered = interaction.hovered;
+  result.zoom_minimum = ImGui::GetItemRectMin();
+  result.zoom_maximum = ImGui::GetItemRectMax();
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  if (interaction.hovered || interaction.active || zoom.open) {
+    const ColorRgba fill = interaction.active ? CurrentPalette().control_pressed
+                                              : CurrentPalette().control_hover;
+    const float visual_inset_y = Scale(2.0f);
+    const ImVec2 visual_minimum(result.zoom_minimum.x,
+                                result.zoom_minimum.y + visual_inset_y);
+    const ImVec2 visual_maximum(result.zoom_maximum.x,
+                                result.zoom_maximum.y - visual_inset_y);
+    draw_list->AddRectFilled(visual_minimum, visual_maximum,
+                             ImGui::GetColorU32(ToImVec4(fill)), Scale(3.0f));
+    draw_list->AddRect(
+        visual_minimum, visual_maximum,
+        ImGui::GetColorU32(ToImVec4(CurrentPalette().border_strong)),
+        Scale(3.0f), ImDrawFlags_RoundCornersAll, Scale(1.0f));
+  }
+  const std::string percent = std::format("{:.0f}%", std::round(zoom.percent));
+  const ImVec2 text_size = ImGui::CalcTextSize(percent.c_str());
+  const float icon_size = Scale(16.0f);
+  const float content_width = text_size.x + Scale(2.0f) + icon_size;
+  const float content_x = result.zoom_maximum.x - Scale(4.0f) - content_width;
+  const float content_y =
+      CenteredContentY(result.zoom_minimum.y, target.y, text_size.y);
+  draw_list->AddText(
+      ImVec2(content_x, content_y),
+      ImGui::GetColorU32(ToImVec4(CurrentPalette().text_primary)),
+      percent.c_str());
+  const float icon_y =
+      CenteredContentY(result.zoom_minimum.y, target.y, icon_size);
+  static_cast<void>(assets.DrawIcon(
+      "triangle-down", steppenface::UiIconSize::Small16,
+      {.minimum = {.x = content_x + text_size.x + Scale(2.0f), .y = icon_y},
+       .maximum = {.x = content_x + text_size.x + Scale(2.0f) + icon_size,
+                   .y = icon_y + icon_size}},
+      CurrentPalette().text_primary));
+  DrawContainedFocusRing(interaction, result.zoom_minimum, result.zoom_maximum,
+                         force_focus);
+  if (interaction.hovered ||
+      (interaction.focused && ImGui::GetIO().NavVisible)) {
+    detail::ShowTooltip("Canvas zoom controls");
+  }
+  ImGui::PopID();
+  return result;
+}
+
 StatusBarResult DrawStatusBar(detail::UiAssetAtlas &assets,
                               const StatusSample &sample,
                               StatusZoomPresentationState &zoom,
-                              const bool force_focus = false) {
+                              const bool force_focus = false,
+                              const bool narrow = false) {
+  if (assets.body_font() != nullptr) {
+    ImGui::PushFont(assets.body_font(),
+                    CurrentLayoutMetrics().typography.body_font_height);
+  }
   StatusBarResult result;
   const float bar_height = Scale(kStatusBarHeight);
-  const float gap = Scale(kStatusFactGroupGap);
+  const float gap = Scale(narrow ? 8.0f : kStatusFactGroupGap);
   const float cell_padding = Scale(kStatusFactCellPadding);
-  const auto fixed_column_width = [cell_padding](const float content_width) {
-    return content_width + cell_padding * 2.0f;
-  };
-  const float file_width = fixed_column_width(FactWidth("File", sample.file));
-  const float tool_width = fixed_column_width(FactWidth("Tool", sample.tool));
+  const float file_width = FactWidth("File", sample.file);
+  const float tool_width = FactWidth("Tool", sample.tool);
   float right_width =
       FactWidth("Grid", sample.grid) + gap + FactWidth("Snap", sample.snap);
   if (sample.workspace == StatusWorkspace::Canvas) {
@@ -843,40 +920,47 @@ StatusBarResult DrawStatusBar(detail::UiAssetAtlas &assets,
     right_width += gap + FactWidth("Orbit", sample.orbit) + gap +
                    FactWidth("View", sample.view);
   }
-  right_width = fixed_column_width(right_width);
 
   ImGui::PushStyleColor(ImGuiCol_ChildBg,
                         ToImVec4(CurrentPalette().application_surface));
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(Scale(10.0f), 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                      ImVec2(Scale(narrow ? 4.0f : 8.0f), 0.0f));
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(gap, 0.0f));
-  if (ImGui::BeginChild(
-          "##status-bar", ImVec2(0.0f, bar_height), ImGuiChildFlags_None,
-          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+  if (ImGui::BeginChild("##status-bar", ImVec2(0.0f, bar_height),
+                        ImGuiChildFlags_AlwaysUseWindowPadding,
+                        ImGuiWindowFlags_NoScrollbar |
+                            ImGuiWindowFlags_NoScrollWithMouse)) {
     const ImVec2 bar_minimum = ImGui::GetWindowPos();
     const ImVec2 bar_size = ImGui::GetWindowSize();
     const ImVec2 bar_maximum(bar_minimum.x + bar_size.x,
                              bar_minimum.y + bar_size.y);
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(cell_padding, 0.0f));
-    if (ImGui::BeginTable("##status-facts", 5,
-                          ImGuiTableFlags_SizingStretchProp |
-                              ImGuiTableFlags_NoPadOuterX |
-                              ImGuiTableFlags_NoSavedSettings,
-                          ImVec2(0.0f, bar_height))) {
+    if (ImGui::BeginTable(
+            "##status-facts", 5,
+            ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoClip |
+                ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoSavedSettings,
+            ImVec2(0.0f, bar_height))) {
       ImGui::TableSetupColumn("File", ImGuiTableColumnFlags_WidthFixed,
                               file_width);
       ImGui::TableSetupColumn("Tool", ImGuiTableColumnFlags_WidthFixed,
                               tool_width);
-      ImGui::TableSetupColumn("Scope", ImGuiTableColumnFlags_WidthStretch,
-                              1.1f);
-      ImGui::TableSetupColumn("Selection", ImGuiTableColumnFlags_WidthStretch,
-                              0.9f);
+      ImGui::TableSetupColumn("Scope",
+                              narrow ? ImGuiTableColumnFlags_WidthFixed
+                                     : ImGuiTableColumnFlags_WidthStretch,
+                              narrow ? Scale(104.0f) : 1.0f);
+      ImGui::TableSetupColumn("Selection",
+                              narrow ? ImGuiTableColumnFlags_WidthFixed
+                                     : ImGuiTableColumnFlags_WidthStretch,
+                              narrow ? Scale(104.0f) : 1.0f);
       ImGui::TableSetupColumn("View", ImGuiTableColumnFlags_WidthFixed,
                               right_width);
       ImGui::TableNextRow(ImGuiTableRowFlags_None, bar_height);
       ImGui::TableSetColumnIndex(0);
-      DrawFact("File", sample.file, ImGui::GetContentRegionAvail().x);
+      DrawFact("File", sample.file,
+               ImGui::GetContentRegionAvail().x + cell_padding * 2.0f);
       ImGui::TableSetColumnIndex(1);
-      DrawFact("Tool", sample.tool, ImGui::GetContentRegionAvail().x);
+      DrawFact("Tool", sample.tool,
+               ImGui::GetContentRegionAvail().x + cell_padding * 2.0f);
       ImGui::TableSetColumnIndex(2);
       DrawFact("Scope", sample.scope, ImGui::GetContentRegionAvail().x);
       ImGui::TableSetColumnIndex(3);
@@ -887,65 +971,7 @@ StatusBarResult DrawStatusBar(detail::UiAssetAtlas &assets,
       DrawFact("Snap", sample.snap, FactWidth("Snap", sample.snap));
       if (sample.workspace == StatusWorkspace::Canvas) {
         ImGui::SameLine(0.0f, gap);
-        ImGui::PushID("zoom-trigger");
-        if (zoom.request_focus) {
-          ImGui::SetKeyboardFocusHere();
-          zoom.request_focus = false;
-        }
-        const ImVec2 target(Scale(68.0f), Scale(24.0f));
-        ImGui::InvisibleButton("##zoom", target, ImGuiButtonFlags_EnableNav);
-        const InteractionResult interaction = detail::CaptureInteraction();
-        result.zoom_activated = ImGui::IsItemActivated();
-        result.zoom_hovered = interaction.hovered;
-        result.zoom_minimum = ImGui::GetItemRectMin();
-        result.zoom_maximum = ImGui::GetItemRectMax();
-        ImDrawList *draw_list = ImGui::GetWindowDrawList();
-        if (interaction.hovered || interaction.active || zoom.open) {
-          const ColorRgba fill = interaction.active
-                                     ? CurrentPalette().control_pressed
-                                     : CurrentPalette().control_hover;
-          const float visual_inset_y = Scale(2.0f);
-          const ImVec2 visual_minimum(result.zoom_minimum.x,
-                                      result.zoom_minimum.y + visual_inset_y);
-          const ImVec2 visual_maximum(result.zoom_maximum.x,
-                                      result.zoom_maximum.y - visual_inset_y);
-          draw_list->AddRectFilled(visual_minimum, visual_maximum,
-                                   ImGui::GetColorU32(ToImVec4(fill)),
-                                   Scale(3.0f));
-          draw_list->AddRect(
-              visual_minimum, visual_maximum,
-              ImGui::GetColorU32(ToImVec4(CurrentPalette().border_strong)),
-              Scale(3.0f), ImDrawFlags_RoundCornersAll, Scale(1.0f));
-        }
-        const std::string percent =
-            std::format("{:.0f}%", std::round(zoom.percent));
-        const ImVec2 text_size = ImGui::CalcTextSize(percent.c_str());
-        const float icon_size = Scale(16.0f);
-        const float content_width = text_size.x + Scale(2.0f) + icon_size;
-        const float content_x =
-            result.zoom_maximum.x - Scale(4.0f) - content_width;
-        const float content_y =
-            CenteredContentY(result.zoom_minimum.y, target.y, text_size.y);
-        draw_list->AddText(
-            ImVec2(content_x, content_y),
-            ImGui::GetColorU32(ToImVec4(CurrentPalette().text_primary)),
-            percent.c_str());
-        const float icon_y =
-            CenteredContentY(result.zoom_minimum.y, target.y, icon_size);
-        static_cast<void>(assets.DrawIcon(
-            "triangle-down", steppenface::UiIconSize::Small16,
-            {.minimum = {.x = content_x + text_size.x + Scale(2.0f),
-                         .y = icon_y},
-             .maximum = {.x = content_x + text_size.x + Scale(2.0f) + icon_size,
-                         .y = icon_y + icon_size}},
-            CurrentPalette().text_primary));
-        DrawContainedFocusRing(interaction, result.zoom_minimum,
-                               result.zoom_maximum, force_focus);
-        if (interaction.hovered ||
-            (interaction.focused && ImGui::GetIO().NavVisible)) {
-          detail::ShowTooltip("Canvas zoom controls");
-        }
-        ImGui::PopID();
+        result = DrawStatusZoomTrigger(assets, zoom, force_focus);
       } else {
         ImGui::SameLine(0.0f, gap);
         DrawFact("Orbit", sample.orbit, FactWidth("Orbit", sample.orbit));
@@ -955,47 +981,29 @@ StatusBarResult DrawStatusBar(detail::UiAssetAtlas &assets,
       ImGui::EndTable();
     }
     ImGui::PopStyleVar();
-    const float border_inset = Scale(0.5f);
-    ImGui::GetWindowDrawList()->AddRect(
-        ImVec2(bar_minimum.x + border_inset, bar_minimum.y + border_inset),
-        ImVec2(bar_maximum.x - border_inset, bar_maximum.y - border_inset),
-        ImGui::GetColorU32(ToImVec4(CurrentPalette().border)), 0.0f,
-        ImDrawFlags_None, Scale(1.0f));
+    ImGui::GetWindowDrawList()->AddLine(
+        bar_minimum, ImVec2(bar_maximum.x, bar_minimum.y),
+        ImGui::GetColorU32(ToImVec4(CurrentPalette().border)));
   }
   ImGui::EndChild();
   ImGui::PopStyleVar(2);
   ImGui::PopStyleColor();
+  if (assets.body_font() != nullptr) {
+    ImGui::PopFont();
+  }
   return result;
 }
 
 ImVec2 ZoomPanelSize(const StatusSample &sample) {
-  const float width = std::min(Scale(420.0f), ImGui::GetContentRegionAvail().x);
-  const float padding = Scale(kStatusZoomPanelPadding);
-  const float spacing = Scale(kStatusZoomPanelItemSpacing);
-  const float command_spacing = Scale(kStatusZoomCommandSpacing);
-  const float command_height = Scale(kStatusZoomCommandHeight);
-  const float text_height = ImGui::GetTextLineHeight();
-  float height =
-      padding * 2.0f + command_height * 3.0f + command_spacing * 2.0f;
-  height += spacing + text_height;
-  height += spacing + ImGui::GetFrameHeight();
-  if (!sample.can_fit_selection) {
-    const float wrap_width = std::max(Scale(64.0f), width - padding * 2.0f);
-    const ImVec2 reason_size =
-        ImGui::CalcTextSize(sample.selection_disabled_reason.data(),
-                            sample.selection_disabled_reason.data() +
-                                sample.selection_disabled_reason.size(),
-                            false, wrap_width);
-    height += spacing + Scale(1.0f) + spacing + reason_size.y;
-  }
-  height += ImGui::GetStyle().ChildBorderSize * 2.0f;
-  return ImVec2(width, std::ceil(height));
+  const float width =
+      std::min(Scale(kStatusZoomPanelWidth), ImGui::GetContentRegionAvail().x);
+  return ImVec2(width, Scale(sample.can_fit_selection ? 138.0f : 171.0f));
 }
 
 void DrawZoomPanel(const StatusSample &sample,
                    StatusZoomPresentationState &zoom, const ImVec2 panel_size,
                    const ImVec2 panel_position, ImVec2 &panel_minimum,
-                   ImVec2 &panel_maximum) {
+                   ImVec2 &panel_maximum, ImFont *mono_font) {
   const float width = panel_size.x;
   const float height = panel_size.y;
   ImGui::SetCursorScreenPos(panel_position);
@@ -1034,20 +1042,34 @@ void DrawZoomPanel(const StatusSample &sample,
     ImGui::BeginGroup();
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                         ImVec2(Scale(4.0f), Scale(kStatusZoomCommandSpacing)));
-    ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(1.0f, 0.5f));
-    command("zoom-100", "Zoom 100%", true, {});
+    ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
     command("zoom-fit", "Zoom to Fit", sample.can_fit,
             "No spatial content is available to fit.");
     command("zoom-selection", "Zoom to Selection", sample.can_fit_selection,
             sample.selection_disabled_reason);
+    command("zoom-100", "Zoom 100%", true, {});
     ImGui::PopStyleVar(2);
     ImGui::EndGroup();
-    detail::DrawSecondaryText("Zoom · 10–1600%");
+    const float label_right =
+        ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
+    detail::DrawSecondaryText("Zoom");
     ImGui::SameLine();
-    ImGui::Text("%.0f%%", zoom.percent);
+    const std::string percent =
+        std::format("{:.0f}%", std::round(zoom.percent));
+    if (mono_font != nullptr) {
+      ImGui::PushFont(mono_font,
+                      CurrentLayoutMetrics().typography.body_font_height);
+    }
+    ImGui::SetCursorPosX(label_right - ImGui::CalcTextSize(percent.c_str()).x);
+    ImGui::TextUnformatted(percent.c_str());
+    if (mono_font != nullptr) {
+      ImGui::PopFont();
+    }
     float slider_position =
         fancy_ui::StatusZoomSliderPositionFromPercent(zoom.percent);
     ImGui::SetNextItemWidth(-1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(ImGui::GetStyle().FramePadding.x, 0.0f));
     if (detail::DrawSliderFloat("##zoom-slider", slider_position, 0.0f, 100.0f,
                                 "%.0f", {}, false, false,
                                 ImGuiSliderFlags_AlwaysClamp)) {
@@ -1055,7 +1077,15 @@ void DrawZoomPanel(const StatusSample &sample,
           fancy_ui::StatusZoomPercentFromSliderPosition(slider_position);
       zoom.feedback = "Zoom adjusted";
     }
+    ImGui::PopStyleVar();
     detail::DrawFocusRing(detail::CaptureInteraction(), true);
+    const float scale_right =
+        ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
+    detail::DrawSecondaryText("10%");
+    ImGui::SameLine();
+    const char *maximum_label = "1600%";
+    ImGui::SetCursorPosX(scale_right - ImGui::CalcTextSize(maximum_label).x);
+    detail::DrawSecondaryText(maximum_label);
     if (!sample.can_fit_selection) {
       ImGui::Separator();
       detail::DrawSecondaryTextWrapped(sample.selection_disabled_reason);
@@ -1106,7 +1136,10 @@ void DrawStatusCard(detail::UiAssetAtlas &assets, const StatusSample &sample,
               },
       };
       OperationPresentationState state;
-      DrawOperationStrip(assets, background, state);
+      DrawOperationStrip(assets, background, state,
+                         {.copy_width = 200.0f,
+                          .progress_width = 132.0f,
+                          .progress_bar_width = 84.0f});
     }
     const StatusBarResult bar = DrawStatusBar(assets, sample, zoom);
     if (bar.zoom_activated) {
@@ -1118,14 +1151,14 @@ void DrawStatusCard(detail::UiAssetAtlas &assets, const StatusSample &sample,
       const float inset = Scale(4.0f);
       zoom_panel_size.y =
           std::min(zoom_panel_size.y, card_height - inset * 2.0f);
-      const float panel_x = std::clamp(
-          bar.zoom_maximum.x - zoom_panel_size.x, card_minimum.x + inset,
-          card_maximum.x - inset - zoom_panel_size.x);
-      const float panel_y = std::clamp(
-          bar.zoom_minimum.y - inset - zoom_panel_size.y,
-          card_minimum.y + inset, card_maximum.y - inset - zoom_panel_size.y);
+      const float minimum_x = card_minimum.x + inset;
+      const float maximum_x =
+          std::max(minimum_x, card_maximum.x - inset - zoom_panel_size.x);
+      const float panel_x = std::clamp(bar.zoom_maximum.x - zoom_panel_size.x,
+                                       minimum_x, maximum_x);
+      const float panel_y = bar.zoom_minimum.y - inset - zoom_panel_size.y;
       DrawZoomPanel(sample, zoom, zoom_panel_size, ImVec2(panel_x, panel_y),
-                    panel_minimum, panel_maximum);
+                    panel_minimum, panel_maximum, assets.mono_font());
     }
     if (zoom.open && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
       zoom.open = false;
@@ -1182,7 +1215,8 @@ void DrawStatusBarStateGallery(detail::UiAssetAtlas &assets,
       "zoom, overflow, and operation independence.");
   ImGui::Spacing();
   if (ImGui::BeginChild("##status-states-scroll", ImVec2(0.0f, 0.0f), false,
-                        ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+                        ImGuiWindowFlags_NoScrollbar |
+                            ImGuiWindowFlags_NoScrollWithMouse)) {
     const auto &samples = StatusSamples();
     for (std::size_t index = 0; index < samples.size(); ++index) {
       if (index == 7) {
@@ -1196,21 +1230,47 @@ void DrawStatusBarStateGallery(detail::UiAssetAtlas &assets,
                               ImGuiWindowFlags_NoSavedSettings |
                                   ImGuiWindowFlags_NoScrollbar)) {
           DrawStateCardHeading(samples[index].title, assets.heading_font());
-          const float narrow_width =
-              std::min(Scale(760.0f), ImGui::GetContentRegionAvail().x);
+          const float margin = Scale(12.0f);
+          ImGui::SetCursorPosX(margin);
+          const float narrow_width = std::min(
+              Scale(760.0f), ImGui::GetContentRegionAvail().x - margin);
           ImGui::PushStyleColor(ImGuiCol_ChildBg,
                                 ToImVec4(CurrentPalette().application_surface));
-          if (ImGui::BeginChild("##narrow-status", ImVec2(narrow_width, 0.0f),
-                                ImGuiChildFlags_Borders,
-                                ImGuiWindowFlags_NoScrollbar)) {
-            static_cast<void>(DrawStatusBar(
-                assets, samples[3], state.status_zoom_states[index], true));
+          ImGui::PushStyleColor(ImGuiCol_Border,
+                                ToImVec4(CurrentPalette().border_strong));
+          if (ImGui::BeginChild(
+                  "##narrow-status", ImVec2(narrow_width, Scale(26.0f)),
+                  ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar)) {
+            static_cast<void>(DrawStatusBar(assets, samples[3],
+                                            state.status_zoom_states[index],
+                                            false, true));
           }
           ImGui::EndChild();
-          ImGui::PopStyleColor();
-          ImGui::SameLine();
+          ImGui::PopStyleColor(2);
+          ImGui::SetCursorPos(
+              ImVec2(margin, Scale(kGalleryStateHeadingHeight + 38.0f)));
+          ImGui::PushID("focus-sample");
+          if (assets.body_font() != nullptr) {
+            ImGui::PushFont(assets.body_font(),
+                            CurrentLayoutMetrics().typography.body_font_height);
+          }
+          static_cast<void>(DrawStatusZoomTrigger(
+              assets, state.status_zoom_states[index], true));
+          if (assets.body_font() != nullptr) {
+            ImGui::PopFont();
+          }
+          ImGui::PopID();
+          ImGui::SameLine(0.0f, Scale(8.0f));
+          if (assets.body_font() != nullptr) {
+            ImGui::PushFont(assets.body_font(),
+                            CurrentLayoutMetrics().typography.body_font_height *
+                                0.9f);
+          }
           detail::DrawSecondaryText(
               "24 px target · 16/20 text · visible focus");
+          if (assets.body_font() != nullptr) {
+            ImGui::PopFont();
+          }
         }
         ImGui::EndChild();
         ImGui::PopStyleVar();

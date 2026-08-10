@@ -69,7 +69,7 @@ TEST_CASE("gallery screenshots use state-sheet-specific logical extents") {
   REQUIRE(operations.width == 1280);
   REQUIRE(operations.height == 1440);
   REQUIRE(status.width == 1280);
-  REQUIRE(status.height == 1024);
+  REQUIRE(status.height == 1088);
 }
 
 TEST_CASE("gallery capture slugs seed representative transient states") {
