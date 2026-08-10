@@ -608,15 +608,13 @@ void DrawAdvancedFields(GalleryState &state) {
 }
 
 void DrawSpatialGizmo(detail::UiAssetAtlas &assets, GalleryState &state) {
-  const bool bed =
-      state.component_capture == ComponentCaptureVariant::GrainBed;
+  const bool bed = state.component_capture == ComponentCaptureVariant::GrainBed;
   const bool part =
       state.component_capture == ComponentCaptureVariant::GrainPart;
   const std::optional<GrainDirectionValue> secondary =
-      bed || part
-          ? std::nullopt
-          : std::optional{GrainDirectionValue{
-                .kind = GrainDirectionKind::Bed, .degrees = 90.0}};
+      bed || part ? std::nullopt
+                  : std::optional{GrainDirectionValue{
+                        .kind = GrainDirectionKind::Bed, .degrees = 90.0}};
   const GrainDirectionGizmoResult result = GrainDirectionGizmo(
       {
           .id = "grain",
@@ -1569,48 +1567,38 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
   ImGui::PopFont();
   ImGui::Spacing();
 
-  const auto move_tab = [&state](const int delta) {
-    const int current = static_cast<int>(state.active_tab);
-    ActivateGalleryTab(
-        state, static_cast<GalleryTab>((current + delta + kGalleryTabCount) %
-                                       kGalleryTabCount));
+  static constexpr std::array gallery_tabs{
+      ChoiceSpec{.id = "components", .label = "Components"},
+      ChoiceSpec{.id = "shell", .label = "Application shell"},
+      ChoiceSpec{.id = "settings", .label = "Settings"},
+      ChoiceSpec{.id = "operations", .label = "Operation strip & tray"},
+      ChoiceSpec{.id = "status", .label = "Status bar"},
   };
-  if (ImGui::BeginTabBar("##gallery-tabs",
-                         ImGuiTabBarFlags_FittingPolicyResizeDown)) {
-    const auto tab = [&](const char *label, const GalleryTab gallery_tab,
-                         const std::function<void()> &draw) {
-      const ImGuiTabItemFlags flags = state.active_tab == gallery_tab
-                                          ? ImGuiTabItemFlags_SetSelected
-                                          : ImGuiTabItemFlags_None;
-      const bool restore_focus =
-          state.focus_active_tab && state.active_tab == gallery_tab;
-      if (restore_focus) {
-        ImGui::SetKeyboardFocusHere();
-      }
-      const bool visible = ImGui::BeginTabItem(label, nullptr, flags);
-      if (restore_focus) {
-        state.focus_active_tab = false;
-      }
-      const bool focused = ImGui::IsItemFocused();
-      if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-        ActivateGalleryTab(state, gallery_tab);
-      }
-      if (focused && ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
-        move_tab(-1);
-      } else if (focused && ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
-        move_tab(1);
-      }
-      if (visible) {
+  static_assert(gallery_tabs.size() == kGalleryTabCount);
+  const TabSetResult selected_tab = TabSet({
+      .id = "gallery-tabs",
+      .tabs = gallery_tabs,
+      .selected_index = static_cast<std::size_t>(state.active_tab),
+      .request_focus = state.focus_active_tab,
+  });
+  const GalleryTab active_tab =
+      static_cast<GalleryTab>(selected_tab.selected_index);
+  if (active_tab != state.active_tab) {
+    ActivateGalleryTab(state, active_tab);
+  }
+  state.focus_active_tab = false;
+  {
+    const auto panel = [&state](const GalleryTab tab, const auto &draw) {
+      if (state.active_tab == tab) {
         draw();
-        ImGui::EndTabItem();
       }
     };
-    tab("Components", GalleryTab::Components, [&assets, &state] {
+    panel(GalleryTab::Components, [&assets, &state] {
       detail::ApplicationChrome chrome(assets);
       ImGui::PushFont(nullptr,
                       CurrentLayoutMetrics().typography.body_font_height);
-      detail::DrawSecondaryText(
-          "Shared controls, hierarchy rows, semantic feedback, and values.");
+      detail::DrawSecondaryText("Shared controls, hierarchy rows, "
+                                "semantic feedback, and values.");
       ImGui::PopFont();
       ImGui::Spacing();
       const float table_width = Scale(4.0f * 302.0f + 3.0f * 8.0f);
@@ -1668,8 +1656,7 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
           GalleryCard(
               "grain-gizmo", "Grain direction gizmo", assets.heading_font(),
               [&assets, &state] { DrawSpatialGizmo(assets, state); }, false,
-              true, 448.0f,
-              604.0f);
+              true, 448.0f, 604.0f);
           GalleryCard(
               "hierarchy-step", "STEP", assets.heading_font(),
               [&assets, &state] {
@@ -1710,14 +1697,12 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
       }
       ImGui::EndChild();
     });
-    tab("Application shell", GalleryTab::Shell, [] {});
-    tab("Settings", GalleryTab::Settings,
-        [&assets, &state] { DrawSettingsGallery(assets, state); });
-    tab("Operation strip & tray", GalleryTab::Operations,
-        [&assets, &state] { DrawOperationStateGallery(assets, state); });
-    tab("Status bar", GalleryTab::Status,
-        [&assets, &state] { DrawStatusBarStateGallery(assets, state); });
-    ImGui::EndTabBar();
+    panel(GalleryTab::Settings,
+          [&assets, &state] { DrawSettingsGallery(assets, state); });
+    panel(GalleryTab::Operations,
+          [&assets, &state] { DrawOperationStateGallery(assets, state); });
+    panel(GalleryTab::Status,
+          [&assets, &state] { DrawStatusBarStateGallery(assets, state); });
   }
   ImGui::End();
 

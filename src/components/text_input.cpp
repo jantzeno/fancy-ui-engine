@@ -23,8 +23,9 @@ TextInputResult TextInput(const TextInputSpec &spec) {
   const detail::FieldLayout layout = detail::BeginFieldLayout(spec.label);
   detail::PushFieldControlState(spec.availability, spec.validation);
   detail::BeginAvailability(spec.availability);
-  const bool changed =
-      ImGui::InputText("##value", buffer.data(), buffer.size());
+  const std::string placeholder = detail::Owned(spec.placeholder);
+  const bool changed = ImGui::InputTextWithHint("##value", placeholder.c_str(),
+                                                buffer.data(), buffer.size());
   const InteractionResult interaction = detail::CaptureInteraction();
   const bool cancelled = detail::CancelledThisFrame(interaction);
   const bool committed = ImGui::IsItemDeactivatedAfterEdit() && !cancelled;

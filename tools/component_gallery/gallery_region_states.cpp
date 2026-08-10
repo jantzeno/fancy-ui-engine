@@ -360,6 +360,24 @@ void DrawStateCardHeading(const std::string_view title, ImFont *font) {
   ImGui::SetCursorPosY(start.y + Scale(37.0f));
 }
 
+void DrawOperationCardHeading(const std::string_view title, ImFont *font) {
+  const ImVec2 start = ImGui::GetCursorPos();
+  ImGui::SetCursorPos(ImVec2(start.x + Scale(12.0f), start.y + Scale(8.0f)));
+  ImGui::PushStyleColor(ImGuiCol_Text,
+                        ToImVec4(CurrentPalette().text_secondary));
+  if (font != nullptr) {
+    ImGui::PushFont(font, CurrentLayoutMetrics().typography.body_font_height);
+  }
+  ImGui::TextUnformatted(title.data(), title.data() + title.size());
+  if (font != nullptr) {
+    ImGui::PopFont();
+  }
+  ImGui::PopStyleColor();
+  ImGui::SetCursorPos(ImVec2(start.x, start.y + Scale(33.0f)));
+  ImGui::Separator();
+  ImGui::SetCursorPosY(start.y + Scale(kOperationStateHeadingHeight));
+}
+
 void DrawPhaseIcon(detail::UiAssetAtlas &assets,
                    const PhasePresentation &presentation) {
   const float target = Scale(16.0f);
@@ -380,7 +398,9 @@ void DrawOperationCopy(const OperationSample &sample, const float width,
   const float height = Scale(24.0f);
   const ImVec2 minimum = ImGui::GetCursorScreenPos();
   ImGui::Dummy(ImVec2(std::max(width, Scale(24.0f)), height));
-  const ImVec2 maximum = ImGui::GetItemRectMax();
+  const ImVec2 item_maximum = ImGui::GetItemRectMax();
+  const ImVec2 maximum(std::min(item_maximum.x, minimum.x + Scale(230.0f)),
+                       item_maximum.y);
   const float gap = Scale(8.0f);
   if (heading_font != nullptr) {
     ImGui::PushFont(heading_font,
@@ -388,16 +408,19 @@ void DrawOperationCopy(const OperationSample &sample, const float width,
   }
   const ImVec2 label_size = ImGui::CalcTextSize(
       sample.label.data(), sample.label.data() + sample.label.size());
-  const float label_width =
-      std::min(label_size.x, std::max(Scale(72.0f), width * 0.45f));
+  const float label_width = std::min(label_size.x, width);
   const ImVec2 label_minimum(
       minimum.x,
       minimum.y + std::floor(std::max(0.0f, (height - label_size.y) * 0.5f)));
   const ImVec2 label_maximum(minimum.x + label_width, maximum.y);
+  ImGui::PushStyleColor(
+      ImGuiCol_Text,
+      detail::StatusColor(PresentationForPhase(sample.phase).status));
   ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(), label_minimum,
                             label_maximum, label_maximum.x, sample.label.data(),
                             sample.label.data() + sample.label.size(),
                             &label_size);
+  ImGui::PopStyleColor();
   if (heading_font != nullptr) {
     ImGui::PopFont();
   }
@@ -421,7 +444,7 @@ void DrawOperationCopy(const OperationSample &sample, const float width,
               ImGui::CalcTextSize(sample.detail.data(),
                                   sample.detail.data() + sample.detail.size())
                   .x >
-          width) {
+          maximum.x - minimum.x) {
     detail::ShowTooltip(std::format("{} · {}", sample.label, sample.detail));
   }
 }
@@ -433,9 +456,9 @@ float ActionWidth(const OperationAction &action) {
          Scale(24.0f);
 }
 
-void DrawOperationProgress(const OperationSample &sample) {
+void DrawOperationProgress(const OperationSample &sample, ImFont *mono_font) {
   const LayoutMetrics metrics = CurrentLayoutMetrics();
-  const float progress_width = Scale(144.0f);
+  const float progress_width = Scale(136.0f);
   const float bar_width = Scale(88.0f);
   const float gap = Scale(8.0f);
   const float item_height = Scale(kOperationStripItemHeight);
@@ -449,11 +472,13 @@ void DrawOperationProgress(const OperationSample &sample) {
       .label =
           sample.indeterminate ? "Operation in progress" : "Operation progress",
       .value = sample.indeterminate ? std::nullopt : sample.progress,
-      .status = sample.indeterminate
-                    ? SemanticStatus::Busy
-                    : PresentationForPhase(sample.phase).status,
+      .status = SemanticStatus::Busy,
       .size = {.x = 88.0f},
   });
+  if (mono_font != nullptr) {
+    ImGui::PushFont(mono_font,
+                    CurrentLayoutMetrics().typography.body_font_height);
+  }
   const float text_y =
       origin.y + std::floor((item_height - ImGui::GetTextLineHeight()) * 0.5f);
   ImGui::SetCursorScreenPos(ImVec2(origin.x + bar_width + gap, text_y));
@@ -462,6 +487,9 @@ void DrawOperationProgress(const OperationSample &sample) {
   } else {
     ImGui::Text("%d%%", static_cast<int>(std::round(
                             sample.progress.value_or(0.0f) * 100.0f)));
+  }
+  if (mono_font != nullptr) {
+    ImGui::PopFont();
   }
   ImGui::SetCursorScreenPos(origin);
   ImGui::Dummy(ImVec2(progress_width, item_height));
@@ -476,6 +504,10 @@ void DrawOperationStrip(detail::UiAssetAtlas &assets,
   const float gap = Scale(8.0f);
   const float padding = Scale(8.0f);
   const bool has_details = !sample.sections.empty();
+  if (assets.body_font() != nullptr) {
+    ImGui::PushFont(assets.body_font(),
+                    CurrentLayoutMetrics().typography.body_font_height);
+  }
   float actions_width = 0.0f;
   for (const OperationAction &action : sample.actions) {
     actions_width += ActionWidth(action);
@@ -484,7 +516,7 @@ void DrawOperationStrip(detail::UiAssetAtlas &assets,
     actions_width += gap * static_cast<float>(sample.actions.size() - 1);
   }
   const float progress_width =
-      (sample.progress.has_value() || sample.indeterminate) ? Scale(144.0f)
+      (sample.progress.has_value() || sample.indeterminate) ? Scale(136.0f)
                                                             : 0.0f;
 
   ImGui::PushStyleColor(ImGuiCol_ChildBg,
@@ -494,9 +526,14 @@ void DrawOperationStrip(detail::UiAssetAtlas &assets,
                       ImVec2(padding, Scale(3.0f)));
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(gap, 0.0f));
   if (ImGui::BeginChild("##operation-strip", ImVec2(0.0f, strip_height),
-                        ImGuiChildFlags_Borders,
+                        ImGuiChildFlags_AlwaysUseWindowPadding,
                         ImGuiWindowFlags_NoScrollbar |
                             ImGuiWindowFlags_NoScrollWithMouse)) {
+    const ImVec2 window_minimum = ImGui::GetWindowPos();
+    ImGui::GetWindowDrawList()->AddLine(
+        window_minimum,
+        ImVec2(window_minimum.x + ImGui::GetWindowWidth(), window_minimum.y),
+        ImGui::GetColorU32(ToImVec4(CurrentPalette().border)));
     const float row_y = ImGui::GetCursorScreenPos().y;
     const auto align_to_row = [row_y](const float height) {
       const ImVec2 cursor = ImGui::GetCursorScreenPos();
@@ -524,13 +561,16 @@ void DrawOperationStrip(detail::UiAssetAtlas &assets,
         actions_width + progress_width +
         (!sample.actions.empty() && progress_width > 0.0f ? gap : 0.0f) +
         (!sample.actions.empty() ? gap : 0.0f);
-    const float copy_width = std::max(Scale(48.0f), available - reserved);
+    float copy_width = std::max(Scale(48.0f), available - reserved);
+    if (sample.actions.empty()) {
+      copy_width = std::min(copy_width, Scale(230.0f));
+    }
     DrawOperationCopy(sample, copy_width, assets.heading_font());
 
     if (progress_width > 0.0f) {
       ImGui::SameLine();
       align_to_row(item_height);
-      DrawOperationProgress(sample);
+      DrawOperationProgress(sample, assets.mono_font());
     }
     for (const OperationAction &action : sample.actions) {
       ImGui::SameLine();
@@ -549,6 +589,9 @@ void DrawOperationStrip(detail::UiAssetAtlas &assets,
   ImGui::EndChild();
   ImGui::PopStyleVar(2);
   ImGui::PopStyleColor(2);
+  if (assets.body_font() != nullptr) {
+    ImGui::PopFont();
+  }
 }
 
 void DrawTrayResizeHandle(OperationPresentationState &state) {
@@ -570,60 +613,70 @@ void DrawTrayResizeHandle(OperationPresentationState &state) {
 
 void DrawDetailEntry(const OperationDetailEntry &entry, const bool row_layout) {
   const bool toned = entry.status != SemanticStatus::Neutral;
+  if (row_layout && toned) {
+    ImGui::TextColored(detail::StatusColor(entry.status), "%.*s",
+                       static_cast<int>(entry.label.size()),
+                       entry.label.data());
+  } else if (row_layout) {
+    ImGui::TextUnformatted(entry.label.data(),
+                           entry.label.data() + entry.label.size());
+  }
+  const ImVec2 text_size = ImGui::CalcTextSize(
+      entry.value.data(), entry.value.data() + entry.value.size());
   if (row_layout) {
-    if (toned) {
-      ImGui::TextColored(detail::StatusColor(entry.status), "%.*s",
-                         static_cast<int>(entry.label.size()),
-                         entry.label.data());
-    } else {
-      ImGui::TextUnformatted(entry.label.data(),
-                             entry.label.data() + entry.label.size());
-    }
     ImGui::SameLine();
-    const float value_width =
-        ImGui::CalcTextSize(entry.value.data(),
-                            entry.value.data() + entry.value.size())
-            .x;
     const float cell_end =
         ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
     ImGui::SetCursorPosX(
-        std::max(ImGui::GetCursorPosX(), cell_end - value_width));
-  }
-  if (!row_layout && toned) {
-    ImGui::TextColored(detail::StatusColor(entry.status), "%.*s",
-                       static_cast<int>(entry.value.size()),
-                       entry.value.data());
+        std::max(ImGui::GetCursorPosX(), cell_end - text_size.x));
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          ToImVec4(CurrentPalette().text_primary));
+  } else if (toned) {
+    ImGui::PushStyleColor(ImGuiCol_Text, detail::StatusColor(entry.status));
   } else {
-    ImGui::TextUnformatted(entry.value.data(),
-                           entry.value.data() + entry.value.size());
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          ToImVec4(CurrentPalette().text_secondary));
   }
+  const ImVec2 minimum = ImGui::GetCursorScreenPos();
+  ImGui::Dummy(
+      ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeight()));
+  const ImVec2 maximum = ImGui::GetItemRectMax();
+  ImGui::RenderTextEllipsis(
+      ImGui::GetWindowDrawList(), minimum, maximum, maximum.x,
+      entry.value.data(), entry.value.data() + entry.value.size(), &text_size);
+  ImGui::PopStyleColor();
   if (ImGui::IsItemHovered()) {
     detail::ShowTooltip(entry.value);
   }
 }
 
 void DrawOperationTray(const OperationSample &sample,
-                       OperationPresentationState &state,
-                       ImFont *heading_font) {
+                       OperationPresentationState &state, ImFont *heading_font,
+                       ImFont *mono_font) {
   ImGui::PushStyleColor(ImGuiCol_ChildBg,
                         ToImVec4(CurrentPalette().surface_muted));
   ImGui::PushStyleColor(ImGuiCol_Border,
                         ToImVec4(CurrentPalette().border_strong));
   ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(CurrentPalette().text_primary));
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(Scale(8.0f), 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(Scale(16.0f), 0.0f));
   const float tray_height = Scale(state.tray_height);
   if (ImGui::BeginChild("##operation-tray", ImVec2(0.0f, tray_height),
-                        ImGuiChildFlags_Borders,
-                        ImGuiWindowFlags_NoSavedSettings)) {
+                        ImGuiChildFlags_AlwaysUseWindowPadding,
+                        ImGuiWindowFlags_NoSavedSettings |
+                            ImGuiWindowFlags_NoScrollbar |
+                            ImGuiWindowFlags_NoScrollWithMouse)) {
+    const ImVec2 window_minimum = ImGui::GetWindowPos();
+    ImGui::GetWindowDrawList()->AddLine(
+        window_minimum,
+        ImVec2(window_minimum.x + ImGui::GetWindowWidth(), window_minimum.y),
+        ImGui::GetColorU32(ToImVec4(CurrentPalette().border_strong)));
     DrawTrayResizeHandle(state);
-    ImGui::Spacing();
+    ImGui::SetCursorPosY(Scale(16.0f));
     const int column_count =
         std::clamp(static_cast<int>(sample.sections.size()), 1, 3);
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
-                        ImVec2(Scale(8.0f), Scale(4.0f)));
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(Scale(8.0f), 0.0f));
     if (ImGui::BeginTable("##tray-sections", column_count,
-                          ImGuiTableFlags_SizingStretchSame |
-                              ImGuiTableFlags_BordersInnerV)) {
+                          ImGuiTableFlags_SizingStretchSame)) {
       for (const OperationDetailSection &section : sample.sections) {
         ImGui::TableNextColumn();
         ImGui::PushID(section.title.data());
@@ -636,12 +689,32 @@ void DrawOperationTray(const OperationSample &sample,
         if (heading_font != nullptr) {
           ImGui::PopFont();
         }
-        ImGui::Separator();
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + Scale(4.0f));
+        if (mono_font != nullptr) {
+          ImGui::PushFont(mono_font,
+                          CurrentLayoutMetrics().typography.body_font_height);
+        }
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              ToImVec4(CurrentPalette().text_secondary));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                            ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
         for (const OperationDetailEntry &row : section.rows) {
+          const ImVec2 row_minimum = ImGui::GetCursorScreenPos();
+          const float row_width = ImGui::GetContentRegionAvail().x;
           DrawDetailEntry(row, true);
+          const float line_y = ImGui::GetItemRectMax().y;
+          ImGui::GetWindowDrawList()->AddLine(
+              ImVec2(row_minimum.x, line_y),
+              ImVec2(row_minimum.x + row_width, line_y),
+              ImGui::GetColorU32(ToImVec4(CurrentPalette().border)));
         }
         for (const OperationDetailEntry &line : section.lines) {
           DrawDetailEntry(line, false);
+        }
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
+        if (mono_font != nullptr) {
+          ImGui::PopFont();
         }
         ImGui::PopID();
       }
@@ -676,9 +749,10 @@ void DrawOperationCard(detail::UiAssetAtlas &assets,
                         ImGuiChildFlags_Borders,
                         ImGuiWindowFlags_NoScrollbar |
                             ImGuiWindowFlags_NoSavedSettings)) {
-    DrawStateCardHeading(sample.title, assets.heading_font());
+    DrawOperationCardHeading(sample.title, assets.heading_font());
     if (state.expanded && !sample.sections.empty()) {
-      DrawOperationTray(sample, state, assets.heading_font());
+      DrawOperationTray(sample, state, assets.heading_font(),
+                        assets.mono_font());
     }
     DrawOperationStrip(assets, sample, state);
     if (!state.feedback.empty()) {
@@ -1080,9 +1154,12 @@ void DrawOperationStateGallery(detail::UiAssetAtlas &assets,
       "160–240 px resize behavior.");
   ImGui::Spacing();
   if (ImGui::BeginChild("##operation-states-scroll", ImVec2(0.0f, 0.0f), false,
-                        ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+                        ImGuiWindowFlags_NoScrollbar |
+                            ImGuiWindowFlags_NoScrollWithMouse)) {
     const int columns =
         ImGui::GetContentRegionAvail().x / CurrentUiScale() < 1080.0f ? 1 : 2;
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
+                        ImVec2(Scale(6.0f), Scale(6.0f)));
     if (ImGui::BeginTable("##operation-state-grid", columns,
                           ImGuiTableFlags_SizingStretchSame,
                           ImVec2(0.0f, 0.0f))) {
@@ -1093,6 +1170,7 @@ void DrawOperationStateGallery(detail::UiAssetAtlas &assets,
       }
       ImGui::EndTable();
     }
+    ImGui::PopStyleVar();
   }
   ImGui::EndChild();
 }
@@ -1150,10 +1228,11 @@ void DrawStatusBarStateGallery(detail::UiAssetAtlas &assets,
   ImGui::EndChild();
 }
 
-void DrawShellOperationTray(detail::UiAssetAtlas &, GalleryState &state) {
+void DrawShellOperationTray(detail::UiAssetAtlas &assets, GalleryState &state) {
   ImGui::PushID("shell-operation-tray");
   ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
-  DrawOperationTray(OperationSamples()[1], state.shell.operation, nullptr);
+  DrawOperationTray(OperationSamples()[1], state.shell.operation,
+                    assets.heading_font(), assets.mono_font());
   ImGui::PopID();
 }
 

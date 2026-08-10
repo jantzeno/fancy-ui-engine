@@ -3,6 +3,9 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+#include <set>
+
 using namespace fancy_ui;
 using namespace fancy_ui::gallery;
 
@@ -103,6 +106,35 @@ TEST_CASE("new machines stay local until a confirmed preset is saved") {
   REQUIRE(SelectedMachine(state)->id == "machine-3");
   REQUIRE(SelectedMachine(state)->origin == MachineOrigin::TopLeft);
   REQUIRE(state.dirty);
+}
+
+TEST_CASE("machine preset catalog matches the approved browser fixture") {
+  const std::set<std::string_view> ids = [&] {
+    std::set<std::string_view> result;
+    for (const MachinePreset &preset : kMachinePresets) {
+      result.insert(preset.id);
+    }
+    return result;
+  }();
+  const std::size_t creality_count = static_cast<std::size_t>(
+      std::count_if(kMachinePresets.begin(), kMachinePresets.end(),
+                    [](const MachinePreset &preset) {
+                      return preset.manufacturer == "Creality";
+                    }));
+
+  REQUIRE(kMachinePresets.size() == 25);
+  REQUIRE(kMachinePresetManufacturers.size() == 7);
+  REQUIRE(ids.size() == kMachinePresets.size());
+  REQUIRE(creality_count == 5);
+
+  SettingsGalleryState state = DefaultSettingsGalleryState();
+  BeginNewMachine(state);
+  REQUIRE(OpenMachinePresetPicker(state));
+  REQUIRE(SelectMachinePresetManufacturer(state, "Creality"));
+  REQUIRE(ApplyMachinePreset(state, "creality-falcon-cr-5w-10w"));
+  REQUIRE(state.machine_editor->draft.name == "Creality Falcon CR");
+  REQUIRE(state.machine_editor->draft.bed_width_mm == Catch::Approx(400.0));
+  REQUIRE(state.machine_editor->draft.bed_height_mm == Catch::Approx(415.0));
 }
 
 TEST_CASE("machine edits survive tab changes and block global actions") {

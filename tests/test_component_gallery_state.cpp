@@ -152,6 +152,9 @@ TEST_CASE("operation strip height is stable across tray disclosure") {
 
   REQUIRE(collapsed.strip_height == kOperationStripHeight);
   REQUIRE(expanded.strip_height == kOperationStripHeight);
+  REQUIRE(collapsed.heading_height == kOperationStateHeadingHeight);
+  REQUIRE(collapsed.content_height ==
+          kOperationStateHeadingHeight + kOperationStripHeight);
   REQUIRE(expanded.content_height - collapsed.content_height == 200.0f);
   REQUIRE(without_details.tray_height == 0.0f);
   REQUIRE(with_feedback.content_height - collapsed.content_height ==

@@ -88,8 +88,11 @@ ResizeHandleResult ResizeHandle(const ResizeHandleSpec &spec) {
                               : palette.border_strong;
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   if (vertical) {
+    const float center_x = std::floor((minimum.x + maximum.x) * 0.5f);
     const float y = std::floor((minimum.y + maximum.y) * 0.5f);
-    draw_list->AddLine(ImVec2(minimum.x, y), ImVec2(maximum.x, y),
+    const float half_grip = Scale(24.0f);
+    draw_list->AddLine(ImVec2(center_x - half_grip, y),
+                       ImVec2(center_x + half_grip, y),
                        ImGui::GetColorU32(ImVec4(color.red, color.green,
                                                  color.blue, color.alpha)),
                        Scale(2.0f));

@@ -452,6 +452,47 @@ TEST_CASE(
   REQUIRE(multiselect.popup_open);
 }
 
+TEST_CASE("tab sets restore focus to the selected tab") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(320.0f, 240.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  static constexpr std::array tabs{
+      fancy_ui::ChoiceSpec{.id = "canvas", .label = "Canvas"},
+      fancy_ui::ChoiceSpec{.id = "model", .label = "3D"},
+  };
+  ImGui::NewFrame();
+  ImGui::Begin("tab-focus-contract");
+  static_cast<void>(fancy_ui::TabSet({
+      .id = "workspace",
+      .tabs = tabs,
+      .selected_index = 1,
+      .request_focus = true,
+  }));
+  ImGui::End();
+  ImGui::Render();
+
+  ImGui::NewFrame();
+  ImGui::Begin("tab-focus-contract");
+  const fancy_ui::TabSetResult focused = fancy_ui::TabSet({
+      .id = "workspace",
+      .tabs = tabs,
+      .selected_index = 1,
+  });
+  ImGui::End();
+  ImGui::Render();
+
+  ImGui::DestroyContext();
+  REQUIRE(focused.focused);
+}
+
 TEST_CASE("compact buttons center labels without leaking frame padding") {
   REQUIRE(fancy_ui::detail::ResolveButtonVerticalPadding(0.0f, 16.0f, 6.0f) ==
           Catch::Approx(6.0f));

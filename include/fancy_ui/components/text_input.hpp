@@ -13,6 +13,7 @@ struct TextInputSpec {
   std::string_view label;
   std::string_view tooltip;
   std::string_view value;
+  std::string_view placeholder;
   std::size_t capacity = 512;
   Availability availability;
   Validation validation;

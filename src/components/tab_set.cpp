@@ -1,5 +1,7 @@
 #include "fancy_ui/components/tab_set.hpp"
 
+#include "fancy_ui/components/segmented_control.hpp"
+
 #include "internal/component_internal.hpp"
 
 #include <imgui.h>
@@ -59,8 +61,31 @@ TabSetResult TabSet(const TabSetSpec &spec) {
       Available(spec.tabs[clamped]) || !first.has_value() ? clamped : *first;
   result.selected_index = selected;
 
+  if (spec.width > 0.0f) {
+    const SegmentedControlResult segments = SegmentedControl({
+        .id = spec.id,
+        .choices = spec.tabs,
+        .selected_index = selected,
+        .width = spec.width,
+    });
+    static_cast<InteractionResult &>(result) = segments;
+    result.changed = segments.changed;
+    result.selected_index = segments.selected_index;
+    if (spec.draw_panel && Available(spec.tabs[result.selected_index])) {
+      ImGui::SetCursorPosY(ImGui::GetCursorPosY() -
+                           ImGui::GetStyle().ItemSpacing.y);
+      ImGui::PushID(detail::Owned(spec.id).c_str());
+      ImGui::PushID("panel");
+      spec.draw_panel(result.selected_index);
+      ImGui::PopID();
+      ImGui::PopID();
+    }
+    return result;
+  }
+
   std::vector<ImGuiID> item_ids(spec.tabs.size());
-  std::optional<std::size_t> focus_target;
+  std::optional<std::size_t> focus_target =
+      spec.request_focus ? std::optional{selected} : std::nullopt;
   ImGui::PushID(detail::Owned(spec.id).c_str());
   if (ImGui::BeginTabBar("##tab-set",
                          ImGuiTabBarFlags_FittingPolicyResizeDown)) {

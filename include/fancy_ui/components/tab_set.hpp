@@ -14,6 +14,8 @@ struct TabSetSpec {
   std::string_view id;
   std::span<const ChoiceSpec> tabs;
   std::size_t selected_index = 0;
+  bool request_focus = false;
+  float width = 0.0f;
   std::function<void(std::size_t)> draw_panel;
 };
 

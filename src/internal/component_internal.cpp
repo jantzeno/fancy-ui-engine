@@ -277,6 +277,10 @@ float ResolveButtonVerticalPadding(const float requested_height,
 FieldLayout BeginFieldLayout(const std::string_view label) {
   const LayoutMetrics metrics = CurrentLayoutMetrics();
   const std::string owned_label = Owned(label);
+  if (label.empty()) {
+    ImGui::SetNextItemWidth(-std::numeric_limits<float>::min());
+    return {};
+  }
   if (!field_layout_preview_label_width.has_value() &&
       ImGui::GetContentRegionAvail().x < metrics.inspector.stack_breakpoint) {
     ImGui::PushStyleColor(ImGuiCol_Text,

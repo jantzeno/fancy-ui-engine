@@ -56,6 +56,7 @@ inline constexpr float kOperationTrayMinimumHeight = 160.0f;
 inline constexpr float kOperationTrayMaximumHeight = 240.0f;
 inline constexpr float kOperationTrayDefaultHeight = 160.0f;
 inline constexpr float kGalleryStateHeadingHeight = 37.0f;
+inline constexpr float kOperationStateHeadingHeight = 34.0f;
 inline constexpr float kOperationStripHeight = 32.0f;
 inline constexpr float kOperationStripItemHeight = 24.0f;
 inline constexpr float kOperationFeedbackHeight = 24.0f;
@@ -71,11 +72,11 @@ inline constexpr float kStatusZoomPanelPadding = 8.0f;
 inline constexpr float kStatusZoomPanelItemSpacing = 4.0f;
 
 struct OperationLayout {
-  float heading_height = kGalleryStateHeadingHeight;
+  float heading_height = kOperationStateHeadingHeight;
   float tray_height = 0.0f;
   float strip_height = kOperationStripHeight;
   float feedback_height = 0.0f;
-  float content_height = kGalleryStateHeadingHeight + kOperationStripHeight;
+  float content_height = kOperationStateHeadingHeight + kOperationStripHeight;
 };
 
 struct OperationPresentationState {

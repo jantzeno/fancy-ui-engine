@@ -569,10 +569,13 @@ public:
         logical_width > 0.0f
             ? Scale(logical_width) / static_cast<float>(choices.size())
             : 0.0f;
+    const float row_y = ImGui::GetCursorScreenPos().y;
     for (std::size_t index = 0; index < choices.size(); ++index) {
       if (index > 0) {
         ImGui::SameLine(0.0f, 0.0f);
       }
+      const ImVec2 cursor = ImGui::GetCursorScreenPos();
+      ImGui::SetCursorScreenPos(ImVec2(cursor.x, row_y));
       const ToolbarChoiceView &choice = *choices[index];
       const steppenface::Availability &availability =
           choice.action.availability;

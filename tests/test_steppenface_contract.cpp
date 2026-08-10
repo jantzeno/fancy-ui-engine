@@ -28,6 +28,7 @@ namespace {
 struct WorkspaceGeometrySnapshot {
   std::vector<std::pair<int, int>> selection;
   std::vector<std::pair<int, int>> focus;
+  bool segments_aligned = false;
 };
 
 struct ToolbarSegmentGeometrySnapshot {
@@ -65,6 +66,10 @@ WorkspaceSelectionGeometry(const WorkspaceKind workspace) {
       fancy_ui::PaletteFor(fancy_ui::ResolvedTheme::Dark).focus;
   const ImU32 focus_color = ImGui::ColorConvertFloat4ToU32(
       ImVec4(focus.red, focus.green, focus.blue, focus.alpha));
+  const fancy_ui::ColorRgba rest =
+      fancy_ui::PaletteFor(fancy_ui::ResolvedTheme::Dark).surface_raised;
+  const ImU32 rest_color = ImGui::ColorConvertFloat4ToU32(
+      ImVec4(rest.red, rest.green, rest.blue, rest.alpha));
   const auto collect_positions = [](const ImU32 color) {
     std::vector<ImVec2> positions;
     const ImDrawData *draw_data = ImGui::GetDrawData();
@@ -87,6 +92,7 @@ WorkspaceSelectionGeometry(const WorkspaceKind workspace) {
     ImGui::Render();
   }
   std::vector<ImVec2> positions = collect_positions(selection_color);
+  const std::vector<ImVec2> rest_positions = collect_positions(rest_color);
 
   float minimum_x = std::numeric_limits<float>::max();
   float maximum_x = std::numeric_limits<float>::lowest();
@@ -97,6 +103,12 @@ WorkspaceSelectionGeometry(const WorkspaceKind workspace) {
     maximum_x = std::max(maximum_x, position.x);
     minimum_y = std::min(minimum_y, position.y);
     maximum_y = std::max(maximum_y, position.y);
+  }
+  float rest_minimum_y = std::numeric_limits<float>::max();
+  float rest_maximum_y = std::numeric_limits<float>::lowest();
+  for (const ImVec2 position : rest_positions) {
+    rest_minimum_y = std::min(rest_minimum_y, position.y);
+    rest_maximum_y = std::max(rest_maximum_y, position.y);
   }
 
   io.AddMousePosEvent((minimum_x + maximum_x) * 0.5f,
@@ -128,6 +140,9 @@ WorkspaceSelectionGeometry(const WorkspaceKind workspace) {
   WorkspaceGeometrySnapshot snapshot{
       .selection = normalize(positions),
       .focus = normalize(collect_positions(focus_color)),
+      .segments_aligned = !rest_positions.empty() &&
+                          rest_minimum_y == minimum_y &&
+                          rest_maximum_y == maximum_y,
   };
   ImGui::DestroyContext();
   return snapshot;
@@ -849,6 +864,8 @@ TEST_CASE("workspace switcher selected segments have mirrored geometry") {
   REQUIRE(model_geometry.selection == canvas_geometry.selection);
   REQUIRE_FALSE(model_geometry.focus.empty());
   REQUIRE(model_geometry.focus == canvas_geometry.focus);
+  REQUIRE(model_geometry.segments_aligned);
+  REQUIRE(canvas_geometry.segments_aligned);
 }
 
 TEST_CASE("toolbar segmented controls share connected mirrored geometry") {
