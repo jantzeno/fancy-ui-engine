@@ -132,6 +132,85 @@ void DrawAvailability(GalleryState &state) {
                         : "Disabled · select an eligible object");
 }
 
+void DrawDisclosureRows(GalleryState &state, ImFont *heading_font) {
+  const ImVec2 spacing = ImGui::GetStyle().ItemSpacing;
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing.x, 0.0f));
+  const DisclosureRowResult live = DisclosureRow({
+      .id = "live-header",
+      .label = "Model operations",
+      .metadata = "Live",
+      .variant = DisclosureRowVariant::PanelHeader,
+      .expandable = true,
+      .expanded = state.disclosure_row_open,
+      .font = NativeFontHandle(heading_font),
+  });
+  if (live.expansion_changed) {
+    state.disclosure_row_open = live.expanded;
+  } else if (live.activated) {
+    state.disclosure_row_open = !state.disclosure_row_open;
+  }
+  {
+    const detail::ScopedInteractionPreview preview(
+        detail::InteractionPreview::Hovered);
+    static_cast<void>(DisclosureRow({
+        .id = "hovered-header",
+        .label = "Hovered panel header",
+        .variant = DisclosureRowVariant::PanelHeader,
+        .expandable = true,
+        .expanded = true,
+        .font = NativeFontHandle(heading_font),
+    }));
+  }
+  {
+    const detail::ScopedInteractionPreview preview(
+        detail::InteractionPreview::Pressed);
+    static_cast<void>(DisclosureRow({
+        .id = "pressed-header",
+        .label = "Pressed panel header",
+        .variant = DisclosureRowVariant::PanelHeader,
+        .expandable = true,
+        .font = NativeFontHandle(heading_font),
+    }));
+  }
+  {
+    const detail::ScopedInteractionPreview preview(
+        detail::InteractionPreview::Focused);
+    static_cast<void>(DisclosureRow({
+        .id = "focused-item",
+        .label = "Focused hierarchy item",
+        .expandable = true,
+        .expanded = true,
+    }));
+  }
+  static_cast<void>(DisclosureRow({
+      .id = "selected-item",
+      .label = "Selected hierarchy item",
+      .selected = true,
+  }));
+  static_cast<void>(DisclosureRow({
+      .id = "action-item",
+      .label = "Hierarchy item with action",
+      .reserved_trailing_width = 72.0f,
+  }));
+  const ImVec2 row_minimum = ImGui::GetItemRectMin();
+  const ImVec2 row_maximum = ImGui::GetItemRectMax();
+  const ImVec2 cursor_after_row = ImGui::GetCursorScreenPos();
+  ImGui::SetCursorScreenPos(
+      ImVec2(row_maximum.x - Scale(68.0f), row_minimum.y + Scale(4.0f)));
+  static_cast<void>(Button({
+      .id = "row-action",
+      .label = "Action",
+      .size = {.x = 64.0f, .y = 24.0f},
+  }));
+  ImGui::SetCursorScreenPos(cursor_after_row);
+  static_cast<void>(DisclosureRow({
+      .id = "disabled-item",
+      .label = "Disabled hierarchy item",
+      .availability = {.enabled = false, .reason = "Unavailable example"},
+  }));
+  ImGui::PopStyleVar();
+}
+
 void DrawWorkspaceSwitcher(detail::ApplicationChrome &chrome,
                            GalleryState &state) {
   using steppenface::WorkspaceKind;
@@ -1637,6 +1716,12 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
           GalleryCard("enabled-locked", "Enabled & locked",
                       assets.heading_font(),
                       [&assets, &state] { DrawEnabledLocked(assets, state); });
+          GalleryCard(
+              "disclosure-rows", "Disclosure rows", assets.heading_font(),
+              [&state, &assets] {
+                DrawDisclosureRows(state, assets.heading_font());
+              },
+              false, false, 300.0f);
           GalleryCard(
               "navigation-primitives", "Navigation primitives",
               assets.heading_font(),

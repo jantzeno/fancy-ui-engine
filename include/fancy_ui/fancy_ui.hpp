@@ -7,6 +7,7 @@
 #include "fancy_ui/components/color_picker_popup.hpp"
 #include "fancy_ui/components/color_swatch.hpp"
 #include "fancy_ui/components/context_menu.hpp"
+#include "fancy_ui/components/disclosure_row.hpp"
 #include "fancy_ui/components/duration_input.hpp"
 #include "fancy_ui/components/empty_state.hpp"
 #include "fancy_ui/components/explorer_search.hpp"

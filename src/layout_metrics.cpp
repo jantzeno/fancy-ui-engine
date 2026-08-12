@@ -89,7 +89,6 @@ constexpr LayoutMetrics kLogicalMetrics{
     .inspector =
         {
             .label_width = 112.0f,
-            .section_header_height = 28.0f,
             .information_row_minimum_height = 32.0f,
             .information_metric_row_minimum_height = 72.0f,
             .compass_minimum_height = 104.0f,
@@ -188,7 +187,6 @@ LayoutMetrics ResolveLayoutMetrics(const UiEnvironment &environment) {
   resolve(metrics.explorer.tree_indent);
 
   resolve(metrics.inspector.label_width);
-  resolve(metrics.inspector.section_header_height);
   resolve(metrics.inspector.information_row_minimum_height);
   resolve(metrics.inspector.information_metric_row_minimum_height);
   resolve(metrics.inspector.compass_minimum_height);
@@ -220,8 +218,6 @@ LayoutMetrics ResolveLayoutMetrics(const UiEnvironment &environment) {
       std::max(metrics.shell.status_bar_height, std::ceil(compact_body));
   metrics.explorer.search_height =
       std::max(metrics.explorer.search_height, std::ceil(padded_body));
-  metrics.inspector.section_header_height = std::max(
-      metrics.inspector.section_header_height, std::ceil(compact_body));
   return metrics;
 }
 

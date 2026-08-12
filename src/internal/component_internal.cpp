@@ -291,6 +291,20 @@ void DrawSecondaryTextWrapped(const std::string_view text) {
   ImGui::PopStyleColor();
 }
 
+void DrawStackedFieldLabel(const std::string_view text) {
+  if (text.empty()) {
+    return;
+  }
+  const LayoutMetrics metrics = CurrentLayoutMetrics();
+  ImGui::PushFont(nullptr, metrics.typography.body_font_height);
+  const ImVec2 item_spacing = ImGui::GetStyle().ItemSpacing;
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(item_spacing.x, 0.0f));
+  DrawSecondaryText(text);
+  ImGui::Dummy(ImVec2(0.0f, metrics.spacing.space02));
+  ImGui::PopStyleVar();
+  ImGui::PopFont();
+}
+
 float ResolveButtonVerticalPadding(const float requested_height,
                                    const float text_height,
                                    const float default_padding) {

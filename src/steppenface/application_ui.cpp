@@ -1128,16 +1128,8 @@ public:
         FieldLabelLayoutFor(field.content) == FieldLabelLayout::Stacked;
     const std::string_view control_label =
         stacked_label ? std::string_view{} : std::string_view{field.label};
-    if (stacked_label && !field.label.empty()) {
-      const LayoutMetrics metrics = CurrentLayoutMetrics();
-      ImGui::PushFont(nullptr, metrics.typography.body_font_height);
-      const ImVec2 item_spacing = ImGui::GetStyle().ItemSpacing;
-      ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                          ImVec2(item_spacing.x, 0.0f));
-      detail::DrawSecondaryText(field.label);
-      ImGui::Dummy(ImVec2(0.0f, metrics.spacing.space02));
-      ImGui::PopStyleVar();
-      ImGui::PopFont();
+    if (stacked_label) {
+      detail::DrawStackedFieldLabel(field.label);
     }
     const auto commit = [this, &view, &field](FieldValue value) {
       if (field.edit.has_value()) {
@@ -1582,9 +1574,11 @@ public:
     if (view.panel.inspector.sections.empty()) {
       ImGui::TextWrapped("%s", view.panel.inspector.empty_message.c_str());
     }
-    for (std::size_t index = 0; index < view.panel.inspector.sections.size();
-         ++index) {
-      const SectionView &section = view.panel.inspector.sections[index];
+    const ImVec2 inspector_spacing = ImGui::GetStyle().ItemSpacing;
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_ItemSpacing,
+        ImVec2(inspector_spacing.x, CurrentLayoutMetrics().spacing.space02));
+    for (const SectionView &section : view.panel.inspector.sections) {
       auto [collapsed, inserted] = session.collapsed_sections.try_emplace(
           section.id.value, !section.default_open);
       static_cast<void>(inserted);
@@ -1605,7 +1599,7 @@ public:
           .summary = section.summary,
           .open = !collapsed->second,
           .focused = section.focused,
-          .separated = index > 0,
+          .heading_font = NativeFontHandle(assets->heading_font()),
           .header_action = header_action,
       });
       if (result.open_changed) {
@@ -1628,13 +1622,9 @@ public:
             root = subtree_ends[root];
           }
         }
-        const ImVec2 item_spacing = ImGui::GetStyle().ItemSpacing;
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                            ImVec2(item_spacing.x, 0.0f));
         for (const FieldView &field : section.fields) {
           DrawField(view, field);
         }
-        ImGui::PopStyleVar();
         if (section.status.has_value()) {
           StatusCard({
               .id = section.status->id.value,
@@ -1659,6 +1649,7 @@ public:
     for (const CommandView &command : view.panel.inspector.secondary_commands) {
       DrawCommandButton(view.revision, command, false);
     }
+    ImGui::PopStyleVar();
   }
 
   void DrawOperationTray(const ApplicationView &view) {

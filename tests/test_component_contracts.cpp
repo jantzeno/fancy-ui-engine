@@ -791,7 +791,7 @@ TEST_CASE("hidden shell chrome leaves the full height to panel regions") {
   ImGui::DestroyContext();
 }
 
-TEST_CASE("section disclosure keeps canonical inspector fields flush and "
+TEST_CASE("section disclosure keeps canonical inspector fields spaced and "
           "bounded") {
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
@@ -803,21 +803,27 @@ TEST_CASE("section disclosure keeps canonical inspector fields flush and "
   int height = 0;
   io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
   fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+  const fancy_ui::LayoutMetrics metrics = fancy_ui::CurrentLayoutMetrics();
 
   ImGui::NewFrame();
   ImGui::SetNextWindowSize(ImVec2(320.0f, 480.0f), ImGuiCond_Always);
   ImGui::Begin("section-disclosure-contract", nullptr,
                ImGuiWindowFlags_NoDecoration);
+  const ImVec2 section_spacing = ImGui::GetStyle().ItemSpacing;
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                      ImVec2(section_spacing.x, metrics.spacing.space02));
   const fancy_ui::SectionResult expanded = fancy_ui::BeginSection({
       .id = "expanded",
       .heading = "Expanded",
   });
   const float header_left = ImGui::GetItemRectMin().x;
+  const float header_top = ImGui::GetItemRectMin().y;
   const float header_bottom = ImGui::GetItemRectMax().y;
   bool expanded_content_drawn = false;
   bool inline_field_layout = false;
   float content_left = header_left;
   float content_top = header_bottom;
+  float content_bottom = header_bottom;
   float checkbox_right = 0.0f;
   float control_right = 0.0f;
   if (expanded.open) {
@@ -836,6 +842,7 @@ TEST_CASE("section disclosure keeps canonical inspector fields flush and "
     content_top = ImGui::GetItemRectMin().y;
     checkbox_right = ImGui::GetItemRectMax().x;
     fancy_ui::detail::EndFieldLayout(field, {});
+    content_bottom = ImGui::GetCursorScreenPos().y - metrics.spacing.space02;
   }
   fancy_ui::EndSection(expanded);
 
@@ -843,13 +850,14 @@ TEST_CASE("section disclosure keeps canonical inspector fields flush and "
       .id = "collapsed",
       .heading = "Collapsed",
       .open = false,
-      .separated = true,
   });
+  const float collapsed_header_top = ImGui::GetItemRectMin().y;
   bool collapsed_content_drawn = false;
   if (collapsed.open) {
     collapsed_content_drawn = true;
   }
   fancy_ui::EndSection(collapsed);
+  ImGui::PopStyleVar();
   ImGui::End();
   ImGui::Render();
 
@@ -858,14 +866,18 @@ TEST_CASE("section disclosure keeps canonical inspector fields flush and "
   REQUIRE(content_left == Catch::Approx(header_left));
   REQUIRE(inline_field_layout);
   REQUIRE(checkbox_right <= control_right);
-  REQUIRE(content_top - header_bottom >=
-          fancy_ui::CurrentLayoutMetrics().spacing.space02);
+  REQUIRE(header_bottom - header_top ==
+          Catch::Approx(fancy_ui::CurrentLayoutMetrics().geometry.row_height));
+  REQUIRE(content_top - header_bottom ==
+          Catch::Approx(metrics.spacing.space02));
+  REQUIRE(collapsed_header_top - content_bottom ==
+          Catch::Approx(metrics.spacing.space02));
   REQUIRE_FALSE(collapsed.open);
   REQUIRE_FALSE(collapsed_content_drawn);
   ImGui::DestroyContext();
 }
 
-TEST_CASE("adjacent inspector fields use the contiguous Explorer row rhythm") {
+TEST_CASE("adjacent inspector fields use the shared Inspector spacing") {
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
   io.DisplaySize = ImVec2(640.0f, 480.0f);
@@ -876,11 +888,13 @@ TEST_CASE("adjacent inspector fields use the contiguous Explorer row rhythm") {
   int height = 0;
   io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
   fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+  const fancy_ui::LayoutMetrics metrics = fancy_ui::CurrentLayoutMetrics();
 
   ImGui::NewFrame();
   ImGui::Begin("inspector-field-rhythm");
   const ImVec2 spacing = ImGui::GetStyle().ItemSpacing;
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing.x, 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                      ImVec2(spacing.x, metrics.spacing.space02));
   static_cast<void>(fancy_ui::ValueDisplay({
       .id = "first",
       .label = "First",
@@ -898,10 +912,70 @@ TEST_CASE("adjacent inspector fields use the contiguous Explorer row rhythm") {
   ImGui::End();
   ImGui::Render();
 
-  REQUIRE(second_top - first_bottom == Catch::Approx(0.0f));
+  REQUIRE(second_top - first_bottom == Catch::Approx(metrics.spacing.space02));
   REQUIRE(second_top - first_top ==
-          Catch::Approx(fancy_ui::CurrentLayoutMetrics().geometry.row_height)
+          Catch::Approx(metrics.geometry.row_height + metrics.spacing.space02)
               .margin(1.0f));
+  ImGui::DestroyContext();
+}
+
+TEST_CASE("stacked dropdowns preserve spacing before the next section") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(640.0f, 480.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+  const fancy_ui::LayoutMetrics metrics = fancy_ui::CurrentLayoutMetrics();
+  const std::array options{
+      fancy_ui::SelectOption{.id = "first", .label = "First"},
+      fancy_ui::SelectOption{.id = "second", .label = "Second"},
+  };
+
+  ImGui::NewFrame();
+  ImGui::Begin("stacked-dropdown-section-spacing");
+  const ImVec2 spacing = ImGui::GetStyle().ItemSpacing;
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                      ImVec2(spacing.x, metrics.spacing.space02));
+  const fancy_ui::SectionResult first = fancy_ui::BeginSection({
+      .id = "first-section",
+      .heading = "First section",
+  });
+  float label_top = 0.0f;
+  float dropdown_top = 0.0f;
+  float dropdown_bottom = 0.0f;
+  if (first.open) {
+    label_top = ImGui::GetCursorScreenPos().y;
+    fancy_ui::detail::DrawStackedFieldLabel("Mode");
+    static_cast<void>(fancy_ui::Select({
+        .id = "mode",
+        .options = options,
+    }));
+    dropdown_top = ImGui::GetItemRectMin().y;
+    dropdown_bottom = ImGui::GetItemRectMax().y;
+  }
+  fancy_ui::EndSection(first);
+  const fancy_ui::SectionResult second = fancy_ui::BeginSection({
+      .id = "second-section",
+      .heading = "Second section",
+      .open = false,
+  });
+  const float next_header_top = ImGui::GetItemRectMin().y;
+  fancy_ui::EndSection(second);
+  ImGui::PopStyleVar();
+  ImGui::End();
+  ImGui::Render();
+
+  REQUIRE(dropdown_top - label_top ==
+          Catch::Approx(metrics.typography.body_font_height +
+                        metrics.spacing.space02)
+              .margin(0.25f));
+  REQUIRE(next_header_top - dropdown_bottom ==
+          Catch::Approx(metrics.spacing.space02).margin(1.0f));
   ImGui::DestroyContext();
 }
 
@@ -1334,7 +1408,7 @@ TEST_CASE("hierarchy inline targets do not activate the selectable row") {
   ImGui::DestroyContext();
 }
 
-TEST_CASE("sectioned hierarchy roots and children use contiguous 32 px rows") {
+TEST_CASE("Explorer roots and Inspector sections share 32 px disclosure rows") {
   const auto verify_scale = [](const float scale) {
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
@@ -1353,6 +1427,8 @@ TEST_CASE("sectioned hierarchy roots and children use contiguous 32 px rows") {
     ImVec2 child_maximum;
     ImVec2 next_root_minimum;
     ImVec2 next_root_maximum;
+    ImVec2 section_minimum;
+    ImVec2 section_maximum;
     float scoped_spacing = 0.0f;
     float restored_spacing = 0.0f;
     bool parent_expanded = false;
@@ -1394,6 +1470,13 @@ TEST_CASE("sectioned hierarchy roots and children use contiguous 32 px rows") {
       next_root_minimum = ImGui::GetItemRectMin();
       next_root_maximum = ImGui::GetItemRectMax();
     }
+    const fancy_ui::SectionResult section = fancy_ui::BeginSection({
+        .id = "inspector-section",
+        .heading = "Inspector section",
+    });
+    section_minimum = ImGui::GetItemRectMin();
+    section_maximum = ImGui::GetItemRectMax();
+    fancy_ui::EndSection(section);
     restored_spacing = ImGui::GetStyle().ItemSpacing.y;
     ImGui::End();
     ImGui::Render();
@@ -1405,6 +1488,10 @@ TEST_CASE("sectioned hierarchy roots and children use contiguous 32 px rows") {
     REQUIRE(child_maximum.y - child_minimum.y == Catch::Approx(32.0f * scale));
     REQUIRE(next_root_maximum.y - next_root_minimum.y ==
             Catch::Approx(32.0f * scale));
+    REQUIRE(section_maximum.y - section_minimum.y ==
+            Catch::Approx(32.0f * scale));
+    REQUIRE(section_maximum.x - section_minimum.x ==
+            Catch::Approx(next_root_maximum.x - next_root_minimum.x));
     REQUIRE(child_minimum.y - parent_maximum.y == Catch::Approx(0.0f));
     REQUIRE(child_minimum.x == Catch::Approx(parent_minimum.x));
     REQUIRE(scoped_spacing == Catch::Approx(0.0f));

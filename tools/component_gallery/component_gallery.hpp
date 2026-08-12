@@ -382,6 +382,7 @@ struct GalleryState {
   steppenface::SelectionTool component_selection_tool =
       steppenface::SelectionTool::Pointer;
   bool availability_selected = true;
+  bool disclosure_row_open = true;
   ToggleState checkbox = ToggleState::On;
   ToggleState checkbox_off = ToggleState::Off;
   ToggleState checkbox_mixed = ToggleState::Mixed;

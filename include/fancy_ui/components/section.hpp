@@ -13,7 +13,7 @@ struct SectionSpec {
   std::string_view summary;
   bool open = true;
   bool focused = false;
-  bool separated = false;
+  FontHandle heading_font;
   std::optional<ButtonSpec> header_action;
 };
 

@@ -84,7 +84,6 @@ struct LayoutMetrics {
 
   struct Inspector {
     float label_width;
-    float section_header_height;
     float information_row_minimum_height;
     float information_metric_row_minimum_height;
     float compass_minimum_height;
