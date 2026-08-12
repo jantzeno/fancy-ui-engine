@@ -8,9 +8,14 @@
 #include "fancy_ui/ui_environment.hpp"
 
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
+
+namespace fancy_ui::detail {
+class UiAssetAtlas;
+}
 
 namespace fancy_ui::steppenface {
 
@@ -28,6 +33,9 @@ struct FrameResult {
 class ApplicationUi {
 public:
   ApplicationUi();
+
+  /** Borrows the host's sole ImGui atlas for developer composition. */
+  explicit ApplicationUi(detail::UiAssetAtlas &shared_assets);
   ~ApplicationUi();
 
   ApplicationUi(const ApplicationUi &) = delete;
@@ -44,6 +52,9 @@ public:
   void SetSession(SessionState session);
   [[nodiscard]] FrameResult Draw(const ApplicationView &view,
                                  const SurfaceBindings &surfaces);
+  [[nodiscard]] FrameResult
+  DrawPanelAudit(const ApplicationView &view,
+                 const std::function<void()> &draw_audit_menu);
 
 private:
   class Impl;

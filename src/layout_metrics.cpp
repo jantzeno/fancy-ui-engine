@@ -89,7 +89,6 @@ constexpr LayoutMetrics kLogicalMetrics{
     .inspector =
         {
             .label_width = 112.0f,
-            .stack_breakpoint = 288.0f,
             .section_header_height = 28.0f,
             .information_row_minimum_height = 32.0f,
             .information_metric_row_minimum_height = 72.0f,
@@ -189,7 +188,6 @@ LayoutMetrics ResolveLayoutMetrics(const UiEnvironment &environment) {
   resolve(metrics.explorer.tree_indent);
 
   resolve(metrics.inspector.label_width);
-  resolve(metrics.inspector.stack_breakpoint);
   resolve(metrics.inspector.section_header_height);
   resolve(metrics.inspector.information_row_minimum_height);
   resolve(metrics.inspector.information_metric_row_minimum_height);

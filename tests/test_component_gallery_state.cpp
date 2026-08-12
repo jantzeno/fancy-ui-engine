@@ -16,11 +16,12 @@ TEST_CASE("gallery tab names select deterministic state sheets") {
   REQUIRE(ParseGalleryTab("components") == GalleryTab::Components);
   REQUIRE_FALSE(ParseGalleryTab("hierarchies"));
   REQUIRE(ParseGalleryTab("shell") == GalleryTab::Shell);
+  REQUIRE(ParseGalleryTab("panel-audits") == GalleryTab::PanelAudits);
   REQUIRE(ParseGalleryTab("settings") == GalleryTab::Settings);
   REQUIRE(ParseGalleryTab("operations") == GalleryTab::Operations);
   REQUIRE(ParseGalleryTab("status") == GalleryTab::Status);
   REQUIRE_FALSE(ParseGalleryTab("operation"));
-  REQUIRE(kGalleryTabCount == 5);
+  REQUIRE(kGalleryTabCount == 6);
 }
 
 TEST_CASE("shell preview returns to the tab that opened it") {
@@ -48,11 +49,23 @@ TEST_CASE("command-line shell startup returns to Components") {
   REQUIRE(state.focus_active_tab);
 }
 
+TEST_CASE("panel audit preview returns to the tab that opened it") {
+  GalleryState state;
+  ActivateGalleryTab(state, GalleryTab::Operations);
+  ActivateGalleryTab(state, GalleryTab::PanelAudits);
+
+  REQUIRE(state.active_tab == GalleryTab::PanelAudits);
+  LeaveShellPreview(state);
+  REQUIRE(state.active_tab == GalleryTab::Operations);
+}
+
 TEST_CASE("gallery screenshots use state-sheet-specific logical extents") {
   const GalleryCaptureExtent components =
       GalleryScreenshotLogicalExtent(GalleryTab::Components);
   const GalleryCaptureExtent shell =
       GalleryScreenshotLogicalExtent(GalleryTab::Shell);
+  const GalleryCaptureExtent panel_audits =
+      GalleryScreenshotLogicalExtent(GalleryTab::PanelAudits);
   const GalleryCaptureExtent settings =
       GalleryScreenshotLogicalExtent(GalleryTab::Settings);
   const GalleryCaptureExtent operations =
@@ -64,6 +77,8 @@ TEST_CASE("gallery screenshots use state-sheet-specific logical extents") {
   REQUIRE(components.height == 2760);
   REQUIRE(shell.width == 1280);
   REQUIRE(shell.height == 720);
+  REQUIRE(panel_audits.width == 1280);
+  REQUIRE(panel_audits.height == 720);
   REQUIRE(settings.width == 1280);
   REQUIRE(settings.height == 1440);
   REQUIRE(operations.width == 1280);

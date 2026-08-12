@@ -309,17 +309,6 @@ FieldLayout BeginFieldLayout(const std::string_view label) {
     ImGui::SetNextItemWidth(-std::numeric_limits<float>::min());
     return {};
   }
-  ImGui::SetCursorPosY(ImGui::GetCursorPosY() + metrics.spacing.space02);
-  if (!field_layout_preview_label_width.has_value() &&
-      ImGui::GetContentRegionAvail().x < metrics.inspector.stack_breakpoint) {
-    ImGui::PushStyleColor(ImGuiCol_Text,
-                          ToImVec4(CurrentPalette().text_secondary));
-    ImGui::TextUnformatted(owned_label.c_str());
-    ImGui::PopStyleColor();
-    ImGui::SetNextItemWidth(-std::numeric_limits<float>::min());
-    return {};
-  }
-
   ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(0.0f, 0.0f));
   const bool table = ImGui::BeginTable("##field-layout", 3,
                                        ImGuiTableFlags_SizingStretchProp |

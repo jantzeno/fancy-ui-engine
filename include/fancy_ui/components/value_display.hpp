@@ -12,7 +12,6 @@ struct ValueDisplaySpec {
   std::string_view value;
   std::string_view tooltip;
   bool mixed = false;
-  float label_width = 88.0f;
 };
 
 [[nodiscard]] InteractionResult ValueDisplay(const ValueDisplaySpec &spec);

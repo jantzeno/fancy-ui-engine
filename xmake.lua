@@ -1,4 +1,5 @@
 local repo_dir = workspace_repo_dir("fancy-ui-engine")
+local workspace_dir = path.directory(repo_dir)
 
 target("fancy_ui")
     set_kind("static")
@@ -39,5 +40,22 @@ target("fancy_ui_component_gallery")
     add_defines(
         'FANCY_UI_GALLERY_ASSET_ROOT="' ..
         path.join(repo_dir, "assets", "ui") .. '"')
+    on_load(function(target)
+        local output_dir = path.join(target:autogendir(), "panel-audits")
+        target:add("includedirs", output_dir)
+    end)
+    before_build(function(target)
+        local output_dir = path.join(target:autogendir(), "panel-audits")
+        local script = path.join(
+            workspace_dir, "tools", "ui-mockups", "native_panel_contracts.js")
+        os.mkdir(output_dir)
+        os.vrunv("deno", {
+            "run",
+            "--allow-read=" .. workspace_dir,
+            "--allow-write=" .. output_dir,
+            script,
+            output_dir
+        })
+    end)
     add_deps("fancy_ui")
     add_packages("libsdl3", "glad", "imgui")

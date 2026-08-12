@@ -71,14 +71,16 @@ RotationCompassResult RotationCompass(const RotationCompassSpec &spec) {
   const float padding = Scale(8.0f);
 
   ImGui::PushID(id.c_str());
-  const ImVec2 item_spacing = ImGui::GetStyle().ItemSpacing;
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                      ImVec2(item_spacing.x, 0.0f));
-  ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(palette.text_secondary));
-  ImGui::TextUnformatted(detail::Owned(spec.label).c_str());
-  ImGui::PopStyleColor();
-  ImGui::Dummy(ImVec2(0.0f, metrics.spacing.space02));
-  ImGui::PopStyleVar();
+  if (!spec.label.empty()) {
+    const ImVec2 item_spacing = ImGui::GetStyle().ItemSpacing;
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        ImVec2(item_spacing.x, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(palette.text_secondary));
+    ImGui::TextUnformatted(detail::Owned(spec.label).c_str());
+    ImGui::PopStyleColor();
+    ImGui::Dummy(ImVec2(0.0f, metrics.spacing.space02));
+    ImGui::PopStyleVar();
+  }
   ImGui::PushStyleColor(ImGuiCol_ChildBg,
                         ToImVec4(disabled ? palette.control_disabled_fill
                                           : palette.surface_raised));

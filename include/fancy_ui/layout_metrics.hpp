@@ -84,7 +84,6 @@ struct LayoutMetrics {
 
   struct Inspector {
     float label_width;
-    float stack_breakpoint;
     float section_header_height;
     float information_row_minimum_height;
     float information_metric_row_minimum_height;

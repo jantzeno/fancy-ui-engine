@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <optional>
 #include <string_view>
 
 namespace fancy_ui::shell {
@@ -12,7 +13,7 @@ struct RegionSpec {
   DrawCallback draw;
   bool visible = true;
   bool menu_bar = false;
-  bool zero_padding = false;
+  std::optional<float> padding;
 };
 
 } // namespace fancy_ui::shell

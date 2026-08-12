@@ -20,9 +20,9 @@ void DrawRegion(const RegionSpec &region, const ImVec2 size) {
   }
   const LayoutMetrics metrics = CurrentLayoutMetrics();
   const std::string id = detail::Owned(region.id);
-  if (region.zero_padding) {
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-  }
+  const float padding = region.padding.has_value() ? Scale(*region.padding)
+                                                   : metrics.spacing.space05;
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(padding, padding));
   if (region.menu_bar) {
     const float vertical_padding = std::max(
         0.0f,
@@ -35,18 +35,20 @@ void DrawRegion(const RegionSpec &region, const ImVec2 size) {
   const ImGuiWindowFlags flags =
       region.menu_bar ? ImGuiWindowFlags_MenuBar : ImGuiWindowFlags_None;
   const ImGuiChildFlags child_flags =
-      region.zero_padding ? ImGuiChildFlags_None
-                          : ImGuiChildFlags_AlwaysUseWindowPadding;
+      padding > 0.0f ? ImGuiChildFlags_AlwaysUseWindowPadding
+                     : ImGuiChildFlags_None;
   if (ImGui::BeginChild(id.c_str(), size, child_flags, flags)) {
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_ItemSpacing,
+        ImVec2(metrics.spacing.space03, metrics.spacing.space03));
     region.draw();
+    ImGui::PopStyleVar();
   }
   ImGui::EndChild();
   if (region.menu_bar) {
     ImGui::PopStyleVar(2);
   }
-  if (region.zero_padding) {
-    ImGui::PopStyleVar();
-  }
+  ImGui::PopStyleVar();
 }
 
 bool IsDrawable(const RegionSpec &region) {
@@ -121,7 +123,8 @@ ApplicationShellResult Application(const ApplicationShellSpec &spec,
              ImVec2(0.0f, metrics.shell.context_toolbar_height));
   ImGui::PopStyleColor();
 
-  float reserved_height = metrics.shell.status_bar_height;
+  float reserved_height =
+      IsDrawable(spec.status_bar) ? metrics.shell.status_bar_height : 0.0f;
   if (IsDrawable(spec.operation_strip)) {
     reserved_height += metrics.shell.operation_strip_height;
   }

@@ -18,6 +18,20 @@ struct UiId {
   [[nodiscard]] bool operator==(const UiId &) const = default;
 };
 
+struct DurationValue {
+  int hours = 0;
+  int minutes = 0;
+
+  [[nodiscard]] bool operator==(const DurationValue &) const = default;
+};
+
+struct ChoiceToggleValue {
+  UiId option;
+  ToggleState state = ToggleState::Off;
+
+  [[nodiscard]] bool operator==(const ChoiceToggleValue &) const = default;
+};
+
 enum class WorkspaceKind : std::uint8_t {
   Model3d,
   Canvas,
@@ -90,55 +104,9 @@ struct CommandView {
   Availability availability;
 };
 
-struct TreeRowView {
-  UiId id;
-  std::string label;
-  std::string secondary_label;
-  std::string icon;
-  int depth = 0;
-  bool expanded = false;
-  bool expandable = false;
-  bool selected = false;
-  bool visible = true;
-  std::optional<ColorRgba> color;
-};
-
 using FieldValue =
-    std::variant<bool, std::int64_t, double, std::string, SelectionScope,
+    std::variant<bool, std::int64_t, double, std::string, UiId, ToggleState,
+                 ColorRgba, DurationValue, ChoiceToggleValue, SelectionScope,
                  SelectionTool, ModelCameraPreset>;
-
-struct FieldView {
-  UiId id;
-  std::string label;
-  FieldValue value;
-  std::optional<UiId> target;
-  std::string unit;
-  std::string help;
-  Availability availability;
-};
-
-struct SectionView {
-  UiId id;
-  std::string heading;
-  bool initially_open = true;
-  std::vector<FieldView> fields;
-  std::vector<CommandView> commands;
-};
-
-struct StatusItemView {
-  UiId id;
-  std::string label;
-  SemanticTone tone = SemanticTone::Neutral;
-};
-
-struct OperationView {
-  UiId id;
-  std::string title;
-  std::string summary;
-  SemanticTone tone = SemanticTone::Neutral;
-  float progress = 0.0f;
-  bool indeterminate = false;
-  std::vector<CommandView> commands;
-};
 
 } // namespace fancy_ui::steppenface

@@ -42,11 +42,15 @@ xmake run fancy_ui_component_gallery --theme dark --scale 1
 `--theme` accepts `light` or `dark`. `--scale` accepts values from `0.75` to
 `2`, with `1`, `1.25`, `1.5`, and `2` as the standard review modes. Larger
 layouts scroll instead of omitting component groups. `--tab` accepts
-`components`, `shell`, `settings`, `operations`, or `status`.
+`components`, `shell`, `panel-audits`, `settings`, `operations`, or `status`.
 The interactive gallery exposes the state sheets as keyboard-navigable tabs.
 The Components tab includes the canonical STEP, SVG, DXF, and Canvas Issues
-sectioned outliners. Activating Application shell replaces the gallery chrome
-with a full-canvas preview in the same native window.
+sectioned outliners. Application shell and Panel audits replace the gallery
+chrome with full-canvas previews in the same native window. Panel audits keeps
+only the Activity rail, Explorer, and Inspector; the center region is a
+filterable menu of every canonical panel artifact. The gallery build derives
+those `PanelContractView` values from the HTML catalog instead of maintaining a
+second fixture list.
 
 For deterministic review artifacts, pass a PNG destination. The gallery
 renders a few frames so the font and SVG atlas is installed before capture:

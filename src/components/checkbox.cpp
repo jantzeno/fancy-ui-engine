@@ -47,14 +47,15 @@ CheckboxResult Checkbox(const CheckboxSpec &spec) {
            : 0.0f) +
       icon_width + ((has_state_icon && !label.empty()) ? gap : 0.0f) +
       text_size.x;
+  const float target_width =
+      std::min(std::max(content_width, Scale(24.0f)),
+               std::max(ImGui::GetContentRegionAvail().x, Scale(1.0f)));
 
   ImGui::PushID(id.c_str());
   detail::BeginAvailability(spec.availability);
-  const bool activated =
-      ImGui::InvisibleButton("##checkbox",
-                             ImVec2(std::max(content_width, Scale(24.0f)),
-                                    std::max(target_height, text_size.y)),
-                             ImGuiButtonFlags_EnableNav);
+  const bool activated = ImGui::InvisibleButton(
+      "##checkbox", ImVec2(target_width, std::max(target_height, text_size.y)),
+      ImGuiButtonFlags_EnableNav);
   const InteractionResult interaction = detail::CaptureInteraction();
   const ImVec2 minimum = ImGui::GetItemRectMin();
   const ImVec2 maximum = ImGui::GetItemRectMax();
@@ -63,6 +64,7 @@ CheckboxResult Checkbox(const CheckboxSpec &spec) {
   const ColorRgba foreground =
       disabled ? palette.text_disabled : palette.text_primary;
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  draw_list->PushClipRect(minimum, maximum, true);
   if (!disabled && (interaction.hovered || interaction.active)) {
     draw_list->AddRectFilled(minimum, maximum,
                              ImGui::GetColorU32(ToImVec4(
@@ -129,11 +131,17 @@ CheckboxResult Checkbox(const CheckboxSpec &spec) {
       cursor_x += gap;
     }
   }
+  const std::string visible_label =
+      detail::EllipsizeText(label, std::max(0.0f, maximum.x - cursor_x));
   draw_list->AddText(
       ImVec2(cursor_x, std::floor(center_y - text_size.y * 0.5f)),
-      ImGui::GetColorU32(ToImVec4(foreground)), label.c_str());
+      ImGui::GetColorU32(ToImVec4(foreground)), visible_label.c_str());
+  draw_list->PopClipRect();
   detail::DrawFocusRing(interaction);
-  detail::EndAvailability(spec.availability, spec.tooltip);
+  const std::string_view tooltip =
+      spec.tooltip.empty() && visible_label != label ? std::string_view(label)
+                                                     : spec.tooltip;
+  detail::EndAvailability(spec.availability, tooltip);
   ImGui::PopID();
   detail::DrawValidationHint(spec.validation);
   ImGui::PopFont();

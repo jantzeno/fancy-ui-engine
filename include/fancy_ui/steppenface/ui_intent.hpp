@@ -2,26 +2,20 @@
 
 #include "fancy_ui/steppenface/ui_types.hpp"
 
-#include <cstdint>
 #include <optional>
-#include <string>
 #include <variant>
 
 namespace fancy_ui::steppenface {
 
-enum class EditPhase : std::uint8_t {
-  Changed,
-  Commit,
-  Cancel,
-};
-
 struct InvokeCommand {
   std::uint64_t revision = 0;
+  UiId control;
   CommandId command = CommandId::Quit;
 };
 
 struct ChangeSelection {
   std::uint64_t revision = 0;
+  UiId source;
   UiId entity;
   bool additive = false;
   bool range = false;
@@ -32,7 +26,6 @@ struct EditField {
   UiId field;
   FieldValue value;
   std::optional<UiId> target;
-  EditPhase phase = EditPhase::Commit;
 };
 
 using UiIntent = std::variant<InvokeCommand, ChangeSelection, EditField>;

@@ -364,6 +364,8 @@ inline void MergeGalleryShellResult(ShellGalleryState &state,
 struct GalleryState {
   GalleryTab active_tab = GalleryTab::Components;
   GalleryTab shell_return_tab = GalleryTab::Components;
+  std::size_t panel_audit_index = 0;
+  std::string panel_audit_query;
   bool focus_active_tab = false;
   ResolvedTheme theme = ResolvedTheme::Dark;
   float scale = 1.0f;
@@ -459,7 +461,7 @@ struct GalleryState {
 };
 
 inline void ActivateGalleryTab(GalleryState &state, const GalleryTab tab) {
-  if (tab == GalleryTab::Shell && state.active_tab != GalleryTab::Shell) {
+  if (IsFullCanvasPreview(tab) && !IsFullCanvasPreview(state.active_tab)) {
     state.shell_return_tab = state.active_tab;
   }
   state.active_tab = tab;
@@ -467,7 +469,7 @@ inline void ActivateGalleryTab(GalleryState &state, const GalleryTab tab) {
 }
 
 inline void LeaveShellPreview(GalleryState &state) {
-  state.active_tab = state.shell_return_tab == GalleryTab::Shell
+  state.active_tab = IsFullCanvasPreview(state.shell_return_tab)
                          ? GalleryTab::Components
                          : state.shell_return_tab;
   state.focus_active_tab = true;

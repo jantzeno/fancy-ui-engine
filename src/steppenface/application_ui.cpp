@@ -2,11 +2,30 @@
 
 #include "fancy_ui/components/button.hpp"
 #include "fancy_ui/components/checkbox.hpp"
+#include "fancy_ui/components/checked_multiselect.hpp"
+#include "fancy_ui/components/color_picker_popup.hpp"
+#include "fancy_ui/components/color_swatch.hpp"
+#include "fancy_ui/components/context_menu.hpp"
+#include "fancy_ui/components/duration_input.hpp"
+#include "fancy_ui/components/explorer_search.hpp"
 #include "fancy_ui/components/hierarchy_row.hpp"
 #include "fancy_ui/components/hierarchy_tree.hpp"
+#include "fancy_ui/components/information_tree.hpp"
+#include "fancy_ui/components/metric_row.hpp"
 #include "fancy_ui/components/navigation_item.hpp"
+#include "fancy_ui/components/numeric_input.hpp"
 #include "fancy_ui/components/progress_bar.hpp"
+#include "fancy_ui/components/renamable_select.hpp"
+#include "fancy_ui/components/rotation_compass.hpp"
+#include "fancy_ui/components/section.hpp"
+#include "fancy_ui/components/segmented_control.hpp"
+#include "fancy_ui/components/select.hpp"
+#include "fancy_ui/components/slider.hpp"
+#include "fancy_ui/components/status_card.hpp"
 #include "fancy_ui/components/status_text.hpp"
+#include "fancy_ui/components/text_input.hpp"
+#include "fancy_ui/components/value_display.hpp"
+#include "fancy_ui/components/visibility_toggle.hpp"
 #include "fancy_ui/layout_metrics.hpp"
 #include "fancy_ui/shell/application.hpp"
 #include "fancy_ui/steppenface/ui_assets.hpp"
@@ -29,8 +48,12 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -62,6 +85,13 @@ fancy_ui::Availability ToAvailability(const Availability &availability) {
   };
 }
 
+Validation ToValidation(const ValidationView &validation) {
+  return {
+      .invalid = validation.invalid,
+      .message = validation.message,
+  };
+}
+
 ButtonVariant ToButtonVariant(const CommandVariant variant) {
   switch (variant) {
   case CommandVariant::Primary:
@@ -84,7 +114,7 @@ ImVec4 ToImVec4(const ColorRgba color) {
   return ImVec4(color.red, color.green, color.blue, color.alpha);
 }
 
-bool MatchesQuery(const TreeRowView &row, const std::string &query) {
+bool MatchesQuery(const HierarchyRowView &row, const std::string &query) {
   if (query.empty()) {
     return true;
   }
@@ -100,27 +130,48 @@ bool MatchesQuery(const TreeRowView &row, const std::string &query) {
          contains_case_insensitive(row.secondary_label);
 }
 
-std::size_t ExplorerSubtreeEnd(const std::vector<TreeRowView> &rows,
-                               const std::size_t index) {
-  std::size_t end = index + 1;
-  while (end < rows.size() && rows[end].depth > rows[index].depth) {
-    ++end;
+template <typename Row>
+std::vector<std::size_t> SubtreeEnds(const std::vector<Row> &rows) {
+  std::vector<std::size_t> ends(rows.size(), rows.size());
+  std::vector<std::size_t> ancestors;
+  for (std::size_t index = 0; index < rows.size(); ++index) {
+    while (!ancestors.empty() &&
+           rows[ancestors.back()].depth >= rows[index].depth) {
+      ends[ancestors.back()] = index;
+      ancestors.pop_back();
+    }
+    ancestors.push_back(index);
   }
-  return end;
+  return ends;
 }
 
-bool ExplorerSubtreeMatches(const std::vector<TreeRowView> &rows,
-                            const std::size_t index, const std::string &query) {
-  if (!rows[index].visible) {
-    return false;
-  }
-  const std::size_t end = ExplorerSubtreeEnd(rows, index);
-  for (std::size_t descendant = index; descendant < end; ++descendant) {
-    if (rows[descendant].visible && MatchesQuery(rows[descendant], query)) {
-      return true;
+std::vector<bool> ExplorerMatches(const std::vector<HierarchyRowView> &rows,
+                                  const std::string &query) {
+  if (query.empty()) {
+    std::vector<bool> visible;
+    visible.reserve(rows.size());
+    for (const HierarchyRowView &row : rows) {
+      visible.push_back(row.availability.visible);
     }
+    return visible;
   }
-  return false;
+  int maximum_depth = 0;
+  for (const HierarchyRowView &row : rows) {
+    maximum_depth = std::max(maximum_depth, row.depth);
+  }
+  std::vector<bool> descendant_match(
+      static_cast<std::size_t>(maximum_depth + 2), false);
+  std::vector<bool> visible(rows.size(), false);
+  for (std::size_t reverse = rows.size(); reverse > 0; --reverse) {
+    const std::size_t index = reverse - 1;
+    const HierarchyRowView &row = rows[index];
+    const std::size_t depth = static_cast<std::size_t>(std::max(row.depth, 0));
+    visible[index] = row.availability.visible &&
+                     (MatchesQuery(row, query) || descendant_match[depth + 1]);
+    descendant_match[depth + 1] = false;
+    descendant_match[depth] = descendant_match[depth] || visible[index];
+  }
+  return visible;
 }
 
 FontHandle NativeFontHandle(ImFont *font) {
@@ -144,19 +195,30 @@ public:
     bool disabled = false;
   };
 
+  Impl() : chrome(*assets) {}
+  explicit Impl(detail::UiAssetAtlas &shared_assets)
+      : assets(&shared_assets), chrome(*assets) {}
+
   SessionState session;
   std::filesystem::path asset_root;
-  detail::UiAssetAtlas assets;
-  detail::ApplicationChrome chrome{assets};
+  detail::UiAssetAtlas owned_assets;
+  detail::UiAssetAtlas *assets = &owned_assets;
+  detail::ApplicationChrome chrome;
   std::vector<UiIntent> intents;
+  std::unordered_map<std::string, FieldValue> field_drafts;
+  std::unordered_map<std::string, RenamableSelectState> rename_states;
+  std::unordered_map<std::string, ColorPickerState> color_states;
+  std::unordered_map<std::string, ContextMenuState> context_menu_states;
+  std::unordered_set<std::string> live_transient_ids;
   bool navigation_changed = false;
   bool layout_changed = false;
 
   void EmitCommand(const std::uint64_t revision, const CommandView &command) {
     if (command.availability.visible && command.availability.enabled &&
         !command.availability.busy) {
-      intents.emplace_back(
-          InvokeCommand{.revision = revision, .command = command.command});
+      intents.emplace_back(InvokeCommand{.revision = revision,
+                                         .control = command.id,
+                                         .command = command.command});
     }
   }
 
@@ -176,8 +238,29 @@ public:
         .field = action.field,
         .value = action.value,
         .target = action.target,
-        .phase = EditPhase::Commit,
     });
+  }
+
+  void EmitEdit(const std::uint64_t revision, const EditBindingView &binding,
+                FieldValue value, const Availability &availability) {
+    EmitEdit(revision, ControlActionView{
+                           .field = binding.field,
+                           .value = std::move(value),
+                           .target = binding.target,
+                           .availability = availability,
+                       });
+  }
+
+  void PruneTransientState() {
+    const auto prune = [this](auto &states) {
+      std::erase_if(states, [this](const auto &entry) {
+        return !live_transient_ids.contains(entry.first);
+      });
+    };
+    prune(field_drafts);
+    prune(rename_states);
+    prune(color_states);
+    prune(context_menu_states);
   }
 
   void DrawCommandButton(const std::uint64_t revision,
@@ -257,7 +340,7 @@ public:
                      const ImVec2 minimum, const ImVec2 maximum,
                      const ImU32 color) {
     const ImVec4 tint = ImGui::ColorConvertU32ToFloat4(color);
-    return assets.DrawIcon(
+    return assets->DrawIcon(
         icon, size,
         {.minimum = {.x = minimum.x, .y = minimum.y},
          .maximum = {.x = maximum.x, .y = maximum.y}},
@@ -674,15 +757,106 @@ public:
     ImGui::PopStyleVar();
   }
 
-  void DrawExplorerNode(const ApplicationView &view, const std::string &query,
-                        const std::size_t index, HierarchyTree &tree) {
-    const std::vector<TreeRowView> &rows = view.explorer.rows;
-    if (!ExplorerSubtreeMatches(rows, index, query)) {
+  struct ContextItemStorage {
+    ContextMenuItemSpec spec;
+    std::vector<ContextItemStorage> children;
+    std::vector<ContextMenuItemSpec> child_specs;
+  };
+
+  ContextItemStorage BuildContextItem(const MenuItemView &item) {
+    ContextItemStorage storage;
+    storage.children.reserve(item.children.size());
+    for (const MenuItemView &child : item.children) {
+      storage.children.push_back(BuildContextItem(child));
+    }
+    storage.child_specs.reserve(storage.children.size());
+    for (const ContextItemStorage &child : storage.children) {
+      storage.child_specs.push_back(child.spec);
+    }
+    const Availability *availability = nullptr;
+    if (item.command.has_value()) {
+      availability = &item.command->availability;
+    } else if (item.action.has_value()) {
+      availability = &item.action->availability;
+    }
+    storage.spec = {
+        .id = item.id.value,
+        .label = item.label,
+        .shortcut = item.command.has_value()
+                        ? std::string_view(item.command->shortcut)
+                        : std::string_view{},
+        .tooltip = item.command.has_value()
+                       ? std::string_view(item.command->tooltip)
+                       : std::string_view{},
+        .kind = item.kind == MenuItemKind::Separator
+                    ? ContextMenuItemKind::Separator
+                : item.kind == MenuItemKind::Submenu
+                    ? ContextMenuItemKind::Submenu
+                    : ContextMenuItemKind::Command,
+        .selected = item.selected,
+        .availability = availability == nullptr ? fancy_ui::Availability{}
+                                                : ToAvailability(*availability),
+        .children = storage.child_specs,
+    };
+    return storage;
+  }
+
+  const MenuItemView *FindMenuItem(const std::vector<MenuItemView> &items,
+                                   const std::string &id) const {
+    for (const MenuItemView &item : items) {
+      if (item.id.value == id) {
+        return &item;
+      }
+      if (const MenuItemView *child = FindMenuItem(item.children, id);
+          child != nullptr) {
+        return child;
+      }
+    }
+    return nullptr;
+  }
+
+  void DrawContextMenu(const ApplicationView &view, const ContextMenuView &menu,
+                       const bool request_open) {
+    live_transient_ids.insert(menu.id.value);
+    std::vector<ContextItemStorage> storage;
+    storage.reserve(menu.items.size());
+    for (const MenuItemView &item : menu.items) {
+      storage.push_back(BuildContextItem(item));
+    }
+    std::vector<ContextMenuItemSpec> specs;
+    specs.reserve(storage.size());
+    for (const ContextItemStorage &item : storage) {
+      specs.push_back(item.spec);
+    }
+    ContextMenuResult result = ContextMenu(
+        {.id = menu.id.value, .items = specs, .request_open = request_open},
+        context_menu_states[menu.id.value]);
+    if (!result.activated_id.has_value()) {
+      return;
+    }
+    const MenuItemView *item = FindMenuItem(menu.items, *result.activated_id);
+    if (item == nullptr) {
+      return;
+    }
+    if (item->command.has_value()) {
+      EmitCommand(view.revision, *item->command);
+    } else if (item->action.has_value()) {
+      EmitEdit(view.revision, *item->action);
+    }
+  }
+
+  void DrawExplorerNode(const ApplicationView &view,
+                        const std::vector<bool> &matches,
+                        const std::vector<std::size_t> &subtree_ends,
+                        const std::string &query, const std::size_t index,
+                        HierarchyTree &tree) {
+    const std::vector<HierarchyRowView> &rows = view.panel.explorer.rows;
+    if (!matches[index]) {
       return;
     }
 
-    const TreeRowView &row = rows[index];
-    const std::size_t subtree_end = ExplorerSubtreeEnd(rows, index);
+    const HierarchyRowView &row = rows[index];
+    const std::size_t subtree_end = subtree_ends[index];
     const bool expandable = row.expandable || subtree_end > index + 1;
     auto [expansion, inserted] =
         session.explorer_expanded_rows.try_emplace(row.id.value, row.expanded);
@@ -695,27 +869,63 @@ public:
       tooltip += row.secondary_label;
     }
     const HierarchyRowResult result = HierarchyRow(
-        tree, {
-                  .id = row.id.value,
-                  .label = row.label,
-                  .metadata = row.secondary_label,
-                  .tooltip = tooltip,
-                  .expandable = expandable,
-                  .expanded = expanded,
-                  .selected = row.selected,
-                  .leading_icon = row.icon.empty() ? IconPainter{}
-                                                   : assets.Painter(row.icon),
-              });
+        tree,
+        {
+            .id = row.id.value,
+            .label = row.label,
+            .metadata = row.secondary_label,
+            .tooltip = tooltip,
+            .expandable = expandable,
+            .expanded = expanded,
+            .selected = row.selected,
+            .status = ToStatus(row.tone),
+            .leading_icon =
+                row.icon.empty() ? IconPainter{} : assets->Painter(row.icon),
+            .color = row.color_edit.has_value() ? row.color
+                                                : std::optional<ColorRgba>{},
+            .action_icon = row.context_menu.has_value()
+                               ? assets->Painter("more")
+                               : IconPainter{},
+            .visibility = row.visibility_edit.has_value()
+                              ? row.visibility
+                              : std::optional<ToggleState>{},
+            .visible_icon = assets->Painter("visibility"),
+            .hidden_icon = assets->Painter("visibility-off"),
+            .availability = ToAvailability(row.availability),
+        });
     if (result.expansion_changed && query.empty()) {
       expansion->second = result.expanded;
     }
     if (result.activated) {
       intents.emplace_back(ChangeSelection{
           .revision = view.revision,
-          .entity = row.id,
+          .source = row.id,
+          .entity = row.entity,
           .additive = result.additive,
           .range = result.range,
       });
+    }
+    if (result.visibility_changed && row.visibility_edit.has_value()) {
+      EmitEdit(view.revision, *row.visibility_edit, result.visibility,
+               row.availability);
+    }
+    if (row.color.has_value() && row.color_edit.has_value()) {
+      const std::string color_id = row.id.value + ".color";
+      live_transient_ids.insert(color_id);
+      ColorPickerPopupResult color = ColorPickerPopup(
+          {
+              .id = color_id,
+              .title = "Edit color",
+              .value = *row.color,
+              .request_open = result.color_activated,
+          },
+          color_states[color_id]);
+      if (color.committed) {
+        EmitEdit(view.revision, *row.color_edit, color.value, row.availability);
+      }
+    }
+    if (row.context_menu.has_value()) {
+      DrawContextMenu(view, *row.context_menu, result.action_activated);
     }
 
     if (!expandable || !result.expanded) {
@@ -723,49 +933,58 @@ public:
     }
     std::size_t child = index + 1;
     while (child < subtree_end) {
-      DrawExplorerNode(view, query, child, tree);
-      child = ExplorerSubtreeEnd(rows, child);
+      DrawExplorerNode(view, matches, subtree_ends, query, child, tree);
+      child = subtree_ends[child];
     }
     tree.Pop();
   }
 
   void DrawExplorer(const ApplicationView &view) {
-    if (assets.heading_font() != nullptr) {
+    if (assets->heading_font() != nullptr) {
       ImGui::PushFont(
-          assets.heading_font(),
+          assets->heading_font(),
           CurrentLayoutMetrics().typography.section_heading_font_height);
     }
-    ImGui::TextUnformatted(view.explorer.title.c_str());
-    if (assets.heading_font() != nullptr) {
+    ImGui::TextUnformatted(view.panel.explorer.title.c_str());
+    if (assets->heading_font() != nullptr) {
       ImGui::PopFont();
     }
 
     std::string &query = session.explorer_queries[session.active_destination];
-    std::array<char, 256> buffer{};
-    const std::size_t copy_length =
-        std::min(query.size(), buffer.size() - std::size_t{1});
-    std::copy_n(query.data(), copy_length, buffer.data());
-    ImGui::SetNextItemWidth(-1.0f);
-    if (ImGui::InputTextWithHint("##explorer-filter",
-                                 view.explorer.search_placeholder.c_str(),
-                                 buffer.data(), buffer.size())) {
-      query = buffer.data();
+    const ExplorerSearchResult search = ExplorerSearch({
+        .id = view.panel.explorer.search.id.value,
+        .placeholder = view.panel.explorer.search.placeholder,
+        .query = query,
+        .availability = ToAvailability(view.panel.explorer.search.availability),
+    });
+    if (search.changed) {
+      query = search.query;
     }
 
-    for (const CommandView &command : view.explorer.commands) {
+    for (const CommandView &command : view.panel.explorer.commands) {
       DrawCommandButton(view.revision, command, true);
       ImGui::SameLine();
     }
-    if (!view.explorer.commands.empty()) {
+    if (!view.panel.explorer.commands.empty()) {
       ImGui::NewLine();
+    }
+    if (!view.panel.explorer.tree_label.empty()) {
+      detail::DrawSecondaryText(view.panel.explorer.tree_label);
     }
 
     HierarchyTree tree(
-        {.section_font = NativeFontHandle(assets.heading_font())});
+        {.section_font = NativeFontHandle(assets->heading_font())});
+    const std::vector<bool> matches =
+        ExplorerMatches(view.panel.explorer.rows, query);
+    const std::vector<std::size_t> subtree_ends =
+        SubtreeEnds(view.panel.explorer.rows);
     std::size_t root = 0;
-    while (root < view.explorer.rows.size()) {
-      DrawExplorerNode(view, query, root, tree);
-      root = ExplorerSubtreeEnd(view.explorer.rows, root);
+    while (root < view.panel.explorer.rows.size()) {
+      DrawExplorerNode(view, matches, subtree_ends, query, root, tree);
+      root = subtree_ends[root];
+    }
+    if (!view.panel.explorer.footer.empty()) {
+      detail::DrawSecondaryText(view.panel.explorer.footer);
     }
   }
 
@@ -901,97 +1120,543 @@ public:
     if (!field.availability.visible) {
       return;
     }
-    ImGui::PushID(field.id.value.c_str());
-    ImGui::BeginDisabled(!field.availability.enabled ||
-                         field.availability.busy);
-    if (const bool *value = std::get_if<bool>(&field.value)) {
-      bool edited = *value;
-      if (ImGui::Checkbox(field.label.c_str(), &edited)) {
-        intents.emplace_back(EditField{
-            .revision = view.revision,
-            .field = field.id,
-            .value = edited,
-            .target = field.target,
-            .phase = EditPhase::Commit,
-        });
-      }
-    } else if (const std::int64_t *value =
-                   std::get_if<std::int64_t>(&field.value)) {
-      std::int64_t edited = *value;
-      if (ImGui::InputScalar(field.label.c_str(), ImGuiDataType_S64, &edited)) {
-        intents.emplace_back(EditField{view.revision, field.id, edited,
-                                       field.target, EditPhase::Changed});
-      }
-      if (ImGui::IsItemDeactivatedAfterEdit()) {
-        intents.emplace_back(EditField{view.revision, field.id, edited,
-                                       field.target, EditPhase::Commit});
-      }
-    } else if (const double *value = std::get_if<double>(&field.value)) {
-      double edited = *value;
-      if (ImGui::InputDouble(field.label.c_str(), &edited, 0.0, 0.0, "%.3f")) {
-        intents.emplace_back(EditField{view.revision, field.id, edited,
-                                       field.target, EditPhase::Changed});
-      }
-      if (ImGui::IsItemDeactivatedAfterEdit()) {
-        intents.emplace_back(EditField{view.revision, field.id, edited,
-                                       field.target, EditPhase::Commit});
-      }
-    } else if (const std::string *value =
-                   std::get_if<std::string>(&field.value)) {
-      std::array<char, 512> buffer{};
-      const std::size_t length =
-          std::min(value->size(), buffer.size() - std::size_t{1});
-      std::copy_n(value->data(), length, buffer.data());
-      if (ImGui::InputText(field.label.c_str(), buffer.data(), buffer.size())) {
-        intents.emplace_back(EditField{view.revision, field.id,
-                                       std::string(buffer.data()), field.target,
-                                       EditPhase::Changed});
-      }
-      if (ImGui::IsItemDeactivatedAfterEdit()) {
-        intents.emplace_back(EditField{view.revision, field.id,
-                                       std::string(buffer.data()), field.target,
-                                       EditPhase::Commit});
-      }
+    live_transient_ids.insert(field.id.value);
+    const fancy_ui::Availability availability =
+        ToAvailability(field.availability);
+    const Validation validation = ToValidation(field.validation);
+    const bool stacked_label =
+        FieldLabelLayoutFor(field.content) == FieldLabelLayout::Stacked;
+    const std::string_view control_label =
+        stacked_label ? std::string_view{} : std::string_view{field.label};
+    if (stacked_label && !field.label.empty()) {
+      const LayoutMetrics metrics = CurrentLayoutMetrics();
+      ImGui::PushFont(nullptr, metrics.typography.body_font_height);
+      const ImVec2 item_spacing = ImGui::GetStyle().ItemSpacing;
+      ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                          ImVec2(item_spacing.x, 0.0f));
+      detail::DrawSecondaryText(field.label);
+      ImGui::Dummy(ImVec2(0.0f, metrics.spacing.space02));
+      ImGui::PopStyleVar();
+      ImGui::PopFont();
     }
-    ImGui::EndDisabled();
+    const auto commit = [this, &view, &field](FieldValue value) {
+      if (field.edit.has_value()) {
+        EmitEdit(view.revision, *field.edit, std::move(value),
+                 field.availability);
+      }
+      field_drafts.erase(field.id.value);
+    };
+    const auto draft = [this, &field](FieldValue value) {
+      field_drafts.insert_or_assign(field.id.value, std::move(value));
+    };
+    const auto draft_value = [this, &field](const auto &fallback) {
+      using Value = std::decay_t<decltype(fallback)>;
+      const auto found = field_drafts.find(field.id.value);
+      if (found != field_drafts.end()) {
+        if (const Value *value = std::get_if<Value>(&found->second)) {
+          return *value;
+        }
+      }
+      return fallback;
+    };
+
+    std::visit(
+        [this, &view, &field, &availability, &validation, &control_label,
+         &commit, &draft, &draft_value](const auto &content) {
+          using Content = std::decay_t<decltype(content)>;
+          if constexpr (std::is_same_v<Content, TextFieldView>) {
+            const std::string value = draft_value(content.value);
+            const TextInputResult result = TextInput({
+                .id = field.id.value,
+                .label = control_label,
+                .tooltip = field.tooltip,
+                .value = value,
+                .placeholder = content.placeholder,
+                .capacity = content.capacity,
+                .availability = availability,
+                .validation = validation,
+            });
+            if (result.changed) {
+              draft(result.value);
+            }
+            if (result.committed) {
+              commit(result.value);
+            } else if (result.cancelled) {
+              field_drafts.erase(field.id.value);
+            }
+          } else if constexpr (std::is_same_v<Content, NumericFieldView>) {
+            const double value = draft_value(content.value);
+            const NumericInputResult result = NumericInput({
+                .id = field.id.value,
+                .label = control_label,
+                .tooltip = field.tooltip,
+                .unit = content.unit,
+                .value = value,
+                .minimum = content.minimum,
+                .maximum = content.maximum,
+                .format = content.format,
+                .availability = availability,
+                .validation = validation,
+            });
+            if (result.changed) {
+              draft(result.value);
+            }
+            if (result.committed) {
+              if (content.integral) {
+                commit(static_cast<std::int64_t>(std::llround(result.value)));
+              } else {
+                commit(result.value);
+              }
+            } else if (result.cancelled) {
+              field_drafts.erase(field.id.value);
+            }
+          } else if constexpr (std::is_same_v<Content, SelectFieldView> ||
+                               std::is_same_v<Content,
+                                              RenamableSelectFieldView>) {
+            std::vector<SelectOption> options;
+            options.reserve(content.options.size());
+            std::size_t selected_index = 0;
+            for (std::size_t index = 0; index < content.options.size();
+                 ++index) {
+              const ChoiceOptionView &option = content.options[index];
+              options.push_back({
+                  .id = option.id.value,
+                  .label = option.label,
+                  .tooltip = option.tooltip,
+                  .availability = ToAvailability(option.availability),
+              });
+              if (option.id == content.selected) {
+                selected_index = index;
+              }
+            }
+            if (options.empty()) {
+              static_cast<void>(ValueDisplay({.id = field.id.value,
+                                              .label = control_label,
+                                              .value = "—",
+                                              .tooltip = field.tooltip}));
+            } else if constexpr (std::is_same_v<Content, SelectFieldView>) {
+              const SelectResult result = Select({
+                  .id = field.id.value,
+                  .label = control_label,
+                  .tooltip = field.tooltip,
+                  .options = options,
+                  .selected_index = selected_index,
+                  .availability = availability,
+                  .validation = validation,
+              });
+              if (result.changed) {
+                commit(content.options[result.selected_index].id);
+              }
+            } else {
+              RenamableSelectState &state = rename_states[field.id.value];
+              const RenamableSelectResult result = RenamableSelect(
+                  {
+                      .id = field.id.value,
+                      .label = control_label,
+                      .tooltip = field.tooltip,
+                      .options = options,
+                      .selected_index = selected_index,
+                      .availability = availability,
+                      .rename_availability = availability,
+                      .validation = validation,
+                  },
+                  state);
+              if (result.selection_changed) {
+                commit(content.options[result.selected_index].id);
+              }
+              if (result.committed) {
+                EmitEdit(view.revision, content.rename, result.value,
+                         field.availability);
+              }
+            }
+          } else if constexpr (std::is_same_v<Content, MultiselectFieldView>) {
+            std::vector<CheckedMultiselectOption> options;
+            options.reserve(content.options.size());
+            for (const ToggleOptionView &option : content.options) {
+              options.push_back({
+                  .id = option.option.id.value,
+                  .label = option.option.label,
+                  .state = option.state,
+                  .availability = ToAvailability(option.option.availability),
+              });
+            }
+            const CheckedMultiselectResult result = CheckedMultiselect({
+                .id = field.id.value,
+                .label = control_label,
+                .summary = content.summary,
+                .tooltip = field.tooltip,
+                .options = options,
+                .availability = availability,
+            });
+            if (result.changed && result.option_id.has_value()) {
+              commit(ChoiceToggleValue{
+                  .option = {.value = *result.option_id},
+                  .state = result.state,
+              });
+            }
+          } else if constexpr (std::is_same_v<Content, SegmentedFieldView>) {
+            std::vector<ChoiceSpec> choices;
+            choices.reserve(content.options.size());
+            std::size_t selected_index = 0;
+            for (std::size_t index = 0; index < content.options.size();
+                 ++index) {
+              const ChoiceOptionView &option = content.options[index];
+              choices.push_back({
+                  .id = option.id.value,
+                  .label = option.label,
+                  .tooltip = option.tooltip,
+                  .availability = ToAvailability(option.availability),
+              });
+              if (option.id == content.selected) {
+                selected_index = index;
+              }
+            }
+            if (!choices.empty()) {
+              ImGui::PushFont(
+                  nullptr, CurrentLayoutMetrics().typography.body_font_height);
+              const detail::FieldLayout layout =
+                  detail::BeginFieldLayout(control_label);
+              const SegmentedControlResult result = SegmentedControl({
+                  .id = field.id.value,
+                  .choices = choices,
+                  .selected_index = selected_index,
+                  .width = content.width,
+              });
+              detail::EndFieldLayout(layout, validation);
+              ImGui::PopFont();
+              if (result.changed) {
+                commit(content.options[result.selected_index].id);
+              }
+            }
+          } else if constexpr (std::is_same_v<Content, CheckboxFieldView>) {
+            const std::string value =
+                !content.value.empty()              ? content.value
+                : content.state == ToggleState::On  ? "Enabled"
+                : content.state == ToggleState::Off ? "Disabled"
+                                                    : "Mixed";
+            ImGui::PushFont(nullptr,
+                            CurrentLayoutMetrics().typography.body_font_height);
+            const detail::FieldLayout layout =
+                detail::BeginFieldLayout(control_label);
+            const CheckboxResult result = Checkbox({
+                .id = field.id.value,
+                .label = value,
+                .tooltip = field.tooltip,
+                .state = content.state,
+                .on_icon = content.on_icon.empty()
+                               ? IconPainter{}
+                               : assets->Painter(content.on_icon),
+                .off_icon = content.off_icon.empty()
+                                ? IconPainter{}
+                                : assets->Painter(content.off_icon),
+                .show_checkbox = content.show_checkbox,
+                .availability = availability,
+                .validation = validation,
+            });
+            detail::EndFieldLayout(layout, {});
+            ImGui::PopFont();
+            if (result.changed) {
+              commit(result.state);
+            }
+          } else if constexpr (std::is_same_v<Content, VisibilityFieldView>) {
+            const VisibilityToggleResult result = VisibilityToggle({
+                .id = field.id.value,
+                .label = control_label,
+                .tooltip = field.tooltip,
+                .state = content.state,
+                .visible_icon = assets->Painter("visibility"),
+                .hidden_icon = assets->Painter("visibility-off"),
+                .availability = availability,
+            });
+            if (result.changed) {
+              commit(result.state);
+            }
+          } else if constexpr (std::is_same_v<Content, SliderFieldView>) {
+            const double canonical = static_cast<double>(content.value);
+            const float value = static_cast<float>(draft_value(canonical));
+            const SliderResult result = Slider({
+                .id = field.id.value,
+                .label = control_label,
+                .tooltip = field.tooltip,
+                .unit = content.unit,
+                .value = value,
+                .minimum = content.minimum,
+                .maximum = content.maximum,
+                .format = content.format,
+                .availability = availability,
+                .validation = validation,
+            });
+            if (result.changed) {
+              draft(static_cast<double>(result.value));
+            }
+            if (result.committed) {
+              commit(static_cast<double>(result.value));
+            }
+          } else if constexpr (std::is_same_v<Content,
+                                              RotationCompassFieldView>) {
+            const std::int64_t canonical = content.count;
+            const int count = static_cast<int>(draft_value(canonical));
+            const RotationCompassResult result = RotationCompass({
+                .id = field.id.value,
+                .label = control_label,
+                .tooltip = field.tooltip,
+                .count = count,
+                .inherited = content.inherited,
+                .availability = availability,
+            });
+            if (result.changed) {
+              draft(static_cast<std::int64_t>(result.count));
+            }
+            if (result.committed) {
+              commit(static_cast<std::int64_t>(result.count));
+            }
+          } else if constexpr (std::is_same_v<Content, DurationFieldView>) {
+            const DurationValue value = draft_value(content.value);
+            const DurationResult result = Duration({
+                .id = field.id.value,
+                .label = control_label,
+                .tooltip = field.tooltip,
+                .hours = value.hours,
+                .minutes = value.minutes,
+                .availability = availability,
+                .validation = validation,
+            });
+            const DurationValue edited{.hours = result.hours,
+                                       .minutes = result.minutes};
+            if (result.changed) {
+              draft(edited);
+            }
+            if (result.committed) {
+              commit(edited);
+            } else if (result.cancelled) {
+              field_drafts.erase(field.id.value);
+            }
+          } else if constexpr (std::is_same_v<Content, ColorFieldView>) {
+            const ColorRgba value = draft_value(content.value);
+            const std::span<const ColorRgba> colors =
+                content.colors.empty()
+                    ? std::span<const ColorRgba>(&value, 1)
+                    : std::span<const ColorRgba>(content.colors);
+            const ColorSwatchResult result = ColorSwatch(
+                {
+                    .id = field.id.value,
+                    .label = control_label,
+                    .tooltip = field.tooltip,
+                    .picker_title = field.label,
+                    .value = value,
+                    .colors = colors,
+                    .show_alpha = content.show_alpha,
+                    .availability = availability,
+                },
+                color_states[field.id.value]);
+            if (result.changed) {
+              draft(result.value);
+            }
+            if (result.committed) {
+              commit(result.value);
+            } else if (result.cancelled) {
+              field_drafts.erase(field.id.value);
+            }
+          } else if constexpr (std::is_same_v<Content, ValueFieldView>) {
+            static_cast<void>(ValueDisplay({
+                .id = field.id.value,
+                .label = control_label,
+                .value = content.value,
+                .tooltip = field.tooltip,
+                .mixed = content.mixed,
+            }));
+          } else if constexpr (std::is_same_v<Content, ButtonFieldView>) {
+            DrawCommandButton(view.revision, content.command, false);
+          }
+        },
+        field.content);
     if (!field.help.empty()) {
       detail::DrawSecondaryText(field.help);
     }
-    if (!field.availability.enabled &&
-        ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) &&
-        !field.availability.disabled_reason.empty()) {
-      detail::ShowTooltip(field.availability.disabled_reason);
+  }
+
+  void DrawInformationNode(const ApplicationView &view,
+                           const std::vector<InformationTreeRowView> &rows,
+                           const std::vector<std::size_t> &subtree_ends,
+                           const std::size_t index, InformationTree &tree) {
+    const InformationTreeRowView &row = rows[index];
+    if (!row.availability.visible) {
+      return;
     }
-    ImGui::PopID();
+    std::vector<MetricValue> metrics;
+    metrics.reserve(row.metrics.size());
+    for (const MetricValueView &metric : row.metrics) {
+      metrics.push_back({
+          .label = metric.label,
+          .value = metric.value,
+          .wide = metric.wide,
+          .stacked = metric.stacked,
+      });
+    }
+    std::vector<ButtonSpec> actions;
+    actions.reserve(row.actions.size());
+    for (const CommandView &command : row.actions) {
+      actions.push_back({
+          .id = command.id.value,
+          .label = command.label,
+          .tooltip = command.tooltip,
+          .variant = ToButtonVariant(command.variant),
+          .availability = ToAvailability(command.availability),
+      });
+    }
+    auto [expansion, inserted] =
+        session.explorer_expanded_rows.try_emplace(row.id.value, row.expanded);
+    static_cast<void>(inserted);
+    const std::size_t subtree_end = subtree_ends[index];
+    const bool expandable = row.expandable || subtree_end > index + 1;
+    const InformationTreeRowResult result = InformationTreeRow(
+        tree, {
+                  .id = row.id.value,
+                  .label = row.label,
+                  .metadata = row.metadata,
+                  .expandable = expandable,
+                  .expanded = expandable && expansion->second,
+                  .selected = row.selected,
+                  .highlighted = row.highlighted,
+                  .status = ToStatus(row.tone),
+                  .metrics = metrics,
+                  .actions = actions,
+                  .visibility = row.visibility_edit.has_value()
+                                    ? row.visibility
+                                    : std::optional<ToggleState>{},
+                  .visible_icon = assets->Painter("visibility"),
+                  .hidden_icon = assets->Painter("visibility-off"),
+                  .availability = ToAvailability(row.availability),
+              });
+    if (result.expansion_changed) {
+      expansion->second = result.expanded;
+    }
+    if (result.activated) {
+      intents.emplace_back(ChangeSelection{
+          .revision = view.revision,
+          .source = row.id,
+          .entity = row.entity,
+          .additive = result.additive,
+          .range = result.range,
+      });
+    }
+    if (result.visibility_changed && row.visibility_edit.has_value()) {
+      EmitEdit(view.revision, *row.visibility_edit, result.visibility,
+               row.availability);
+    }
+    if (result.activated_action.has_value() &&
+        *result.activated_action < row.actions.size()) {
+      EmitCommand(view.revision, row.actions[*result.activated_action]);
+    }
+    if (!expandable || !result.expanded) {
+      return;
+    }
+    std::size_t child = index + 1;
+    while (child < subtree_end) {
+      DrawInformationNode(view, rows, subtree_ends, child, tree);
+      child = subtree_ends[child];
+    }
+    tree.Pop();
   }
 
   void DrawInspector(const ApplicationView &view) {
-    if (assets.heading_font() != nullptr) {
+    if (assets->heading_font() != nullptr) {
       ImGui::PushFont(
-          assets.heading_font(),
+          assets->heading_font(),
           CurrentLayoutMetrics().typography.section_heading_font_height);
     }
-    ImGui::TextUnformatted(view.inspector.title.c_str());
-    if (assets.heading_font() != nullptr) {
+    ImGui::TextUnformatted(view.panel.inspector.title.c_str());
+    if (assets->heading_font() != nullptr) {
       ImGui::PopFont();
     }
-    if (view.inspector.sections.empty()) {
-      ImGui::TextWrapped("%s", view.inspector.empty_message.c_str());
+    if (!view.panel.inspector.subtitle.empty()) {
+      detail::DrawSecondaryText(view.panel.inspector.subtitle);
     }
-    for (const SectionView &section : view.inspector.sections) {
-      ImGui::PushID(section.id.value.c_str());
-      ImGui::SetNextItemOpen(section.initially_open, ImGuiCond_Once);
-      if (ImGui::CollapsingHeader(section.heading.c_str())) {
+    if (!view.panel.inspector.scope.empty()) {
+      StatusText({.label = view.panel.inspector.scope,
+                  .status = SemanticStatus::Information});
+    }
+    if (!view.panel.inspector.note.empty()) {
+      ImGui::TextWrapped("%s", view.panel.inspector.note.c_str());
+    }
+    if (view.panel.inspector.sections.empty()) {
+      ImGui::TextWrapped("%s", view.panel.inspector.empty_message.c_str());
+    }
+    for (std::size_t index = 0; index < view.panel.inspector.sections.size();
+         ++index) {
+      const SectionView &section = view.panel.inspector.sections[index];
+      auto [collapsed, inserted] = session.collapsed_sections.try_emplace(
+          section.id.value, !section.default_open);
+      static_cast<void>(inserted);
+      std::optional<ButtonSpec> header_action;
+      if (section.header_command.has_value()) {
+        const CommandView &command = *section.header_command;
+        header_action = ButtonSpec{
+            .id = command.id.value,
+            .label = command.label,
+            .tooltip = command.tooltip,
+            .variant = ToButtonVariant(command.variant),
+            .availability = ToAvailability(command.availability),
+        };
+      }
+      const SectionResult result = BeginSection({
+          .id = section.id.value,
+          .heading = section.heading,
+          .summary = section.summary,
+          .open = !collapsed->second,
+          .focused = section.focused,
+          .separated = index > 0,
+          .header_action = header_action,
+      });
+      if (result.open_changed) {
+        collapsed->second = !result.open;
+      }
+      if (result.header_action_activated &&
+          section.header_command.has_value()) {
+        EmitCommand(view.revision, *section.header_command);
+      }
+      if (result.open) {
+        if (!section.information_rows.empty()) {
+          InformationTree tree(
+              {.section_font = NativeFontHandle(assets->heading_font())});
+          const std::vector<std::size_t> subtree_ends =
+              SubtreeEnds(section.information_rows);
+          std::size_t root = 0;
+          while (root < section.information_rows.size()) {
+            DrawInformationNode(view, section.information_rows, subtree_ends,
+                                root, tree);
+            root = subtree_ends[root];
+          }
+        }
+        const ImVec2 item_spacing = ImGui::GetStyle().ItemSpacing;
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                            ImVec2(item_spacing.x, 0.0f));
         for (const FieldView &field : section.fields) {
           DrawField(view, field);
         }
-        for (const CommandView &command : section.commands) {
+        ImGui::PopStyleVar();
+        if (section.status.has_value()) {
+          StatusCard({
+              .id = section.status->id.value,
+              .title = section.status->title,
+              .message = section.status->message,
+              .status = ToStatus(section.status->tone),
+              .icon = section.status->icon.empty()
+                          ? IconPainter{}
+                          : assets->Painter(section.status->icon),
+          });
+        }
+        for (const CommandView &command : section.actions) {
           DrawCommandButton(view.revision, command, false);
         }
       }
-      ImGui::PopID();
+      EndSection(result);
     }
-    for (const CommandView &command : view.inspector.primary_commands) {
+    if (view.panel.inspector.primary_command.has_value()) {
+      DrawCommandButton(view.revision, *view.panel.inspector.primary_command,
+                        false);
+    }
+    for (const CommandView &command : view.panel.inspector.secondary_commands) {
       DrawCommandButton(view.revision, command, false);
     }
   }
@@ -1019,7 +1684,7 @@ public:
           row_y +
               std::floor((metrics.geometry.compact_target - height) * 0.5f)));
     };
-    if (detail::DrawOperationDisclosure(assets,
+    if (detail::DrawOperationDisclosure(*assets,
                                         session.operation_tray_visible)) {
       ToggleLayout(detail::LayoutRegion::OperationTray);
     }
@@ -1109,6 +1774,8 @@ public:
 };
 
 ApplicationUi::ApplicationUi() : impl_(std::make_unique<Impl>()) {}
+ApplicationUi::ApplicationUi(detail::UiAssetAtlas &shared_assets)
+    : impl_(std::make_unique<Impl>(shared_assets)) {}
 ApplicationUi::~ApplicationUi() = default;
 ApplicationUi::ApplicationUi(ApplicationUi &&) noexcept = default;
 ApplicationUi &ApplicationUi::operator=(ApplicationUi &&) noexcept = default;
@@ -1116,12 +1783,18 @@ ApplicationUi &ApplicationUi::operator=(ApplicationUi &&) noexcept = default;
 AssetLoadReport
 ApplicationUi::Initialize(const std::filesystem::path &asset_root,
                           const UiEnvironment &environment) {
+  if (impl_->assets != &impl_->owned_assets) {
+    return {};
+  }
   impl_->asset_root = asset_root;
-  return impl_->assets.Load(asset_root, environment);
+  return impl_->assets->Load(asset_root, environment);
 }
 
 AssetLoadReport
 ApplicationUi::UpdateEnvironment(const UiEnvironment &environment) {
+  if (impl_->assets != &impl_->owned_assets) {
+    return {};
+  }
   if (impl_->asset_root.empty()) {
     return {
         .used_fallback_font = true,
@@ -1129,7 +1802,7 @@ ApplicationUi::UpdateEnvironment(const UiEnvironment &environment) {
             {"Fancy UI must be initialized before its environment is updated"},
     };
   }
-  return impl_->assets.Load(impl_->asset_root, environment);
+  return impl_->assets->Load(impl_->asset_root, environment);
 }
 
 const SessionState &ApplicationUi::session() const { return impl_->session; }
@@ -1142,14 +1815,15 @@ void ApplicationUi::SetSession(SessionState session) {
 FrameResult ApplicationUi::Draw(const ApplicationView &view,
                                 const SurfaceBindings &surfaces) {
   impl_->intents.clear();
+  impl_->live_transient_ids.clear();
   impl_->navigation_changed = false;
   impl_->layout_changed = false;
-  impl_->assets.InstallPendingIcons();
-  if (impl_->session.active_destination != view.active_destination) {
-    impl_->session.ActivateDestination(view.active_destination);
+  impl_->assets->InstallPendingIcons();
+  if (impl_->session.active_destination != view.panel.destination) {
+    impl_->session.ActivateDestination(view.panel.destination);
   }
 
-  ApplyTheme(ResolveTheme(view.theme_mode), impl_->assets.ui_environment());
+  ApplyTheme(ResolveTheme(view.theme_mode), impl_->assets->ui_environment());
   const bool operation_available = view.operation.has_value();
   const detail::ApplicationChromeCallbacks chrome_callbacks =
       impl_->ChromeCallbacks(view);
@@ -1183,21 +1857,23 @@ FrameResult ApplicationUi::Draw(const ApplicationView &view,
                                 impl_->chrome.DrawContextToolbar(
                                     view.context_toolbar, chrome_callbacks);
                               },
-                          .zero_padding = true},
+                          .padding = 0.0f},
       .activity_rail = {.id = "activity-rail",
                         .draw = [this,
                                  &view]() { impl_->DrawActivityRail(view); },
-                        .zero_padding = true},
+                        .padding = 0.0f},
       .explorer = {.id = "explorer",
-                   .draw = [this, &view]() { impl_->DrawExplorer(view); }},
+                   .draw = [this, &view]() { impl_->DrawExplorer(view); },
+                   .padding = 8.0f},
       .workspace = {.id = "workspace",
                     .draw =
                         [this, &view, &surfaces]() {
                           impl_->DrawWorkspace(view, surfaces);
                         },
-                    .zero_padding = true},
+                    .padding = 0.0f},
       .inspector = {.id = "inspector",
-                    .draw = [this, &view]() { impl_->DrawInspector(view); }},
+                    .draw = [this, &view]() { impl_->DrawInspector(view); },
+                    .padding = 8.0f},
       .operation_tray = {.id = "operation-tray",
                          .draw = [this,
                                   &view]() { impl_->DrawOperationTray(view); },
@@ -1208,10 +1884,10 @@ FrameResult ApplicationUi::Draw(const ApplicationView &view,
                                 impl_->DrawOperationStrip(view);
                               },
                           .visible = view.operation.has_value(),
-                          .zero_padding = true},
+                          .padding = 0.0f},
       .status_bar = {.id = "status-bar",
                      .draw = [this, &view]() { impl_->DrawStatusBar(view); },
-                     .zero_padding = true},
+                     .padding = 0.0f},
   };
   const shell::ApplicationShellResult shell_result =
       shell::Application(shell_spec, shell_state);
@@ -1221,6 +1897,73 @@ FrameResult ApplicationUi::Draw(const ApplicationView &view,
       shell_result.state.operation_tray_height;
   impl_->layout_changed = impl_->layout_changed || shell_result.layout_changed;
   impl_->HandleShortcuts(view);
+  impl_->PruneTransientState();
+
+  ImGui::End();
+  ImGui::PopStyleVar();
+  return {
+      .product_intents = std::move(impl_->intents),
+      .backend_requests = {},
+      .navigation_changed = impl_->navigation_changed,
+      .layout_changed = impl_->layout_changed,
+  };
+}
+
+FrameResult
+ApplicationUi::DrawPanelAudit(const ApplicationView &view,
+                              const std::function<void()> &draw_audit_menu) {
+  impl_->intents.clear();
+  impl_->live_transient_ids.clear();
+  impl_->navigation_changed = false;
+  impl_->layout_changed = false;
+  impl_->assets->InstallPendingIcons();
+  if (impl_->session.active_destination != view.panel.destination) {
+    impl_->session.ActivateDestination(view.panel.destination);
+  }
+  impl_->session.explorer_visible = true;
+  impl_->session.inspector_visible = true;
+
+  ApplyTheme(ResolveTheme(view.theme_mode), impl_->assets->ui_environment());
+  const ImGuiViewport *viewport = ImGui::GetMainViewport();
+  ImGui::SetNextWindowPos(viewport->WorkPos);
+  ImGui::SetNextWindowSize(viewport->WorkSize);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::Begin("##steppenface-panel-audit", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                   ImGuiWindowFlags_NoSavedSettings |
+                   ImGuiWindowFlags_NoBringToFrontOnFocus);
+
+  const shell::ApplicationShellState shell_state{
+      .explorer_visible = true,
+      .inspector_visible = true,
+      .operation_tray_visible = false,
+      .explorer_width = impl_->session.explorer_width,
+      .inspector_width = impl_->session.inspector_width,
+  };
+  const shell::ApplicationShellSpec shell_spec{
+      .application_bar = {.id = "application-bar", .visible = false},
+      .context_toolbar = {.id = "context-toolbar", .visible = false},
+      .activity_rail = {.id = "activity-rail",
+                        .draw = [this,
+                                 &view]() { impl_->DrawActivityRail(view); },
+                        .padding = 0.0f},
+      .explorer = {.id = "explorer",
+                   .draw = [this, &view]() { impl_->DrawExplorer(view); },
+                   .padding = 8.0f},
+      .workspace = {.id = "panel-audit-menu", .draw = draw_audit_menu},
+      .inspector = {.id = "inspector",
+                    .draw = [this, &view]() { impl_->DrawInspector(view); },
+                    .padding = 8.0f},
+      .operation_tray = {.id = "operation-tray", .visible = false},
+      .operation_strip = {.id = "operation-strip", .visible = false},
+      .status_bar = {.id = "status-bar", .visible = false},
+  };
+  const shell::ApplicationShellResult shell_result =
+      shell::Application(shell_spec, shell_state);
+  impl_->session.explorer_width = shell_result.state.explorer_width;
+  impl_->session.inspector_width = shell_result.state.inspector_width;
+  impl_->layout_changed = shell_result.layout_changed;
+  impl_->PruneTransientState();
 
   ImGui::End();
   ImGui::PopStyleVar();

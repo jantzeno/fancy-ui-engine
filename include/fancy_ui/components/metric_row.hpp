@@ -8,6 +8,8 @@ namespace fancy_ui {
 struct MetricValue {
   std::string_view label;
   std::string_view value;
+  bool wide = false;
+  bool stacked = false;
 };
 
 struct MetricRowSpec {

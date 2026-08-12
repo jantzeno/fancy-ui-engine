@@ -237,7 +237,6 @@ TEST_CASE("layout metrics expose the normative shell and panel geometry") {
           Catch::Approx(20.43f));
   REQUIRE(metrics.explorer.tree_indent == 16.0f);
   REQUIRE(metrics.inspector.label_width == 112.0f);
-  REQUIRE(metrics.inspector.stack_breakpoint == 288.0f);
   REQUIRE(metrics.menu.popup_width == 264.0f);
   REQUIRE(metrics.settings.title_bar_height == 48.0f);
 }
@@ -711,37 +710,89 @@ TEST_CASE("shell panel regions honor their declared content padding") {
   float explorer_inset = -1.0f;
   float workspace_inset = -1.0f;
   float inspector_inset = -1.0f;
+  float inspector_right_inset = -1.0f;
+  float inspector_item_spacing = -1.0f;
   ImGui::NewFrame();
   ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
   ImGui::SetNextWindowSize(io.DisplaySize);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   ImGui::Begin("shell-panel-padding", nullptr, ImGuiWindowFlags_NoDecoration);
-  ImGui::PopStyleVar();
 
   const auto capture_inset = [](float &inset) {
     inset = ImGui::GetCursorScreenPos().x - ImGui::GetWindowPos().x;
   };
   const fancy_ui::shell::ApplicationShellSpec spec{
       .explorer = {.id = "explorer",
-                   .draw = [&]() { capture_inset(explorer_inset); }},
+                   .draw = [&]() { capture_inset(explorer_inset); },
+                   .padding = 8.0f},
       .workspace = {.id = "workspace",
                     .draw = [&]() { capture_inset(workspace_inset); },
-                    .zero_padding = true},
+                    .padding = 0.0f},
       .inspector = {.id = "inspector",
-                    .draw = [&]() { capture_inset(inspector_inset); }},
+                    .draw =
+                        [&]() {
+                          capture_inset(inspector_inset);
+                          inspector_right_inset =
+                              ImGui::GetWindowPos().x +
+                              ImGui::GetWindowSize().x -
+                              ImGui::GetCursorScreenPos().x -
+                              ImGui::GetContentRegionAvail().x;
+                          inspector_item_spacing =
+                              ImGui::GetStyle().ItemSpacing.y;
+                        },
+                    .padding = 8.0f},
+  };
+  static_cast<void>(fancy_ui::shell::Application(spec, {}));
+  ImGui::End();
+  ImGui::PopStyleVar();
+  ImGui::Render();
+
+  const float panel_inset = fancy_ui::CurrentLayoutMetrics().spacing.space03;
+  REQUIRE(explorer_inset == Catch::Approx(panel_inset));
+  REQUIRE(workspace_inset == Catch::Approx(0.0f));
+  REQUIRE(inspector_inset == Catch::Approx(panel_inset));
+  REQUIRE(inspector_right_inset == Catch::Approx(panel_inset));
+  REQUIRE(inspector_item_spacing ==
+          Catch::Approx(fancy_ui::CurrentLayoutMetrics().spacing.space03));
+  ImGui::DestroyContext();
+}
+
+TEST_CASE("hidden shell chrome leaves the full height to panel regions") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(1280.0f, 720.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  float workspace_height = 0.0f;
+  ImGui::NewFrame();
+  ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+  ImGui::SetNextWindowSize(io.DisplaySize);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  ImGui::Begin("focused-panel-shell", nullptr, ImGuiWindowFlags_NoDecoration);
+  ImGui::PopStyleVar();
+  const fancy_ui::shell::ApplicationShellSpec spec{
+      .workspace = {.id = "workspace",
+                    .draw =
+                        [&workspace_height]() {
+                          workspace_height = ImGui::GetWindowSize().y;
+                        }},
   };
   static_cast<void>(fancy_ui::shell::Application(spec, {}));
   ImGui::End();
   ImGui::Render();
 
-  const float panel_inset = fancy_ui::CurrentLayoutMetrics().spacing.space05;
-  REQUIRE(explorer_inset == Catch::Approx(panel_inset));
-  REQUIRE(workspace_inset == Catch::Approx(0.0f));
-  REQUIRE(inspector_inset == Catch::Approx(panel_inset));
+  REQUIRE(workspace_height == Catch::Approx(io.DisplaySize.y));
   ImGui::DestroyContext();
 }
 
-TEST_CASE("section disclosure owns content with a header gap") {
+TEST_CASE("section disclosure keeps canonical inspector fields flush and "
+          "bounded") {
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
   io.DisplaySize = ImVec2(640.0f, 480.0f);
@@ -754,28 +805,44 @@ TEST_CASE("section disclosure owns content with a header gap") {
   fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
 
   ImGui::NewFrame();
-  ImGui::Begin("section-disclosure-contract");
+  ImGui::SetNextWindowSize(ImVec2(320.0f, 480.0f), ImGuiCond_Always);
+  ImGui::Begin("section-disclosure-contract", nullptr,
+               ImGuiWindowFlags_NoDecoration);
   const fancy_ui::SectionResult expanded = fancy_ui::BeginSection({
       .id = "expanded",
       .heading = "Expanded",
   });
+  const float header_left = ImGui::GetItemRectMin().x;
   const float header_bottom = ImGui::GetItemRectMax().y;
   bool expanded_content_drawn = false;
+  bool inline_field_layout = false;
+  float content_left = header_left;
   float content_top = header_bottom;
+  float checkbox_right = 0.0f;
+  float control_right = 0.0f;
   if (expanded.open) {
-    static_cast<void>(fancy_ui::TextInput({
+    content_left = ImGui::GetCursorScreenPos().x;
+    const fancy_ui::detail::FieldLayout field =
+        fancy_ui::detail::BeginFieldLayout("Duplicates");
+    inline_field_layout = field.table;
+    control_right =
+        ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+    static_cast<void>(fancy_ui::Checkbox({
         .id = "owned-content",
-        .label = "Name",
+        .label = "Hide duplicates (3) with clipped overflow",
+        .state = fancy_ui::ToggleState::On,
     }));
     expanded_content_drawn = true;
     content_top = ImGui::GetItemRectMin().y;
+    checkbox_right = ImGui::GetItemRectMax().x;
+    fancy_ui::detail::EndFieldLayout(field, {});
   }
   fancy_ui::EndSection(expanded);
 
   const fancy_ui::SectionResult collapsed = fancy_ui::BeginSection({
       .id = "collapsed",
       .heading = "Collapsed",
-      .initially_open = false,
+      .open = false,
       .separated = true,
   });
   bool collapsed_content_drawn = false;
@@ -788,10 +855,53 @@ TEST_CASE("section disclosure owns content with a header gap") {
 
   REQUIRE(expanded.open);
   REQUIRE(expanded_content_drawn);
+  REQUIRE(content_left == Catch::Approx(header_left));
+  REQUIRE(inline_field_layout);
+  REQUIRE(checkbox_right <= control_right);
   REQUIRE(content_top - header_bottom >=
           fancy_ui::CurrentLayoutMetrics().spacing.space02);
   REQUIRE_FALSE(collapsed.open);
   REQUIRE_FALSE(collapsed_content_drawn);
+  ImGui::DestroyContext();
+}
+
+TEST_CASE("adjacent inspector fields use the contiguous Explorer row rhythm") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(640.0f, 480.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+  io.Fonts->AddFontDefault();
+  unsigned char *pixels = nullptr;
+  int width = 0;
+  int height = 0;
+  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+  fancy_ui::ApplyTheme(fancy_ui::ResolvedTheme::Dark);
+
+  ImGui::NewFrame();
+  ImGui::Begin("inspector-field-rhythm");
+  const ImVec2 spacing = ImGui::GetStyle().ItemSpacing;
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing.x, 0.0f));
+  static_cast<void>(fancy_ui::ValueDisplay({
+      .id = "first",
+      .label = "First",
+      .value = "Value",
+  }));
+  const float first_top = ImGui::GetItemRectMin().y;
+  const float first_bottom = ImGui::GetItemRectMax().y;
+  static_cast<void>(fancy_ui::ValueDisplay({
+      .id = "second",
+      .label = "Second",
+      .value = "Value",
+  }));
+  const float second_top = ImGui::GetItemRectMin().y;
+  ImGui::PopStyleVar();
+  ImGui::End();
+  ImGui::Render();
+
+  REQUIRE(second_top - first_bottom == Catch::Approx(0.0f));
+  REQUIRE(second_top - first_top ==
+          Catch::Approx(fancy_ui::CurrentLayoutMetrics().geometry.row_height)
+              .margin(1.0f));
   ImGui::DestroyContext();
 }
 
@@ -831,7 +941,7 @@ TEST_CASE("inline application menu bar occupies the full shell region") {
                     }
                   },
               .menu_bar = true,
-              .zero_padding = true,
+              .padding = 0.0f,
           },
   };
   static_cast<void>(fancy_ui::shell::Application(spec, {}));
@@ -909,8 +1019,7 @@ TEST_CASE("logical control dimensions follow the configured UI scale") {
   ImGui::DestroyContext();
 }
 
-TEST_CASE("gallery field layout preview keeps narrow fields inline only while "
-          "scoped") {
+TEST_CASE("narrow field layouts stay inline while gallery label widths scope") {
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
   io.DisplaySize = ImVec2(640.0f, 480.0f);
@@ -928,27 +1037,33 @@ TEST_CASE("gallery field layout preview keeps narrow fields inline only while "
   ImGui::Begin("field-layout-preview", nullptr, ImGuiWindowFlags_NoDecoration);
   ImGui::PopStyleVar();
 
-  const fancy_ui::detail::FieldLayout stacked =
+  const fancy_ui::detail::FieldLayout default_layout =
       fancy_ui::detail::BeginFieldLayout("Spacing");
-  fancy_ui::detail::EndFieldLayout(stacked, {});
-  bool inline_preview = false;
+  const float default_control_left = ImGui::GetCursorScreenPos().x;
+  fancy_ui::detail::EndFieldLayout(default_layout, {});
+  bool preview_inline = false;
+  float preview_control_left = 0.0f;
   {
     const fancy_ui::detail::ScopedFieldLayoutPreview preview(76.0f);
     const fancy_ui::detail::FieldLayout layout =
         fancy_ui::detail::BeginFieldLayout("Spacing");
-    inline_preview = layout.table;
+    preview_inline = layout.table;
+    preview_control_left = ImGui::GetCursorScreenPos().x;
     fancy_ui::detail::EndFieldLayout(layout, {});
   }
   const fancy_ui::detail::FieldLayout restored =
       fancy_ui::detail::BeginFieldLayout("Spacing");
+  const float restored_control_left = ImGui::GetCursorScreenPos().x;
   fancy_ui::detail::EndFieldLayout(restored, {});
 
   ImGui::End();
   ImGui::Render();
 
-  REQUIRE_FALSE(stacked.table);
-  REQUIRE(inline_preview);
-  REQUIRE_FALSE(restored.table);
+  REQUIRE(default_layout.table);
+  REQUIRE(preview_inline);
+  REQUIRE(restored.table);
+  REQUIRE(preview_control_left < default_control_left);
+  REQUIRE(restored_control_left == Catch::Approx(default_control_left));
   ImGui::DestroyContext();
 }
 
@@ -1044,7 +1159,7 @@ TEST_CASE("color swatch opens a transactional picker and commits on Enter") {
     result = fancy_ui::ColorSwatch(
         {
             .id = "color",
-            .label = "Bed color",
+            .label = "",
             .value = value,
             .colors = std::span<const fancy_ui::ColorRgba>(&value, 1),
             .picker_layout = layout,

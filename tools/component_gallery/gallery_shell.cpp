@@ -4,11 +4,13 @@
 #include "internal/application_chrome.hpp"
 #include "internal/component_internal.hpp"
 #include "internal/ui_asset_atlas.hpp"
+#include "native_panel_contracts.hpp"
 
 #include <imgui.h>
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <format>
@@ -373,6 +375,25 @@ ControlActionView GalleryAction(std::string field, FieldValue value,
   };
 }
 
+FieldView GalleryNumericField(std::string id, std::string label,
+                              const double value, std::string unit,
+                              std::string help, const bool integral,
+                              std::optional<UiId> target = std::nullopt) {
+  const UiId field{.value = std::move(id)};
+  return {
+      .id = field,
+      .label = std::move(label),
+      .help = std::move(help),
+      .edit = EditBindingView{.field = field, .target = std::move(target)},
+      .content =
+          NumericFieldView{
+              .value = value,
+              .unit = std::move(unit),
+              .integral = integral,
+          },
+  };
+}
+
 std::string GalleryModelGridLabel(const GalleryModelToolbarState &state) {
   const int spacing = state.beds.front().grid_spacing_mm;
   const bool uniform =
@@ -444,14 +465,10 @@ BuildGalleryModelGridPopover(const GalleryModelToolbarState &state) {
                                 static_cast<std::int64_t>(spacing), target),
     });
   }
-  popover.fields.push_back({
-      .id = {.value = "model.grid-spacing"},
-      .label = "Custom spacing",
-      .value = static_cast<std::int64_t>(current_spacing),
-      .target = UiId{.value = target},
-      .unit = "mm",
-      .help = "Enter a positive whole-millimeter spacing.",
-  });
+  popover.fields.push_back(GalleryNumericField(
+      "model.grid-spacing", "Custom spacing", current_spacing, "mm",
+      "Enter a positive whole-millimeter spacing.", true,
+      UiId{.value = target}));
   return popover;
 }
 
@@ -513,13 +530,9 @@ BuildGalleryCanvasGridPopover(const GalleryCanvasToolbarState &state) {
                                 static_cast<std::int64_t>(spacing)),
     });
   }
-  popover.fields.push_back({
-      .id = {.value = "canvas.grid-spacing"},
-      .label = "Custom spacing",
-      .value = state.grid_spacing_mm,
-      .unit = "mm",
-      .help = "Enter a positive grid spacing.",
-  });
+  popover.fields.push_back(GalleryNumericField(
+      "canvas.grid-spacing", "Custom spacing", state.grid_spacing_mm, "mm",
+      "Enter a positive grid spacing.", false));
   return popover;
 }
 
@@ -681,487 +694,530 @@ ContextToolbarView BuildGalleryContextToolbar(const ShellGalleryState &state) {
   return toolbar;
 }
 
-void DrawGalleryToolbarField(ShellGalleryState &state, const FieldView &field) {
-  if (!field.availability.visible) {
-    return;
-  }
-  ImGui::PushID(field.id.value.c_str());
-  ImGui::BeginDisabled(!field.availability.enabled || field.availability.busy);
-  bool changed = false;
-  FieldValue edited = field.value;
-  if (std::int64_t *value = std::get_if<std::int64_t>(&edited)) {
-    changed = ImGui::InputScalar(field.label.c_str(), ImGuiDataType_S64, value);
-  } else if (double *value = std::get_if<double>(&edited)) {
-    changed = ImGui::InputDouble(field.label.c_str(), value, 0.0, 0.0, "%.3f");
-  }
-  ImGui::EndDisabled();
-  if (changed) {
-    static_cast<void>(
-        ApplyGalleryToolbarAction(state, {
-                                             .field = field.id,
-                                             .value = std::move(edited),
-                                             .target = field.target,
-                                             .availability = field.availability,
-                                         }));
-  }
-  if (!field.help.empty()) {
-    detail::DrawSecondaryText(field.help);
-  }
-  ImGui::PopID();
+FieldView GalleryField(std::string id, std::string label, FieldContent content,
+                       UiAvailability availability = Enabled(),
+                       std::string help = {}, const bool editable = true) {
+  const UiId field{.value = std::move(id)};
+  return {
+      .id = field,
+      .label = std::move(label),
+      .help = std::move(help),
+      .availability = std::move(availability),
+      .edit =
+          editable
+              ? std::optional<EditBindingView>{EditBindingView{.field = field}}
+              : std::nullopt,
+      .content = std::move(content),
+  };
 }
 
-void DrawPanelHeading(detail::UiAssetAtlas &assets,
-                      const std::string_view title,
-                      const bool vertically_centered) {
-  const LayoutMetrics metrics = CurrentLayoutMetrics();
-  const float title_y =
-      vertically_centered
-          ? std::floor((metrics.geometry.panel_header_height -
-                        metrics.typography.section_heading_font_height) *
-                       0.5f)
-          : metrics.spacing.space04;
-  ImGui::SetCursorPos(
-      ImVec2(metrics.spacing.space05, std::max(0.0f, title_y)));
-  if (assets.heading_font() != nullptr) {
-    ImGui::PushFont(
-        assets.heading_font(),
-        metrics.typography.section_heading_font_height);
+std::vector<ChoiceOptionView> GalleryMaterialOptions() {
+  return {
+      {.id = {.value = "plywood"}, .label = "Plywood"},
+      {.id = {.value = "acrylic"}, .label = "Acrylic"},
+      {.id = {.value = "aluminum"}, .label = "Aluminum"},
+  };
+}
+
+UiId GalleryMaterialId(const std::size_t index) {
+  static constexpr std::array ids{"plywood", "acrylic", "aluminum"};
+  return {.value = ids[std::min(index, ids.size() - 1)]};
+}
+
+std::vector<ActivityView> BuildGalleryActivities(const GalleryState &state) {
+  return {
+      {.destination = Destination::Model, .label = "Model", .icon = "model"},
+      {.destination = Destination::ModelBeds, .label = "Beds", .icon = "bed"},
+      {.destination = Destination::CanvasObjects,
+       .label = "Objects",
+       .icon = "objects"},
+      {.destination = Destination::CanvasBeds, .label = "Beds", .icon = "bed"},
+      {.destination = Destination::CanvasGrain,
+       .label = "Grain",
+       .icon = "grain"},
+      {.destination = Destination::Search, .label = "Search", .icon = "search"},
+      {.destination = Destination::Compact,
+       .label = "Compact",
+       .icon = "compact"},
+      {.destination = Destination::Diagnostics,
+       .label = "Diagnostics",
+       .icon = "diagnostics",
+       .availability = state.settings.applied.general.diagnostics_enabled
+                           ? Enabled()
+                           : Disabled("Enable diagnostics in Settings.")},
+  };
+}
+
+ApplicationView BuildGalleryApplicationView(const GalleryState &state) {
+  const ShellGalleryState &shell = state.shell;
+  ApplicationView view{
+      .revision = 1,
+      .theme_mode = state.theme == ResolvedTheme::Dark ? ThemeMode::Dark
+                                                       : ThemeMode::Light,
+      .application_bar = BuildGalleryApplicationBar(shell),
+      .context_toolbar = BuildGalleryContextToolbar(shell),
+      .panel =
+          {
+              .id = {.value = "gallery:application-shell"},
+              .label = "Application shell preview",
+              .destination = shell.active_workspace == WorkspaceKind::Canvas
+                                 ? Destination::CanvasObjects
+                                 : Destination::Model,
+          },
+  };
+  view.activities = BuildGalleryActivities(state);
+
+  view.panel.explorer = {
+      .title = "Objects",
+      .tree_label = "Hierarchy",
+      .footer = "3 objects · one hidden",
+      .search = {.id = {.value = "gallery.explorer.search"},
+                 .placeholder = "Search objects, sources, parts"},
+      .rows =
+          {
+              {
+                  .id = {.value = "gallery.row.project"},
+                  .entity = {.value = "gallery.project"},
+                  .label = "fixture-kit-07.svg",
+                  .secondary_label = "3 objects",
+                  .icon = "objects",
+                  .expanded = true,
+                  .expandable = true,
+              },
+              {
+                  .id = {.value = "gallery.row.face-plate"},
+                  .entity = {.value = "gallery.face-plate"},
+                  .label = shell.object_name,
+                  .secondary_label = "Plywood",
+                  .icon = "objects",
+                  .depth = 1,
+                  .selected = true,
+                  .color = shell.display_color,
+                  .color_edit =
+                      EditBindingView{
+                          .field = {.value = "matrix.display-color"}},
+                  .visibility = shell.visible,
+                  .visibility_edit =
+                      EditBindingView{.field = {.value = "matrix.visibility"}},
+                  .context_menu =
+                      ContextMenuView{
+                          .id = {.value = "gallery.row.face-plate.menu"},
+                          .items =
+                              {
+                                  {.id = {.value = "gallery.row.focus"},
+                                   .label = "Focus",
+                                   .command = GalleryCommand(
+                                       CommandId::ZoomToSelection,
+                                       "gallery.row.focus", "Focus")},
+                                  {.id = {.value = "gallery.row.visibility"},
+                                   .label = "Toggle visibility",
+                                   .action = GalleryAction(
+                                       "matrix.visibility",
+                                       shell.visible == ToggleState::On
+                                           ? ToggleState::Off
+                                           : ToggleState::On)},
+                              }},
+              },
+              {
+                  .id = {.value = "gallery.row.restricted"},
+                  .entity = {.value = "gallery.restricted"},
+                  .label = "Locked reference",
+                  .secondary_label = "Unavailable",
+                  .icon = "objects",
+                  .depth = 1,
+                  .availability = Disabled("Unlock the reference to edit it."),
+              },
+          },
+  };
+
+  view.workspace = {
+      .kind = shell.active_workspace,
+      .selection_source = {.value =
+                               shell.active_workspace == WorkspaceKind::Canvas
+                                   ? "workspace.canvas"
+                                   : "workspace.model"},
+      .title = "Contract matrix workspace",
+      .empty_message = "No surface is bound in this gallery composition.",
+  };
+
+  SectionView information{
+      .id = {.value = "matrix.information"},
+      .heading = "Information tree",
+      .summary = "Prepared selection",
+      .information_rows =
+          {
+              {.id = {.value = "matrix.info.root"},
+               .entity = {.value = "gallery.face-plate"},
+               .label = shell.object_name,
+               .metadata = "Selected",
+               .expanded = true,
+               .expandable = true,
+               .selected = true,
+               .metrics =
+                   {{.label = "Width", .value = "240 mm"},
+                    {.label = "Height", .value = "180 mm", .stacked = true}},
+               .visibility = shell.visible,
+               .visibility_edit =
+                   EditBindingView{.field = {.value = "matrix.visibility"}},
+               .actions = {{.id = {.value = "matrix.info.focus"},
+                            .command = CommandId::ZoomToSelection,
+                            .label = "…",
+                            .tooltip = "Focus selection"}}},
+              {.id = {.value = "matrix.info.child"},
+               .entity = {.value = "gallery.face-plate.source"},
+               .label = "Source geometry",
+               .metadata = "fixture-kit-07.svg",
+               .depth = 1,
+               .highlighted = true,
+               .tone = SemanticTone::Information},
+          },
+  };
+
+  const std::vector<ChoiceOptionView> materials = GalleryMaterialOptions();
+  const UiId material = GalleryMaterialId(shell.material_index);
+  SectionView fields{
+      .id = {.value = "matrix.fields"},
+      .heading = "Field contract matrix",
+      .summary = "14 payloads",
+      .fields =
+          {
+              GalleryField("matrix.name", "Name",
+                           TextFieldView{.value = shell.object_name,
+                                         .placeholder = "Object name"}),
+              GalleryField("matrix.spacing", "Spacing",
+                           NumericFieldView{.value = shell.spacing_mm,
+                                            .minimum = 0.0,
+                                            .unit = "mm",
+                                            .format = "%.1f"}),
+              GalleryField(
+                  "matrix.material", "Material",
+                  SelectFieldView{.options = materials, .selected = material}),
+              GalleryField(
+                  "matrix.renamable-material", "Named material",
+                  RenamableSelectFieldView{
+                      .options = materials,
+                      .selected = material,
+                      .rename = {.field = {.value = "matrix.material-name"}}}),
+              GalleryField(
+                  "matrix.layers", "Layers",
+                  MultiselectFieldView{
+                      .summary = shell.enabled == ToggleState::On ? "2 of 2"
+                                                                  : "1 of 2",
+                      .options =
+                          {{{.id = {.value = "geometry"}, .label = "Geometry"},
+                            ToggleState::On},
+                           {{.id = {.value = "labels"}, .label = "Labels"},
+                            shell.enabled}}}),
+              GalleryField("matrix.mode", "Mode",
+                           SegmentedFieldView{.options = materials,
+                                              .selected = material}),
+              GalleryField("matrix.enabled", "Enabled",
+                           CheckboxFieldView{.state = shell.enabled}),
+              GalleryField("matrix.visibility", "Show overlay",
+                           VisibilityFieldView{.state = shell.visible}),
+              GalleryField("matrix.explode", "Explode",
+                           SliderFieldView{.value = shell.explode_percent,
+                                           .minimum = 0.0f,
+                                           .maximum = 100.0f,
+                                           .unit = "%",
+                                           .format = "%.0f"}),
+              GalleryField(
+                  "matrix.rotations", "Search rotations",
+                  RotationCompassFieldView{.count = shell.rotation_count}),
+              GalleryField(
+                  "matrix.duration", "Time limit",
+                  DurationFieldView{.value = {.hours = shell.hours,
+                                              .minutes = shell.minutes}}),
+              GalleryField("matrix.display-color", "Display color",
+                           ColorFieldView{.value = shell.display_color}),
+              GalleryField(
+                  "matrix.source", "Source",
+                  ValueFieldView{.value = "fixture-kit-07.svg", .mixed = false},
+                  Enabled(), {}, false),
+              GalleryField(
+                  "matrix.inspect", "",
+                  ButtonFieldView{.command = GalleryCommand(
+                                      CommandId::OpenLegalNotices,
+                                      "matrix.inspect", "Inspect component", {},
+                                      Enabled(), CommandVariant::Primary)},
+                  Enabled(), {}, false),
+              GalleryField("matrix.unavailable", "Unavailable value",
+                           NumericFieldView{.value = 12.0},
+                           Disabled("Complete setup before editing.")),
+              GalleryField("matrix.busy", "Busy value",
+                           NumericFieldView{.value = 24.0},
+                           UiAvailability{.enabled = false,
+                                          .busy = true,
+                                          .disabled_reason =
+                                              "Calculation in progress."}),
+          },
+      .status =
+          StatusCardView{
+              .id = {.value = "matrix.ready"},
+              .title = "Ready",
+              .message =
+                  "Every panel-audit field payload uses the typed renderer.",
+              .tone = SemanticTone::Success,
+              .icon = "success",
+          },
+  };
+  view.panel.inspector = {
+      .title = "Panel audit",
+      .subtitle = "Typed ImGui contract matrix",
+      .scope = "Selection · 1 object",
+      .note = shell.feedback,
+      .sections = {std::move(information), std::move(fields)},
+      .primary_command = GalleryCommand(CommandId::Quit, "gallery.back",
+                                        "Back to component gallery", {},
+                                        Enabled(), CommandVariant::Tertiary),
+  };
+  view.operation = OperationView{
+      .id = {.value = "matrix.operation"},
+      .title = "Panel audit validation",
+      .summary = "Rendering the native contract matrix.",
+      .tone = SemanticTone::Success,
+      .progress = 1.0f,
+  };
+  view.status_items = {
+      {.id = {.value = "matrix.status.contract"},
+       .label = "14 field payloads",
+       .tone = SemanticTone::Success},
+      {.id = {.value = "matrix.status.theme"},
+       .label = state.theme == ResolvedTheme::Dark ? "Dark" : "Light"},
+  };
+  return view;
+}
+
+bool ApplyGalleryPanelEdit(ShellGalleryState &state, const EditField &edit) {
+  if (edit.field.value == "matrix.name" ||
+      edit.field.value == "matrix.material-name") {
+    if (const std::string *value = std::get_if<std::string>(&edit.value)) {
+      state.object_name = *value;
+      return true;
+    }
+  } else if (edit.field.value == "matrix.spacing") {
+    if (const double *value = std::get_if<double>(&edit.value)) {
+      state.spacing_mm = *value;
+      return true;
+    }
+  } else if (edit.field.value == "matrix.material" ||
+             edit.field.value == "matrix.renamable-material" ||
+             edit.field.value == "matrix.mode") {
+    if (const UiId *value = std::get_if<UiId>(&edit.value)) {
+      const std::array ids{"plywood", "acrylic", "aluminum"};
+      const auto found = std::ranges::find(ids, value->value);
+      if (found != ids.end()) {
+        state.material_index =
+            static_cast<std::size_t>(std::distance(ids.begin(), found));
+        return true;
+      }
+    }
+  } else if (edit.field.value == "matrix.layers") {
+    if (const ChoiceToggleValue *value =
+            std::get_if<ChoiceToggleValue>(&edit.value);
+        value != nullptr && value->option.value == "labels") {
+      state.enabled = value->state;
+      return true;
+    }
+  } else if (edit.field.value == "matrix.enabled") {
+    if (const ToggleState *value = std::get_if<ToggleState>(&edit.value)) {
+      state.enabled = *value;
+      return true;
+    }
+  } else if (edit.field.value == "matrix.visibility") {
+    if (const ToggleState *value = std::get_if<ToggleState>(&edit.value)) {
+      state.visible = *value;
+      return true;
+    }
+  } else if (edit.field.value == "matrix.explode") {
+    if (const double *value = std::get_if<double>(&edit.value)) {
+      state.explode_percent = static_cast<float>(*value);
+      return true;
+    }
+  } else if (edit.field.value == "matrix.rotations") {
+    if (const std::int64_t *value = std::get_if<std::int64_t>(&edit.value)) {
+      state.rotation_count = static_cast<int>(*value);
+      return true;
+    }
+  } else if (edit.field.value == "matrix.duration") {
+    if (const DurationValue *value = std::get_if<DurationValue>(&edit.value)) {
+      state.hours = value->hours;
+      state.minutes = value->minutes;
+      return true;
+    }
+  } else if (edit.field.value == "matrix.display-color") {
+    if (const ColorRgba *value = std::get_if<ColorRgba>(&edit.value)) {
+      state.display_color = *value;
+      return true;
+    }
   }
-  ImGui::TextUnformatted(title.data(), title.data() + title.size());
+  return ApplyGalleryToolbarAction(
+      state, {.field = edit.field, .value = edit.value, .target = edit.target});
+}
+
+bool ContainsCaseInsensitive(const std::string_view text,
+                             const std::string_view query) {
+  return std::ranges::search(
+             text, query,
+             [](const char left, const char right) {
+               return std::tolower(static_cast<unsigned char>(left)) ==
+                      std::tolower(static_cast<unsigned char>(right));
+             })
+             .begin() != text.end();
+}
+
+void DrawPanelAuditMenu(detail::UiAssetAtlas &assets,
+                        const std::vector<PanelContractView> &audits,
+                        GalleryState &state, bool &return_requested) {
+  if (assets.heading_font() != nullptr) {
+    ImGui::PushFont(assets.heading_font(),
+                    CurrentLayoutMetrics().typography.page_title_font_height);
+  }
+  ImGui::TextUnformatted("Panel audits");
   if (assets.heading_font() != nullptr) {
     ImGui::PopFont();
   }
-  const ImVec2 window_position = ImGui::GetWindowPos();
-  const ImVec2 window_size = ImGui::GetWindowSize();
-  const float separator_y =
-      window_position.y + metrics.geometry.panel_header_height -
-      metrics.geometry.border;
-  ImGui::GetWindowDrawList()->AddLine(
-      ImVec2(window_position.x, separator_y),
-      ImVec2(window_position.x + window_size.x, separator_y),
-      ImGui::GetColorU32(ImGuiCol_Border), metrics.geometry.border);
-  ImGui::SetCursorPosY(metrics.geometry.panel_header_height);
-}
-
-void DrawActivityRail(detail::UiAssetAtlas &assets,
-                      const bool diagnostics_enabled) {
-  struct Activity {
-    std::string_view id;
-    std::string_view label;
-    std::string_view icon;
-  };
-  static constexpr std::array activities{
-      Activity{"objects", "Objects", "objects"},
-      Activity{"beds", "Beds", "bed"},
-      Activity{"grain", "Grain", "grain"},
-      Activity{"search", "Search", "search"},
-      Activity{"compact", "Compact", "compact"},
-  };
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
-  for (const Activity &activity : activities) {
-    static_cast<void>(NavigationItem({
-        .id = activity.id,
-        .label = activity.label,
-        .tooltip = activity.label,
-        .selected = activity.id == "objects",
-        .draw_icon = assets.Painter(activity.icon),
-    }));
-  }
-  if (diagnostics_enabled) {
-    static_cast<void>(NavigationItem({
-        .id = "diagnostics",
-        .label = "Diagnostics",
-        .tooltip = "Diagnostics",
-        .draw_icon = assets.Painter("diagnostics"),
-    }));
-  }
-  ImGui::PopStyleVar();
-}
-
-void DrawExplorer(detail::UiAssetAtlas &assets, GalleryState &state) {
-  const LayoutMetrics metrics = CurrentLayoutMetrics();
-  DrawPanelHeading(assets, "Objects", true);
-
-  ImGui::SetCursorPos(ImVec2(metrics.spacing.space04,
-                            metrics.geometry.panel_header_height +
-                                metrics.spacing.space04));
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-  if (ImGui::BeginChild("##shell-explorer-search",
-                        ImVec2(-metrics.spacing.space04,
-                               metrics.explorer.search_height))) {
-    static_cast<void>(TextInput({
-        .id = "shell-explorer-search-input",
-        .label = "",
-        .value = "",
-        .placeholder = "Search objects, sources, parts",
-    }));
-  }
-  ImGui::EndChild();
-  ImGui::PopStyleVar();
-
-  ImGui::SetCursorPosX(metrics.spacing.space03);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                      ImVec2(0.0f, metrics.spacing.space02));
-  if (ImGui::BeginChild("##shell-hierarchy",
-                        ImVec2(-metrics.spacing.space03, 0.0f),
-                        ImGuiChildFlags_AlwaysUseWindowPadding)) {
-    DrawHierarchySample(assets, state);
-  }
-  ImGui::EndChild();
-  ImGui::PopStyleVar();
-}
-
-[[nodiscard]] bool DrawWorkspace(detail::UiAssetAtlas &assets,
-                                 const std::string_view feedback) {
-  const float available_height = ImGui::GetContentRegionAvail().y;
-  ImGui::SetCursorPosY(ImGui::GetCursorPosY() +
-                       std::max(Scale(24.0f), available_height * 0.38f));
-  EmptyState({
-      .id = "blank-workspace",
-      .title = "Blank view",
-      .message = "No surface is bound in this gallery composition.",
-      .icon = assets.Painter("objects"),
-      .minimum_height = 96.0f,
-  });
+  detail::DrawSecondaryText(std::format(
+      "{} canonical Explorer / Inspector contracts", audits.size()));
   ImGui::Spacing();
-  const float button_width = Scale(220.0f);
-  const float hint_width = ImGui::CalcTextSize("Esc").x;
-  const float row_width =
-      button_width + ImGui::GetStyle().ItemSpacing.x + hint_width;
-  ImGui::SetCursorPosX(
-      ImGui::GetCursorPosX() +
-      std::max(0.0f, (ImGui::GetContentRegionAvail().x - row_width) * 0.5f));
-  const bool return_requested =
-      Button({
-                 .id = "back-to-component-gallery",
-                 .label = "Back to component gallery",
-                 .variant = ButtonVariant::Tertiary,
-                 .size = {.x = button_width, .y = Scale(32.0f)},
-             })
-          .activated;
-  ImGui::SameLine();
-  detail::DrawSecondaryText("Esc");
-  if (!feedback.empty()) {
-    const float feedback_width =
-        ImGui::CalcTextSize(feedback.data(), feedback.data() + feedback.size())
-            .x;
-    ImGui::SetCursorPosX(
-        ImGui::GetCursorPosX() +
-        std::max(0.0f,
-                 (ImGui::GetContentRegionAvail().x - feedback_width) * 0.5f));
-    detail::DrawSecondaryText(feedback);
+  if (Button({.id = "panel-audits.back",
+              .label = "Back to gallery",
+              .variant = ButtonVariant::Tertiary})
+          .activated) {
+    return_requested = true;
   }
-  return return_requested;
-}
 
-void DrawInspector(detail::UiAssetAtlas &assets, GalleryState &state) {
-  ShellGalleryState &shell = state.shell;
-  const LayoutMetrics metrics = CurrentLayoutMetrics();
-  DrawPanelHeading(assets, "Inspector", false);
-
-  ImGui::SetCursorPosX(0.0f);
-  ImGui::PushStyleVar(
-      ImGuiStyleVar_WindowPadding,
-      ImVec2(metrics.spacing.space05, metrics.spacing.space04));
-  if (ImGui::BeginChild("##shell-inspector-scroll", ImVec2(0.0f, 0.0f),
-                        ImGuiChildFlags_AlwaysUseWindowPadding,
-                        ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
-    const detail::ScopedFieldLayoutPreview field_layout(
-        metrics.inspector.label_width);
-    const SectionResult values = BeginSection({
-        .id = "inspector-values",
-        .heading = "Values and fields",
-    });
-    if (values.open) {
-      static_cast<void>(ValueDisplay({
-          .id = "source",
-          .label = "Source",
-          .value = "fixture-kit-07.svg",
-      }));
-      const TextInputResult name = TextInput({
-          .id = "name",
-          .label = "Name",
-          .value = shell.object_name,
-      });
-      if (name.changed) {
-        shell.object_name = name.value;
+  const ExplorerSearchResult search = ExplorerSearch({
+      .id = "panel-audits.search",
+      .placeholder = "Filter by audit label or ID",
+      .query = state.panel_audit_query,
+  });
+  if (search.changed) {
+    state.panel_audit_query = search.query;
+  }
+  ImGui::Separator();
+  if (ImGui::BeginChild("##panel-audit-list")) {
+    for (std::size_t index = 0; index < audits.size(); ++index) {
+      const PanelContractView &audit = audits[index];
+      if (!state.panel_audit_query.empty() &&
+          !ContainsCaseInsensitive(audit.label, state.panel_audit_query) &&
+          !ContainsCaseInsensitive(audit.id.value, state.panel_audit_query)) {
+        continue;
       }
-      const NumericInputResult spacing = NumericInput({
-          .id = "spacing",
-          .label = "Spacing",
-          .unit = "mm",
-          .value = shell.spacing_mm,
-          .minimum = 0.0,
-          .format = "%.1f",
-      });
-      if (spacing.changed) {
-        shell.spacing_mm = spacing.value;
-      }
-      static constexpr std::array materials{
-          SelectOption{.id = "plywood", .label = "Plywood"},
-          SelectOption{.id = "acrylic", .label = "Acrylic"},
-          SelectOption{.id = "aluminum", .label = "Aluminum"},
-      };
-      const SelectResult material = Select({
-          .id = "material",
-          .label = "Material",
-          .options = materials,
-          .selected_index = shell.material_index,
-      });
-      if (material.changed) {
-        shell.material_index = material.selected_index;
-      }
-      const DurationResult duration = Duration({
-          .id = "duration",
-          .label = "Time limit",
-          .hours = shell.hours,
-          .minutes = shell.minutes,
-      });
-      if (duration.changed) {
-        shell.hours = duration.hours;
-        shell.minutes = duration.minutes;
-      }
-    }
-    EndSection(values);
-
-    const SectionResult toggles = BeginSection({
-        .id = "inspector-toggles",
-        .heading = "Toggles and range",
-        .separated = true,
-    });
-    if (toggles.open) {
-      const CheckboxResult enabled = Checkbox({
-          .id = "enabled",
-          .label = "Enabled",
-          .state = shell.enabled,
-      });
-      if (enabled.changed) {
-        shell.enabled = enabled.state;
-      }
-      const VisibilityToggleResult visible = VisibilityToggle({
-          .id = "visible",
-          .label = "Show overlay",
-          .state = shell.visible,
-          .visible_icon = assets.Painter("visibility"),
-          .hidden_icon = assets.Painter("visibility-off"),
-      });
-      if (visible.changed) {
-        shell.visible = visible.state;
-      }
-      const SliderResult explode = Slider({
-          .id = "explode",
-          .label = "Explode",
-          .unit = "%",
-          .value = shell.explode_percent,
-          .minimum = 0.0f,
-          .maximum = 100.0f,
-          .format = "%.0f",
-      });
-      if (explode.changed) {
-        shell.explode_percent = explode.value;
-      }
-    }
-    EndSection(toggles);
-
-    const SectionResult specialized = BeginSection({
-        .id = "inspector-specialized",
-        .heading = "Specialized",
-        .separated = true,
-    });
-    if (specialized.open) {
-      const RotationCompassResult rotations = RotationCompass({
-          .id = "rotations",
-          .label = "Search rotations",
-          .count = shell.rotation_count,
-      });
-      if (rotations.changed) {
-        shell.rotation_count = rotations.count;
-      }
-      const std::span<const ColorRgba> color(&shell.display_color, 1);
-      const ColorSwatchResult swatch = ColorSwatch(
-          {
-              .id = "display-color",
-              .label = "Display color",
-              .tooltip = "Open display color picker",
-              .picker_title = "Display color",
-              .value = shell.display_color,
-              .colors = color,
-          },
-          shell.color_picker);
-      if (swatch.changed) {
-        shell.display_color = swatch.value;
-      }
-    }
-    EndSection(specialized);
-
-    const SectionResult feedback = BeginSection({
-        .id = "inspector-feedback",
-        .heading = "Feedback and action",
-        .separated = true,
-    });
-    if (feedback.open) {
-      StatusCard({
-          .id = "readiness",
-          .title = "Ready",
-          .message = "Inspector components are ready.",
-          .status = SemanticStatus::Success,
-          .icon = assets.Painter("success"),
-      });
-      if (Button({
-                     .id = "inspect",
-                     .label = "Inspect component",
-                     .variant = ButtonVariant::Primary,
-                     .size = {.x = -1.0f, .y = 32.0f},
-                 })
+      ImGui::PushID(audit.id.value.c_str());
+      if (Button({.id = "select",
+                  .label = audit.label,
+                  .selected = index == state.panel_audit_index,
+                  .size = {.x = -1.0f, .y = 32.0f}})
               .activated) {
-        shell.feedback = "Component inspection requested.";
+        state.panel_audit_index = index;
       }
-      detail::DrawSecondaryText(shell.feedback);
+      detail::DrawSecondaryText(audit.id.value);
+      ImGui::Spacing();
+      ImGui::PopID();
     }
-    EndSection(feedback);
   }
   ImGui::EndChild();
-  ImGui::PopStyleVar();
+}
+
+bool DrawPanelAuditGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
+  static ApplicationUi ui(assets);
+  static const std::vector<PanelContractView> audits =
+      BuildCanonicalPanelAuditContracts();
+  if (audits.empty()) {
+    return false;
+  }
+  state.panel_audit_index =
+      std::min(state.panel_audit_index, audits.size() - 1);
+  ApplicationView view{
+      .revision = 1,
+      .theme_mode = state.theme == ResolvedTheme::Dark ? ThemeMode::Dark
+                                                       : ThemeMode::Light,
+      .activities = BuildGalleryActivities(state),
+      .panel = audits[state.panel_audit_index],
+  };
+  bool return_requested = false;
+  const FrameResult result =
+      ui.DrawPanelAudit(view, [&assets, &state, &return_requested]() {
+        DrawPanelAuditMenu(assets, audits, state, return_requested);
+      });
+  if (result.navigation_changed) {
+    const Destination destination = ui.session().active_destination;
+    const auto selected =
+        std::ranges::find(audits, destination, &PanelContractView::destination);
+    if (selected != audits.end()) {
+      state.panel_audit_index =
+          static_cast<std::size_t>(std::distance(audits.begin(), selected));
+    }
+  }
+  state.shell.layout.explorer_width = ui.session().explorer_width;
+  state.shell.layout.inspector_width = ui.session().inspector_width;
+  return return_requested;
 }
 
 } // namespace
 
 bool DrawApplicationShellGallery(detail::UiAssetAtlas &assets,
                                  GalleryState &state) {
+  if (state.active_tab == GalleryTab::PanelAudits) {
+    return DrawPanelAuditGallery(assets, state);
+  }
+  static ApplicationUi ui(assets);
+  static bool initialized = false;
+  if (!initialized) {
+    SessionState session{
+        .active_destination =
+            state.shell.active_workspace == WorkspaceKind::Canvas
+                ? Destination::CanvasObjects
+                : Destination::Model,
+        .explorer_visible = state.shell.layout.explorer_visible,
+        .inspector_visible = state.shell.layout.inspector_visible,
+        .operation_tray_visible = state.shell.operation.expanded,
+        .explorer_width = state.shell.layout.explorer_width,
+        .inspector_width = state.shell.layout.inspector_width,
+        .operation_tray_height = state.shell.operation.tray_height,
+    };
+    ui.SetSession(std::move(session));
+    initialized = true;
+  }
+
+  ApplicationView view = BuildGalleryApplicationView(state);
+  const FrameResult result = ui.Draw(view, {});
   bool return_requested = false;
-  detail::ApplicationChrome chrome(assets);
-  ApplicationBarView application_bar = BuildGalleryApplicationBar(state.shell);
-  ContextToolbarView context_toolbar = BuildGalleryContextToolbar(state.shell);
-  bool explorer_visible = state.shell.layout.explorer_visible;
-  bool inspector_visible = state.shell.layout.inspector_visible;
-  const detail::ApplicationChromeCallbacks chrome_callbacks{
-      .invoke_command =
-          [&state](const CommandView &command) {
-            RecordShellCommandInvocation(state.shell, command);
-          },
-      .commit_action =
-          [&state](const ControlActionView &action) {
-            static_cast<void>(ApplyGalleryToolbarAction(state.shell, action));
-          },
-      .draw_field =
-          [&state](const FieldView &field) {
-            DrawGalleryToolbarField(state.shell, field);
-          },
-      .activate_workspace =
-          [&state](const WorkspaceKind workspace) {
-            state.shell.active_workspace = workspace;
-          },
-      .toggle_layout =
-          [&state, &explorer_visible,
-           &inspector_visible](const detail::LayoutRegion region) {
-            switch (region) {
-            case detail::LayoutRegion::Explorer:
-              explorer_visible = !explorer_visible;
-              break;
-            case detail::LayoutRegion::OperationTray:
-              state.shell.operation.expanded = !state.shell.operation.expanded;
-              break;
-            case detail::LayoutRegion::Inspector:
-              inspector_visible = !inspector_visible;
-              break;
+  for (const UiIntent &intent : result.product_intents) {
+    std::visit(
+        [&view, &state, &return_requested](const auto &value) {
+          using Intent = std::decay_t<decltype(value)>;
+          if constexpr (std::is_same_v<Intent, InvokeCommand>) {
+            if (value.control.value == "gallery.back") {
+              return_requested = true;
+            } else if (const CommandView *command =
+                           FindCommand(view, value.control, value.command)) {
+              RecordShellCommandInvocation(state.shell, *command);
             }
-          },
-  };
-  shell::ApplicationShellState input = state.shell.layout;
-  input.operation_tray_visible = state.shell.operation.expanded;
-  const shell::ApplicationShellSpec spec{
-      .application_bar =
-          {
-              .id = "gallery-application-bar",
-              .draw =
-                  [&chrome, &application_bar, &state, &chrome_callbacks,
-                   &explorer_visible, &inspector_visible]() {
-                    chrome.DrawApplicationBar(
-                        application_bar,
-                        {
-                            .explorer_visible = explorer_visible,
-                            .operation_tray_visible =
-                                state.shell.operation.expanded,
-                            .operation_available = true,
-                            .inspector_visible = inspector_visible,
-                        },
-                        chrome_callbacks,
-                        detail::ApplicationBarHost::InlineRegion);
-                  },
-              .menu_bar = true,
-              .zero_padding = true,
-          },
-      .context_toolbar =
-          {
-              .id = "gallery-context-toolbar",
-              .draw =
-                  [&chrome, &context_toolbar, &chrome_callbacks]() {
-                    chrome.DrawContextToolbar(context_toolbar,
-                                              chrome_callbacks);
-                  },
-              .zero_padding = true,
-          },
-      .activity_rail =
-          {
-              .id = "gallery-activity-rail",
-              .draw =
-                  [&assets, &state]() {
-                    DrawActivityRail(
-                        assets,
-                        state.settings.applied.general.diagnostics_enabled);
-                  },
-              .zero_padding = true,
-          },
-      .explorer =
-          {
-              .id = "gallery-explorer",
-              .draw = [&assets, &state]() { DrawExplorer(assets, state); },
-              .zero_padding = true,
-          },
-      .workspace =
-          {
-              .id = "gallery-workspace",
-              .draw =
-                  [&assets, &state, &return_requested]() {
-                    return_requested =
-                        DrawWorkspace(assets, state.shell.feedback) ||
-                        return_requested;
-                  },
-              .zero_padding = true,
-          },
-      .inspector =
-          {
-              .id = "gallery-inspector",
-              .draw = [&assets, &state]() { DrawInspector(assets, state); },
-              .zero_padding = true,
-          },
-      .operation_tray =
-          {
-              .id = "gallery-operation-tray",
-              .draw = [&assets,
-                       &state]() { DrawShellOperationTray(assets, state); },
-          },
-      .operation_strip =
-          {
-              .id = "gallery-operation-strip",
-              .draw = [&assets,
-                       &state]() { DrawShellOperationStrip(assets, state); },
-              .zero_padding = true,
-          },
-      .status_bar =
-          {
-              .id = "gallery-status-bar",
-              .draw = [&assets,
-                       &state]() { DrawShellStatusBar(assets, state); },
-              .zero_padding = true,
-          },
-  };
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                      ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
-  const shell::ApplicationShellResult result = shell::Application(spec, input);
-  ImGui::PopStyleVar();
-  MergeGalleryShellResult(state.shell, result.state, explorer_visible,
-                          inspector_visible);
+          } else if constexpr (std::is_same_v<Intent, EditField>) {
+            if (ApplyGalleryPanelEdit(state.shell, value)) {
+              state.shell.feedback = "Updated the typed panel contract.";
+            }
+          } else {
+            state.shell.feedback =
+                "Selection intent: " + value.entity.value + ".";
+          }
+        },
+        intent);
+  }
+  const SessionState &session = ui.session();
+  state.shell.active_workspace =
+      WorkspaceForDestination(session.active_destination);
+  state.shell.layout.explorer_visible = session.explorer_visible;
+  state.shell.layout.inspector_visible = session.inspector_visible;
+  state.shell.layout.operation_tray_visible = session.operation_tray_visible;
+  state.shell.layout.explorer_width = session.explorer_width;
+  state.shell.layout.inspector_width = session.inspector_width;
+  state.shell.layout.operation_tray_height = session.operation_tray_height;
+  state.shell.operation.expanded = session.operation_tray_visible;
+  state.shell.operation.tray_height = session.operation_tray_height;
+  state.shell.model_toolbar.grid_target = session.model_grid_target.value;
   return return_requested;
 }
 

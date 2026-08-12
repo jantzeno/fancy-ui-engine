@@ -1503,33 +1503,26 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
   ImGui::SetNextWindowPos(viewport->WorkPos);
   ImGui::SetNextWindowSize(viewport->WorkSize);
-  const bool shell_preview = state.active_tab == GalleryTab::Shell;
+  const bool shell_preview = IsFullCanvasPreview(state.active_tab);
   if (shell_preview) {
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-  } else {
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        ImVec2(Scale(24.0f), Scale(24.0f)));
-  }
-  ImGui::Begin("Fancy UI component gallery", nullptr,
-               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-                   ImGuiWindowFlags_NoSavedSettings |
-                   ImGuiWindowFlags_NoBringToFrontOnFocus);
-  if (shell_preview) {
-    ImGui::PopStyleVar(2);
     const bool escape_owned_at_frame_start =
         ImGui::IsAnyItemActive() ||
         ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId |
                                    ImGuiPopupFlags_AnyPopupLevel);
     const bool return_requested = DrawApplicationShellGallery(assets, state);
     const bool escape_requested = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
-    ImGui::End();
     if (return_requested ||
         (escape_requested && !escape_owned_at_frame_start)) {
       LeaveShellPreview(state);
     }
     return;
   }
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                      ImVec2(Scale(24.0f), Scale(24.0f)));
+  ImGui::Begin("Fancy UI component gallery", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                   ImGuiWindowFlags_NoSavedSettings |
+                   ImGuiWindowFlags_NoBringToFrontOnFocus);
   ImGui::PopStyleVar();
 
   if (assets.heading_font() != nullptr) {
@@ -1574,6 +1567,7 @@ void DrawComponentGallery(detail::UiAssetAtlas &assets, GalleryState &state) {
   static constexpr std::array gallery_tabs{
       ChoiceSpec{.id = "components", .label = "Components"},
       ChoiceSpec{.id = "shell", .label = "Application shell"},
+      ChoiceSpec{.id = "panel-audits", .label = "Panel audits"},
       ChoiceSpec{.id = "settings", .label = "Settings"},
       ChoiceSpec{.id = "operations", .label = "Operation strip & tray"},
       ChoiceSpec{.id = "status", .label = "Status bar"},

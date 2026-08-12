@@ -11,6 +11,7 @@
 #include <cmath>
 #include <limits>
 #include <string>
+#include <vector>
 
 namespace fancy_ui {
 
@@ -86,12 +87,28 @@ InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
   const std::string metadata = detail::Owned(spec.metadata);
   const bool disabled = !spec.availability.enabled || spec.availability.busy;
   const LayoutMetrics metrics = CurrentLayoutMetrics();
+  const LayoutMetrics logical = LogicalLayoutMetrics();
   const SemanticPalette &palette = CurrentPalette();
   const bool section_root = tree.open_nodes_ == 0;
   const float visibility_width =
       spec.visibility.has_value()
           ? metrics.geometry.icon * 3.0f + metrics.spacing.space03 + Scale(2.0f)
           : 0.0f;
+  std::vector<float> action_widths;
+  action_widths.reserve(spec.actions.size());
+  float actions_width = spec.actions.empty() ? 0.0f : metrics.spacing.space03;
+  for (const ButtonSpec &action : spec.actions) {
+    const float width =
+        std::max(metrics.geometry.compact_target,
+                 ImGui::CalcTextSize(detail::Owned(action.label).c_str()).x +
+                     metrics.spacing.space04);
+    action_widths.push_back(width);
+    actions_width += width;
+  }
+  if (action_widths.size() > 1) {
+    actions_width +=
+        static_cast<float>(action_widths.size() - 1) * metrics.spacing.space02;
+  }
   const ImVec2 node_cursor = ImGui::GetCursorScreenPos();
   const ImVec2 content_min(ImGui::GetWindowPos().x +
                                ImGui::GetWindowContentRegionMin().x,
@@ -100,10 +117,15 @@ InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
       ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x,
       node_cursor.y + metrics.inspector.information_row_minimum_height);
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  draw_list->AddRectFilled(
-      content_min, content_max,
-      ImGui::GetColorU32(
-          ToImVec4(section_root ? palette.surface_muted : palette.surface)));
+  ColorRgba background = section_root ? palette.surface_muted : palette.surface;
+  if (spec.selected || spec.highlighted) {
+    background = palette.selection;
+    if (spec.highlighted && !spec.selected) {
+      background.alpha *= 0.5f;
+    }
+  }
+  draw_list->AddRectFilled(content_min, content_max,
+                           ImGui::GetColorU32(ToImVec4(background)));
 
   ImGuiTreeNodeFlags flags =
       ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_OpenOnArrow |
@@ -114,6 +136,9 @@ InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
     flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
   } else {
     ImGui::SetNextItemOpen(spec.expanded, ImGuiCond_Always);
+  }
+  if (spec.selected) {
+    flags |= ImGuiTreeNodeFlags_Selected;
   }
 
   const ColorRgba foreground = disabled ? palette.text_disabled
@@ -131,6 +156,9 @@ InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
   const ImVec2 maximum = ImGui::GetItemRectMax();
   const ImVec2 cursor_after = ImGui::GetCursorScreenPos();
   const bool expansion_changed = spec.expandable && ImGui::IsItemToggledOpen();
+  bool activated = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+  const bool additive = activated && ImGui::GetIO().KeyCtrl;
+  const bool range = activated && ImGui::GetIO().KeyShift;
   detail::EndAvailability(spec.availability, {});
   if (spec.expandable && native_open) {
     ++tree.open_nodes_;
@@ -161,8 +189,8 @@ InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
                                              : StatusForeground(spec.status))));
     label_x += dot_size + metrics.spacing.space03;
   }
-  const float metadata_x =
-      maximum.x - visibility_width - metrics.spacing.space03 - metadata_size.x;
+  const float metadata_x = maximum.x - visibility_width - actions_width -
+                           metrics.spacing.space03 - metadata_size.x;
   draw_list->PushClipRect(
       ImVec2(label_x, minimum.y),
       ImVec2(std::max(label_x, metadata_x - metrics.spacing.space03),
@@ -207,12 +235,46 @@ InformationTreeRow(InformationTree &tree, const InformationTreeRowSpec &spec) {
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
   }
 
+  std::optional<std::size_t> activated_action;
+  if (!spec.actions.empty()) {
+    float action_x = maximum.x - visibility_width - actions_width;
+    for (std::size_t index = 0; index < spec.actions.size(); ++index) {
+      ButtonSpec action = spec.actions[index];
+      action.size = {action_widths[index] / CurrentUiScale(),
+                     logical.geometry.compact_target};
+      ImGui::SetCursorScreenPos(ImVec2(
+          action_x,
+          (minimum.y + maximum.y - metrics.geometry.compact_target) * 0.5f));
+      if (Button(action).activated) {
+        activated_action = index;
+      }
+      action_x += action_widths[index] + metrics.spacing.space02;
+    }
+    ImGui::SetCursorScreenPos(cursor_after);
+  }
+  if (visibility_changed || activated_action.has_value()) {
+    activated = false;
+  }
+
+  if (!spec.metrics.empty()) {
+    const std::string metrics_id = id + ".metrics";
+    MetricRow({
+        .id = metrics_id,
+        .metrics = spec.metrics,
+        .minimum_height = 0.0f,
+    });
+  }
+
   InformationTreeRowResult result;
   static_cast<InteractionResult &>(result) = interaction;
+  result.activated = activated && !disabled;
+  result.additive = additive;
+  result.range = range;
   result.expansion_changed = expansion_changed;
   result.expanded = spec.expandable && native_open;
   result.visibility_changed = visibility_changed && !disabled;
   result.visibility = visibility;
+  result.activated_action = activated_action;
   return result;
 }
 

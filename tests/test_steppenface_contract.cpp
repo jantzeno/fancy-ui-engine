@@ -14,6 +14,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <limits>
 #include <optional>
 #include <string_view>
@@ -56,9 +57,9 @@ WorkspaceSelectionGeometry(const WorkspaceKind workspace) {
   ApplicationUi ui;
   ApplicationView view;
   view.application_bar.active_workspace = workspace;
-  view.active_destination = workspace == WorkspaceKind::Model3d
-                                ? Destination::Model
-                                : Destination::CanvasObjects;
+  view.panel.destination = workspace == WorkspaceKind::Model3d
+                               ? Destination::Model
+                               : Destination::CanvasObjects;
   const fancy_ui::ColorRgba selection =
       fancy_ui::PaletteFor(fancy_ui::ResolvedTheme::Dark).selection;
   const ImU32 selection_color = ImGui::ColorConvertFloat4ToU32(
@@ -259,11 +260,66 @@ ToolbarSegmentGeometry(const std::size_t selected_index) {
 
 } // namespace
 
+TEST_CASE("application shell borrows the gallery's single font atlas") {
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(1280.0f, 720.0f);
+  io.DeltaTime = 1.0f / 60.0f;
+
+  {
+    fancy_ui::detail::UiAssetAtlas assets;
+    const std::filesystem::path asset_root =
+        std::filesystem::path(FANCY_UI_TEST_SOURCE_ROOT) / "assets" / "ui";
+    const AssetLoadReport report = assets.Load(asset_root, {});
+    REQUIRE(report.ok());
+    ImFont *const body_font = assets.body_font();
+    ImFont *const heading_font = assets.heading_font();
+
+    unsigned char *pixels = nullptr;
+    int width = 0;
+    int height = 0;
+    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+
+    ApplicationUi ui(assets);
+    REQUIRE(ui.Initialize(asset_root, {}).ok());
+    ApplicationView view;
+    view.panel.id = {.value = "panel:test"};
+    view.panel.label = "Shared atlas regression";
+    for (int frame = 0; frame < 2; ++frame) {
+      ImGui::NewFrame();
+      static_cast<void>(ui.Draw(view, {}));
+      ImGui::Render();
+    }
+
+    int audit_menu_frames = 0;
+    for (int frame = 0; frame < 2; ++frame) {
+      ImGui::NewFrame();
+      static_cast<void>(ui.DrawPanelAudit(
+          view, [&audit_menu_frames]() { ++audit_menu_frames; }));
+      ImGui::Render();
+    }
+    REQUIRE(audit_menu_frames == 2);
+
+    ImGui::NewFrame();
+    ImGui::Begin("gallery-after-shell");
+    ImGui::PushFont(heading_font, heading_font->LegacySize);
+    ImGui::TextUnformatted("The gallery font remains valid.");
+    ImGui::PopFont();
+    ImGui::End();
+    ImGui::Render();
+
+    REQUIRE(assets.body_font() == body_font);
+    REQUIRE(assets.heading_font() == heading_font);
+    REQUIRE(io.FontDefault == body_font);
+  }
+  ImGui::DestroyContext();
+}
+
 TEST_CASE("application views own adapter-provided labels and identifiers") {
   ApplicationView view;
   view.revision = 17;
   view.application_bar.dirty_label = "Unsaved";
-  view.explorer.rows.push_back({
+  view.panel.explorer.rows.push_back({
       .id = {.value = "model.part.4"},
       .label = "Bracket",
       .secondary_label = "Part 4",
@@ -274,8 +330,8 @@ TEST_CASE("application views own adapter-provided labels and identifiers") {
   REQUIRE(view.revision == 17);
   REQUIRE(view.application_bar.dirty_label == "Unsaved");
   REQUIRE(view.application_bar.document_dirty);
-  REQUIRE(view.explorer.rows.front().id.value == "model.part.4");
-  REQUIRE(view.explorer.rows.front().selected);
+  REQUIRE(view.panel.explorer.rows.front().id.value == "model.part.4");
+  REQUIRE(view.panel.explorer.rows.front().selected);
 }
 
 TEST_CASE("menu command lookup traverses nested submenus") {
@@ -337,11 +393,13 @@ TEST_CASE("disabled commands carry precise missing backend contracts") {
 TEST_CASE("product intents retain the source view revision") {
   UiIntent intent = InvokeCommand{
       .revision = 29,
+      .control = {.value = "view.zoom-fit"},
       .command = CommandId::ZoomToFit,
   };
 
   REQUIRE(std::holds_alternative<InvokeCommand>(intent));
   REQUIRE(std::get<InvokeCommand>(intent).revision == 29);
+  REQUIRE(std::get<InvokeCommand>(intent).control.value == "view.zoom-fit");
 }
 
 TEST_CASE("toolbar contracts preserve typed order and edit targets") {
@@ -454,6 +512,112 @@ TEST_CASE("command lookup traverses toolbar popovers after application menus") {
   REQUIRE_FALSE(popover_match->availability.enabled);
   REQUIRE(popover_match->id.value == "model.select-faces.internal");
   REQUIRE(popover_match->availability.disabled_reason == "No model is loaded.");
+}
+
+TEST_CASE(
+    "panel contracts revalidate exact command edit and selection identities") {
+  ApplicationView view;
+  view.context_toolbar.items.emplace_back(CommandView{
+      .id = {.value = "toolbar.run"},
+      .command = CommandId::StartSearch,
+      .label = "Run",
+  });
+  view.context_toolbar.items.emplace_back(ToolbarSegmentedView{
+      .id = {.value = "selection.tools"},
+      .choices = {{.id = {.value = "selection.pointer"},
+                   .label = "Pointer",
+                   .action = {.field = {.value = "selection.tool"},
+                              .value = SelectionTool::Pointer}},
+                  {.id = {.value = "selection.rectangle"},
+                   .label = "Rectangle",
+                   .action = {.field = {.value = "selection.tool"},
+                              .value = SelectionTool::Rectangle,
+                              .availability = {.enabled = false,
+                                               .disabled_reason =
+                                                   "Unavailable"}}}},
+  });
+  view.panel.inspector.secondary_commands.push_back({
+      .id = {.value = "inspector.run"},
+      .command = CommandId::StartSearch,
+      .label = "Run",
+      .availability = {.enabled = false, .disabled_reason = "Not ready"},
+  });
+  view.panel.explorer.rows.push_back({
+      .id = {.value = "row.bed"},
+      .entity = {.value = "bed.7"},
+      .label = "Bed 7",
+      .visibility = fancy_ui::ToggleState::On,
+      .visibility_edit =
+          EditBindingView{
+              .field = {.value = "bed.visible"},
+              .target = UiId{.value = "bed.7"},
+          },
+  });
+  view.panel.inspector.sections.push_back({
+      .id = {.value = "section.values"},
+      .heading = "Values",
+      .fields = {{.id = {.value = "spacing.control"},
+                  .label = "Spacing",
+                  .edit = EditBindingView{.field = {.value = "spacing"},
+                                          .target = UiId{.value = "bed.7"}},
+                  .content = NumericFieldView{.value = 8.0}}},
+  });
+
+  REQUIRE(
+      FindCommand(view, UiId{.value = "toolbar.run"}, CommandId::StartSearch)
+          ->availability.enabled);
+  REQUIRE_FALSE(
+      FindCommand(view, UiId{.value = "inspector.run"}, CommandId::StartSearch)
+          ->availability.enabled);
+  REQUIRE(FindCommand(view, UiId{.value = "missing"}, CommandId::StartSearch) ==
+          nullptr);
+
+  const Availability *edit = FindEditBinding(view, UiId{.value = "spacing"},
+                                             UiId{.value = "bed.7"}, 8.0);
+  REQUIRE(edit != nullptr);
+  REQUIRE(edit->enabled);
+  REQUIRE(FindEditBinding(view, UiId{.value = "spacing"},
+                          UiId{.value = "bed.8"}, 8.0) == nullptr);
+  REQUIRE(FindEditBinding(view, UiId{.value = "selection.tool"}, std::nullopt,
+                          SelectionTool::Pointer)
+              ->enabled);
+  REQUIRE_FALSE(FindEditBinding(view, UiId{.value = "selection.tool"},
+                                std::nullopt, SelectionTool::Rectangle)
+                    ->enabled);
+
+  const Availability *selection =
+      FindSelectable(view, UiId{.value = "row.bed"}, UiId{.value = "bed.7"});
+  REQUIRE(selection != nullptr);
+  REQUIRE(selection->enabled);
+  REQUIRE(FindSelectable(view, UiId{.value = "row.bed"},
+                         UiId{.value = "bed.8"}) == nullptr);
+}
+
+TEST_CASE("field content variant covers the complete panel audit registry") {
+  std::vector<FieldContent> contents;
+  contents.emplace_back(TextFieldView{});
+  contents.emplace_back(NumericFieldView{});
+  contents.emplace_back(SelectFieldView{});
+  contents.emplace_back(RenamableSelectFieldView{});
+  contents.emplace_back(MultiselectFieldView{});
+  contents.emplace_back(SegmentedFieldView{});
+  contents.emplace_back(CheckboxFieldView{});
+  contents.emplace_back(VisibilityFieldView{});
+  contents.emplace_back(SliderFieldView{});
+  contents.emplace_back(RotationCompassFieldView{});
+  contents.emplace_back(DurationFieldView{});
+  contents.emplace_back(ColorFieldView{});
+  contents.emplace_back(ValueFieldView{});
+  contents.emplace_back(ButtonFieldView{});
+
+  REQUIRE(contents.size() == std::variant_size_v<FieldContent>);
+  REQUIRE(contents.size() == 14);
+  for (std::size_t index = 0; index < contents.size(); ++index) {
+    const bool stacked =
+        index == 2 || index == 3 || index == 4 || index == 8 || index == 9;
+    REQUIRE(FieldLabelLayoutFor(contents[index]) ==
+            (stacked ? FieldLabelLayout::Stacked : FieldLabelLayout::Inline));
+  }
 }
 
 TEST_CASE(
@@ -666,8 +830,8 @@ TEST_CASE(
   ui.SetSession(std::move(session));
 
   ApplicationView view;
-  view.active_destination = Destination::Model;
-  view.explorer.rows = {
+  view.panel.destination = Destination::Model;
+  view.panel.explorer.rows = {
       {
           .id = {.value = "assembly"},
           .label = "Assembly",

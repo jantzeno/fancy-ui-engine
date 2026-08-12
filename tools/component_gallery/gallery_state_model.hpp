@@ -14,12 +14,17 @@ namespace fancy_ui::gallery {
 enum class GalleryTab : std::uint8_t {
   Components,
   Shell,
+  PanelAudits,
   Settings,
   Operations,
   Status,
 };
 
-inline constexpr int kGalleryTabCount = 5;
+inline constexpr int kGalleryTabCount = 6;
+
+[[nodiscard]] constexpr bool IsFullCanvasPreview(const GalleryTab tab) {
+  return tab == GalleryTab::Shell || tab == GalleryTab::PanelAudits;
+}
 
 struct GalleryCaptureExtent {
   int width = 1280;
@@ -32,6 +37,7 @@ GalleryScreenshotLogicalExtent(const GalleryTab tab) {
   case GalleryTab::Components:
     return {.width = 1280, .height = 2760};
   case GalleryTab::Shell:
+  case GalleryTab::PanelAudits:
     return {.width = 1280, .height = 720};
   case GalleryTab::Settings:
   case GalleryTab::Operations:
@@ -133,6 +139,9 @@ ParseGalleryTab(const std::string_view value) {
   }
   if (value == "shell") {
     return GalleryTab::Shell;
+  }
+  if (value == "panel-audits") {
+    return GalleryTab::PanelAudits;
   }
   if (value == "settings") {
     return GalleryTab::Settings;
