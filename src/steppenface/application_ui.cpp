@@ -1467,6 +1467,62 @@ public:
     }
   }
 
+  void DrawSystemSettings(const ApplicationView &view) {
+    if (!view.settings.has_value() || !view.settings->open) {
+      return;
+    }
+    const SystemSettingsView &settings = *view.settings;
+    bool open = true;
+    ImGui::SetNextWindowSize(ImVec2(Scale(640.0f), Scale(420.0f)),
+                             ImGuiCond_FirstUseEver);
+    if (ImGui::Begin((settings.title + "##steppenface-settings").c_str(), &open,
+                     ImGuiWindowFlags_NoSavedSettings)) {
+      ImGui::TextUnformatted("Appearance");
+      if (!settings.description.empty()) {
+        detail::DrawSecondaryTextWrapped(settings.description);
+      }
+      ImGui::Dummy(ImVec2(0.0f, Scale(12.0f)));
+      DrawField(view, settings.theme);
+
+      const SemanticPalette preview = PaletteFor(settings.preview_theme);
+      ImGui::PushStyleColor(ImGuiCol_ChildBg, ToImVec4(preview.surface_muted));
+      ImGui::PushStyleColor(ImGuiCol_Border, ToImVec4(preview.border_strong));
+      if (ImGui::BeginChild("##theme-preview", ImVec2(0.0f, Scale(150.0f)),
+                            ImGuiChildFlags_Borders)) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(preview.text_primary));
+        ImGui::TextUnformatted("Theme preview");
+        ImGui::PushStyleColor(ImGuiCol_Text, ToImVec4(preview.text_secondary));
+        ImGui::TextUnformatted(
+            "Shell, model viewport, and Canvas use this semantic palette.");
+        ImGui::PopStyleColor(2);
+      }
+      ImGui::EndChild();
+      ImGui::PopStyleColor(2);
+
+      ImGui::SetCursorPosY(ImGui::GetCursorPosY() + Scale(12.0f));
+      if (Button(
+              {.id = settings.discard.id.value,
+               .label = settings.discard.label,
+               .variant = ToButtonVariant(settings.discard.variant),
+               .availability = ToAvailability(settings.discard.availability)})
+              .activated) {
+        EmitCommand(view.revision, settings.discard);
+      }
+      ImGui::SameLine();
+      if (Button({.id = settings.apply.id.value,
+                  .label = settings.apply.label,
+                  .variant = ToButtonVariant(settings.apply.variant),
+                  .availability = ToAvailability(settings.apply.availability)})
+              .activated) {
+        EmitCommand(view.revision, settings.apply);
+      }
+    }
+    ImGui::End();
+    if (!open) {
+      EmitCommand(view.revision, settings.close);
+    }
+  }
+
   void DrawInformationNode(const ApplicationView &view,
                            const std::vector<InformationTreeRowView> &rows,
                            const std::vector<std::size_t> &subtree_ends,
@@ -1813,7 +1869,8 @@ FrameResult ApplicationUi::Draw(const ApplicationView &view,
     impl_->session.ActivateDestination(view.panel.destination);
   }
 
-  ApplyTheme(ResolveTheme(view.theme_mode), impl_->assets->ui_environment());
+  ApplyTheme(ResolveTheme(view.theme_mode, view.system_theme),
+             impl_->assets->ui_environment());
   const bool operation_available = view.operation.has_value();
   const detail::ApplicationChromeCallbacks chrome_callbacks =
       impl_->ChromeCallbacks(view);
@@ -1891,6 +1948,7 @@ FrameResult ApplicationUi::Draw(const ApplicationView &view,
 
   ImGui::End();
   ImGui::PopStyleVar();
+  impl_->DrawSystemSettings(view);
   return {
       .product_intents = std::move(impl_->intents),
       .backend_requests = {},
@@ -1913,7 +1971,8 @@ ApplicationUi::DrawPanelAudit(const ApplicationView &view,
   impl_->session.explorer_visible = true;
   impl_->session.inspector_visible = true;
 
-  ApplyTheme(ResolveTheme(view.theme_mode), impl_->assets->ui_environment());
+  ApplyTheme(ResolveTheme(view.theme_mode, view.system_theme),
+             impl_->assets->ui_environment());
   const ImGuiViewport *viewport = ImGui::GetMainViewport();
   ImGui::SetNextWindowPos(viewport->WorkPos);
   ImGui::SetNextWindowSize(viewport->WorkSize);

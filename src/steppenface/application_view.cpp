@@ -1,5 +1,6 @@
 #include "fancy_ui/steppenface/application_view.hpp"
 
+#include <array>
 #include <type_traits>
 #include <utility>
 
@@ -128,8 +129,20 @@ const CommandView *FindAnyCommand(const ApplicationView &view,
     }
   }
   if (view.operation.has_value()) {
-    return FindCommand(view.operation->commands,
-                       std::forward<Predicate>(matches));
+    if (const CommandView *found = FindCommand(
+            view.operation->commands, std::forward<Predicate>(matches));
+        found != nullptr) {
+      return found;
+    }
+  }
+  if (view.settings.has_value()) {
+    const std::array commands{&view.settings->apply, &view.settings->discard,
+                              &view.settings->close};
+    for (const CommandView *command : commands) {
+      if (matches(*command)) {
+        return command;
+      }
+    }
   }
   return nullptr;
 }
@@ -371,6 +384,11 @@ const Availability *FindEditBinding(const ApplicationView &view,
           view.workspace.viewport_toolbar, field, target, value);
       found != nullptr) {
     return found;
+  }
+  if (view.settings.has_value() && view.settings->theme.edit.has_value() &&
+      SameBinding(field, target, view.settings->theme.edit->field,
+                  view.settings->theme.edit->target)) {
+    return FieldEditAvailability(view.settings->theme, value);
   }
   for (const HierarchyRowView &row : view.panel.explorer.rows) {
     if (row.color_edit.has_value() &&

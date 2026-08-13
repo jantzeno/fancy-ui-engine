@@ -391,9 +391,23 @@ struct StatusItemView {
   SemanticTone tone = SemanticTone::Neutral;
 };
 
+struct SystemSettingsView {
+  bool open = false;
+  std::string title = "System Settings";
+  std::string description;
+  FieldView theme;
+  ResolvedTheme preview_theme = ResolvedTheme::Dark;
+  bool dirty = false;
+  CommandView apply;
+  CommandView discard;
+  CommandView close;
+};
+
 struct ApplicationView {
   std::uint64_t revision = 0;
   ThemeMode theme_mode = ThemeMode::System;
+  std::optional<ResolvedTheme> system_theme;
+  std::optional<SystemSettingsView> settings;
   ApplicationBarView application_bar;
   ContextToolbarView context_toolbar;
   std::vector<ActivityView> activities;
