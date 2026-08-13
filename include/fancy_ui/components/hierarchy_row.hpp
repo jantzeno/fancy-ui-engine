@@ -27,6 +27,8 @@ struct HierarchyRowSpec {
   IconPainter visible_icon;
   IconPainter hidden_icon;
   std::string_view visibility_tooltip;
+  bool drag_source = false;
+  bool drop_target = false;
   Availability availability;
 };
 
@@ -40,6 +42,8 @@ struct HierarchyRowResult : InteractionResult {
   bool action_activated = false;
   bool visibility_changed = false;
   ToggleState visibility = ToggleState::Off;
+  bool drag_started = false;
+  bool drop_received = false;
 };
 
 [[nodiscard]] HierarchyRowResult HierarchyRow(HierarchyTree &tree,

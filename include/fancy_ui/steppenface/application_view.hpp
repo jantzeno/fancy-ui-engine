@@ -268,13 +268,17 @@ struct HierarchyRowView {
   int depth = 0;
   bool expanded = false;
   bool expandable = false;
+  bool selectable = true;
   bool selected = false;
   SemanticTone tone = SemanticTone::Neutral;
   Availability availability;
+  std::optional<Availability> expansion;
   std::optional<ColorRgba> color;
   std::optional<EditBindingView> color_edit;
   std::optional<ToggleState> visibility;
   std::optional<EditBindingView> visibility_edit;
+  std::optional<Availability> drag_source;
+  std::optional<Availability> drop_target;
   std::optional<ContextMenuView> context_menu;
 };
 
@@ -433,5 +437,13 @@ FindEditBinding(const ApplicationView &view, const UiId &field,
 [[nodiscard]] const Availability *FindSelectable(const ApplicationView &view,
                                                  const UiId &source,
                                                  const UiId &entity);
+[[nodiscard]] const Availability *FindExpandable(const ApplicationView &view,
+                                                 const UiId &source,
+                                                 const UiId &entity);
+[[nodiscard]] bool CanDropEntities(const ApplicationView &view,
+                                   const UiId &source_control,
+                                   const std::vector<UiId> &entities,
+                                   const UiId &target_control,
+                                   const UiId &target);
 
 } // namespace fancy_ui::steppenface

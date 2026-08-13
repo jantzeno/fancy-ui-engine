@@ -424,6 +424,37 @@ TEST_CASE("typed command targets and selection modes preserve identity") {
   REQUIRE(IsRangeSelection(SelectionMode::AdditiveRange));
 }
 
+TEST_CASE("hierarchy drops preserve exact controls entities and targets") {
+  ApplicationView view;
+  view.panel.explorer.rows = {
+      {.id = {.value = "row.artwork.1"},
+       .entity = {.value = "canvas.artwork.1"},
+       .label = "Artwork 1",
+       .selected = true,
+       .drag_source = Availability{}},
+      {.id = {.value = "row.artwork.2"},
+       .entity = {.value = "canvas.artwork.2"},
+       .label = "Artwork 2",
+       .selected = true,
+       .drag_source = Availability{}},
+      {.id = {.value = "row.bed.7"},
+       .entity = {.value = "bed.7"},
+       .label = "Bed 7",
+       .drop_target = Availability{}},
+  };
+  const std::vector<UiId> entities{{.value = "canvas.artwork.1"},
+                                   {.value = "canvas.artwork.2"}};
+
+  REQUIRE(CanDropEntities(view, UiId{.value = "row.artwork.1"}, entities,
+                          UiId{.value = "row.bed.7"}, UiId{.value = "bed.7"}));
+  REQUIRE_FALSE(CanDropEntities(view, UiId{.value = "row.artwork.2"},
+                                {entities.front()}, UiId{.value = "row.bed.7"},
+                                UiId{.value = "bed.7"}));
+  REQUIRE_FALSE(CanDropEntities(view, UiId{.value = "row.artwork.1"}, entities,
+                                UiId{.value = "row.bed.7"},
+                                UiId{.value = "bed.8"}));
+}
+
 TEST_CASE("toolbar contracts preserve typed order and edit targets") {
   ContextToolbarView toolbar;
   toolbar.items.emplace_back(ToolbarSegmentedView{

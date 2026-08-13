@@ -205,6 +205,8 @@ public:
   detail::UiAssetAtlas *assets = &owned_assets;
   detail::ApplicationChrome chrome;
   std::vector<UiIntent> intents;
+  std::optional<UiId> dragged_source_control;
+  std::vector<UiId> dragged_entities;
   std::unordered_map<std::string, FieldValue> field_drafts;
   std::unordered_map<std::string, RenamableSelectState> rename_states;
   std::unordered_map<std::string, ColorPickerState> color_states;
@@ -892,18 +894,58 @@ public:
                               : std::optional<ToggleState>{},
             .visible_icon = assets->Painter("visibility"),
             .hidden_icon = assets->Painter("visibility-off"),
+            .drag_source = row.drag_source.has_value() &&
+                           row.drag_source->visible &&
+                           row.drag_source->enabled && !row.drag_source->busy,
+            .drop_target = row.drop_target.has_value() &&
+                           row.drop_target->visible &&
+                           row.drop_target->enabled && !row.drop_target->busy,
             .availability = ToAvailability(row.availability),
         });
     if (result.expansion_changed && query.empty()) {
       expansion->second = result.expanded;
+      if (row.expansion.has_value() && row.expansion->visible &&
+          row.expansion->enabled && !row.expansion->busy) {
+        intents.emplace_back(ChangeExpansion{.revision = view.revision,
+                                             .source = row.id,
+                                             .entity = row.entity,
+                                             .expanded = result.expanded});
+      }
     }
-    if (result.activated) {
+    if (result.activated && row.selectable) {
       intents.emplace_back(ChangeSelection{
           .revision = view.revision,
           .source = row.id,
           .entity = row.entity,
           .mode = SelectionModeFor(result.additive, result.range),
       });
+    }
+    if (result.drag_started && row.drag_source.has_value()) {
+      dragged_source_control = row.id;
+      dragged_entities.clear();
+      if (row.selected) {
+        for (const HierarchyRowView &candidate : rows) {
+          if (candidate.selected && candidate.drag_source.has_value() &&
+              candidate.drag_source->visible &&
+              candidate.drag_source->enabled && !candidate.drag_source->busy) {
+            dragged_entities.push_back(candidate.entity);
+          }
+        }
+      } else {
+        dragged_entities.push_back(row.entity);
+      }
+    }
+    if (result.drop_received && row.drop_target.has_value() &&
+        dragged_source_control.has_value() && !dragged_entities.empty()) {
+      intents.emplace_back(DropEntities{
+          .revision = view.revision,
+          .source_control = *dragged_source_control,
+          .entities = dragged_entities,
+          .target_control = row.id,
+          .target = row.entity,
+      });
+      dragged_source_control.reset();
+      dragged_entities.clear();
     }
     if (result.visibility_changed && row.visibility_edit.has_value()) {
       EmitEdit(view.revision, *row.visibility_edit, result.visibility,
@@ -985,6 +1027,10 @@ public:
     }
     if (!view.panel.explorer.footer.empty()) {
       detail::DrawSecondaryText(view.panel.explorer.footer);
+    }
+    if (ImGui::GetDragDropPayload() == nullptr) {
+      dragged_source_control.reset();
+      dragged_entities.clear();
     }
   }
 

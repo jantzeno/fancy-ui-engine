@@ -106,6 +106,20 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
   });
   const ImVec2 minimum = ImGui::GetItemRectMin();
   const ImVec2 maximum = ImGui::GetItemRectMax();
+  bool drag_started = false;
+  if (spec.drag_source && !disabled && ImGui::BeginDragDropSource()) {
+    ImGui::SetDragDropPayload("FANCY_UI_HIERARCHY_ROWS", nullptr, 0);
+    ImGui::TextUnformatted(spec.label.data(),
+                           spec.label.data() + spec.label.size());
+    drag_started = true;
+    ImGui::EndDragDropSource();
+  }
+  bool drop_received = false;
+  if (spec.drop_target && !disabled && ImGui::BeginDragDropTarget()) {
+    drop_received =
+        ImGui::AcceptDragDropPayload("FANCY_UI_HIERARCHY_ROWS") != nullptr;
+    ImGui::EndDragDropTarget();
+  }
   if (row.expanded) {
     ImGui::TreePush(id.c_str());
     ++tree.open_nodes_;
@@ -198,6 +212,8 @@ HierarchyRowResult HierarchyRow(HierarchyTree &tree,
   result.action_activated = action_activated && !disabled;
   result.visibility_changed = visibility_changed && !disabled;
   result.visibility = visibility;
+  result.drag_started = drag_started;
+  result.drop_received = drop_received;
   return result;
 }
 

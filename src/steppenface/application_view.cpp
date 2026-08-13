@@ -1,5 +1,6 @@
 #include "fancy_ui/steppenface/application_view.hpp"
 
+#include <algorithm>
 #include <array>
 #include <type_traits>
 #include <utility>
@@ -442,7 +443,7 @@ const Availability *FindEditBinding(const ApplicationView &view,
 const Availability *FindSelectable(const ApplicationView &view,
                                    const UiId &source, const UiId &entity) {
   for (const HierarchyRowView &row : view.panel.explorer.rows) {
-    if (row.id == source && row.entity == entity) {
+    if (row.selectable && row.id == source && row.entity == entity) {
       return &row.availability;
     }
   }
@@ -457,6 +458,51 @@ const Availability *FindSelectable(const ApplicationView &view,
     return &view.workspace.selection_availability;
   }
   return nullptr;
+}
+
+const Availability *FindExpandable(const ApplicationView &view,
+                                   const UiId &source, const UiId &entity) {
+  for (const HierarchyRowView &row : view.panel.explorer.rows) {
+    if (row.expandable && row.expansion.has_value() && row.id == source &&
+        row.entity == entity && row.availability.visible &&
+        row.availability.enabled && !row.availability.busy) {
+      return &*row.expansion;
+    }
+  }
+  return nullptr;
+}
+
+bool CanDropEntities(const ApplicationView &view, const UiId &source_control,
+                     const std::vector<UiId> &entities,
+                     const UiId &target_control, const UiId &target) {
+  const auto available = [](const Availability &value) {
+    return value.visible && value.enabled && !value.busy;
+  };
+  const auto source = std::ranges::find(view.panel.explorer.rows,
+                                        source_control, &HierarchyRowView::id);
+  const auto target_row = std::ranges::find(
+      view.panel.explorer.rows, target_control, &HierarchyRowView::id);
+  if (source == view.panel.explorer.rows.end() ||
+      target_row == view.panel.explorer.rows.end() ||
+      source->drag_source == std::nullopt ||
+      target_row->drop_target == std::nullopt ||
+      !available(*source->drag_source) ||
+      !available(*target_row->drop_target) || target_row->entity != target) {
+    return false;
+  }
+
+  std::vector<UiId> expected;
+  if (source->selected) {
+    for (const HierarchyRowView &row : view.panel.explorer.rows) {
+      if (row.selected && row.drag_source.has_value() &&
+          available(*row.drag_source)) {
+        expected.push_back(row.entity);
+      }
+    }
+  } else {
+    expected.push_back(source->entity);
+  }
+  return !expected.empty() && expected == entities;
 }
 
 } // namespace fancy_ui::steppenface
