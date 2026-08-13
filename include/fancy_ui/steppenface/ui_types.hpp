@@ -74,6 +74,34 @@ enum class SelectionTool : std::uint8_t {
   Oval,
 };
 
+/** Complete hierarchy-selection gesture captured at activation time. */
+enum class SelectionMode : std::uint8_t {
+  Replace,
+  Additive,
+  Range,
+  AdditiveRange,
+};
+
+[[nodiscard]] constexpr SelectionMode SelectionModeFor(const bool additive,
+                                                       const bool range) {
+  if (additive && range) {
+    return SelectionMode::AdditiveRange;
+  }
+  if (range) {
+    return SelectionMode::Range;
+  }
+  return additive ? SelectionMode::Additive : SelectionMode::Replace;
+}
+
+[[nodiscard]] constexpr bool IsAdditiveSelection(const SelectionMode mode) {
+  return mode == SelectionMode::Additive ||
+         mode == SelectionMode::AdditiveRange;
+}
+
+[[nodiscard]] constexpr bool IsRangeSelection(const SelectionMode mode) {
+  return mode == SelectionMode::Range || mode == SelectionMode::AdditiveRange;
+}
+
 enum class ModelCameraPreset : std::uint8_t {
   Custom,
   Front,
@@ -102,6 +130,8 @@ struct CommandView {
   std::string tooltip;
   CommandVariant variant = CommandVariant::Normal;
   Availability availability;
+  /** Stable product identity for targeted commands; never a display label. */
+  std::optional<UiId> target;
 };
 
 using FieldValue =

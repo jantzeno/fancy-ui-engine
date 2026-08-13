@@ -408,6 +408,11 @@ struct ApplicationView {
 [[nodiscard]] const CommandView *FindCommand(const ApplicationView &view,
                                              const UiId &control,
                                              CommandId command);
+/** Finds an exact command binding, including its stable product target. */
+[[nodiscard]] const CommandView *FindCommand(const ApplicationView &view,
+                                             const UiId &control,
+                                             CommandId command,
+                                             const std::optional<UiId> &target);
 [[nodiscard]] const Availability *
 FindEditBinding(const ApplicationView &view, const UiId &field,
                 const std::optional<UiId> &target, const FieldValue &value);

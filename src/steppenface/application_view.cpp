@@ -341,6 +341,16 @@ const CommandView *FindCommand(const ApplicationView &view, const UiId &control,
       });
 }
 
+const CommandView *FindCommand(const ApplicationView &view, const UiId &control,
+                               const CommandId command,
+                               const std::optional<UiId> &target) {
+  return FindAnyCommand(
+      view, [&control, command, &target](const CommandView &candidate) {
+        return candidate.id == control && candidate.command == command &&
+               candidate.target == target;
+      });
+}
+
 const Availability *FindEditBinding(const ApplicationView &view,
                                     const UiId &field,
                                     const std::optional<UiId> &target,

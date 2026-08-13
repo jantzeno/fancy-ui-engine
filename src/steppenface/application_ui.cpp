@@ -218,7 +218,8 @@ public:
         !command.availability.busy) {
       intents.emplace_back(InvokeCommand{.revision = revision,
                                          .control = command.id,
-                                         .command = command.command});
+                                         .command = command.command,
+                                         .target = command.target});
     }
   }
 
@@ -901,8 +902,7 @@ public:
           .revision = view.revision,
           .source = row.id,
           .entity = row.entity,
-          .additive = result.additive,
-          .range = result.range,
+          .mode = SelectionModeFor(result.additive, result.range),
       });
     }
     if (result.visibility_changed && row.visibility_edit.has_value()) {
@@ -1528,8 +1528,7 @@ public:
           .revision = view.revision,
           .source = row.id,
           .entity = row.entity,
-          .additive = result.additive,
-          .range = result.range,
+          .mode = SelectionModeFor(result.additive, result.range),
       });
     }
     if (result.visibility_changed && row.visibility_edit.has_value()) {

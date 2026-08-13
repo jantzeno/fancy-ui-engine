@@ -11,14 +11,14 @@ struct InvokeCommand {
   std::uint64_t revision = 0;
   UiId control;
   CommandId command = CommandId::Quit;
+  std::optional<UiId> target;
 };
 
 struct ChangeSelection {
   std::uint64_t revision = 0;
   UiId source;
   UiId entity;
-  bool additive = false;
-  bool range = false;
+  SelectionMode mode = SelectionMode::Replace;
 };
 
 struct EditField {

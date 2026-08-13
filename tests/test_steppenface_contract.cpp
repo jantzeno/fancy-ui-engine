@@ -402,6 +402,28 @@ TEST_CASE("product intents retain the source view revision") {
   REQUIRE(std::get<InvokeCommand>(intent).control.value == "view.zoom-fit");
 }
 
+TEST_CASE("typed command targets and selection modes preserve identity") {
+  ApplicationView view;
+  view.panel.inspector.secondary_commands.push_back({
+      .id = {.value = "result.delete"},
+      .command = CommandId::DeleteObjects,
+      .label = "Delete result",
+      .target = UiId{.value = "result:71"},
+  });
+
+  const CommandView *exact =
+      FindCommand(view, UiId{.value = "result.delete"},
+                  CommandId::DeleteObjects, UiId{.value = "result:71"});
+  REQUIRE(exact != nullptr);
+  REQUIRE(exact->target == UiId{.value = "result:71"});
+  REQUIRE(FindCommand(view, UiId{.value = "result.delete"},
+                      CommandId::DeleteObjects,
+                      UiId{.value = "result:72"}) == nullptr);
+  REQUIRE(SelectionModeFor(true, true) == SelectionMode::AdditiveRange);
+  REQUIRE(IsAdditiveSelection(SelectionMode::AdditiveRange));
+  REQUIRE(IsRangeSelection(SelectionMode::AdditiveRange));
+}
+
 TEST_CASE("toolbar contracts preserve typed order and edit targets") {
   ContextToolbarView toolbar;
   toolbar.items.emplace_back(ToolbarSegmentedView{
@@ -648,6 +670,7 @@ TEST_CASE(
                     .id = {.value = "model.select-faces.choice"},
                     .command = expected,
                     .label = "Face choice",
+                    .target = UiId{.value = "model:5"},
                 },
             },
     });
@@ -702,6 +725,7 @@ TEST_CASE(
         activated.product_intents.front()));
     const InvokeCommand invoked =
         std::get<InvokeCommand>(activated.product_intents.front());
+    REQUIRE(invoked.target == UiId{.value = "model:5"});
     ImGui::DestroyContext();
     return invoked;
   };
